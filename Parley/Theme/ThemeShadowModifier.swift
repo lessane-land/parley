@@ -36,14 +36,18 @@ private struct MoodCardModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius)
+        let surface = fill ?? theme.paperRaised
         content
-            .background(fill ?? theme.paperRaised, in: shape)
+            .background(surface)
+            .clipShape(shape)
+            // The shadow is cast by a shape *behind* the content — never by the
+            // text — so a hard offset shadow doesn't duplicate the text.
+            .background { shape.fill(surface).themeShadow(theme.shadow) }
             .overlay(
                 shape.strokeBorder(
                     selected ? theme.accent : theme.edge,
                     lineWidth: selected ? max(theme.borderWidth, 2) : theme.borderWidth
                 )
             )
-            .themeShadow(theme.shadow)
     }
 }

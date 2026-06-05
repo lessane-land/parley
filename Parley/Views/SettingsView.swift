@@ -190,8 +190,6 @@ struct ThemePreviewCard: View {
     let density: Density
 
     var body: some View {
-        let radius = theme.cornerRadius
-
         VStack(alignment: .leading, spacing: 8) {
             Text("Design review")
                 .font(theme.titleFont(20, relativeTo: .title3))
@@ -215,12 +213,7 @@ struct ThemePreviewCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.paperRaised, in: RoundedRectangle(cornerRadius: radius))
-        .overlay(
-            RoundedRectangle(cornerRadius: radius)
-                .strokeBorder(theme.edge, lineWidth: theme.borderWidth)
-        )
-        .themeShadow(theme.shadow)
+        .moodCard(theme)
     }
 }
 

@@ -24,13 +24,7 @@ struct TranscriptPanel: View {
             Divider().overlay(theme.line)
             content
         }
-        .background(theme.paperSunk)
-        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.cornerRadius)
-                .strokeBorder(theme.edge, lineWidth: theme.borderWidth)
-        )
-        .themeShadow(theme.shadow)
+        .moodCard(theme, fill: theme.paperSunk)
     }
 
     // MARK: Header (label · status · record button)

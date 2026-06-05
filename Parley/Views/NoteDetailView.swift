@@ -182,13 +182,8 @@ struct NoteDetailView: View {
 
             DrawingCanvas(data: $note.drawing, inkColor: theme.ink)
                 .id(canvasID)
-                .background(theme.paperRaised)
-                .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: theme.cornerRadius)
-                        .strokeBorder(theme.edge, lineWidth: theme.borderWidth)
-                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .moodCard(theme)
         }
     }
     #endif

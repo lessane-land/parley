@@ -160,12 +160,13 @@ final class TranscriptionService {
     private func startEngine(convertingTo analyzerFormat: AVAudioFormat?) throws {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        // `.record` (input only) — we never play audio back, so we must NOT pass
-        // `.duckOthers` here: ducking is only valid on output-bearing categories
-        // (.playback/.playAndRecord/…), and combining it with `.record` makes
-        // setCategory throw paramErr (OSStatus -50). `.allowBluetooth` lets a
-        // paired headset/mic be the input source.
-        try session.setCategory(.record, mode: .spokenAudio, options: [.allowBluetooth])
+        // This must be the exact combination Apple's SpeechAnalyzer sample uses.
+        // `.spokenAudio` is an output-oriented mode, so it's only valid on an
+        // output-bearing category — pairing it with the input-only `.record`
+        // makes setCategory throw paramErr (OSStatus -50). `.playAndRecord` is
+        // the right category for live capture (and what the sample uses).
+        // `.allowBluetooth` lets a paired headset/mic be the input source.
+        try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetooth, .defaultToSpeaker])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         #endif
 

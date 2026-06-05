@@ -3,19 +3,71 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 56;
 	objects = {
 
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		1A0000000000000000000003 /* Parley */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Parley;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
+/* Begin PBXBuildFile section */
+		00000000000000000000001D /* ParleyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000001C /* ParleyApp.swift */; };
+		00000000000000000000001F /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000001E /* Note.swift */; };
+		000000000000000000000021 /* AppFonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000020 /* AppFonts.swift */; };
+		000000000000000000000023 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000022 /* Color+Hex.swift */; };
+		000000000000000000000025 /* Density.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000024 /* Density.swift */; };
+		000000000000000000000027 /* Mood.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000026 /* Mood.swift */; };
+		000000000000000000000029 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000028 /* Theme.swift */; };
+		00000000000000000000002B /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000002A /* ThemeManager.swift */; };
+		00000000000000000000002D /* ThemeShadowModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000002C /* ThemeShadowModifier.swift */; };
+		00000000000000000000002F /* NoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000002E /* NoteDetailView.swift */; };
+		000000000000000000000031 /* NoteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000030 /* NoteListView.swift */; };
+		000000000000000000000033 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000032 /* SettingsView.swift */; };
+		000000000000000000000017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000016 /* Assets.xcassets */; };
+		000000000000000000000019 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000018 /* Preview Assets.xcassets */; };
+		000000000000000000000035 /* Archivo-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000034 /* Archivo-Bold.ttf */; };
+		000000000000000000000037 /* Archivo-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000036 /* Archivo-ExtraBold.ttf */; };
+		000000000000000000000039 /* Archivo-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000038 /* Archivo-Regular.ttf */; };
+		00000000000000000000003B /* HankenGrotesk-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000003A /* HankenGrotesk-Regular.ttf */; };
+		00000000000000000000003D /* HankenGrotesk-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000003C /* HankenGrotesk-SemiBold.ttf */; };
+		00000000000000000000003F /* IBMPlexMono-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000003E /* IBMPlexMono-Medium.ttf */; };
+		000000000000000000000041 /* IBMPlexMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000040 /* IBMPlexMono-Regular.ttf */; };
+		000000000000000000000043 /* Newsreader-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000042 /* Newsreader-Regular.ttf */; };
+		000000000000000000000045 /* Newsreader-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000044 /* Newsreader-SemiBold.ttf */; };
+		000000000000000000000047 /* SpaceGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000046 /* SpaceGrotesk-Medium.ttf */; };
+		000000000000000000000049 /* SpaceGrotesk-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000048 /* SpaceGrotesk-Regular.ttf */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		00000000000000000000000B /* Parley.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Parley.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		00000000000000000000001C /* ParleyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ParleyApp.swift"; sourceTree = "<group>"; };
+		00000000000000000000001E /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Note.swift"; sourceTree = "<group>"; };
+		000000000000000000000020 /* AppFonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppFonts.swift"; sourceTree = "<group>"; };
+		000000000000000000000022 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
+		000000000000000000000024 /* Density.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Density.swift"; sourceTree = "<group>"; };
+		000000000000000000000026 /* Mood.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Mood.swift"; sourceTree = "<group>"; };
+		000000000000000000000028 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Theme.swift"; sourceTree = "<group>"; };
+		00000000000000000000002A /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ThemeManager.swift"; sourceTree = "<group>"; };
+		00000000000000000000002C /* ThemeShadowModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ThemeShadowModifier.swift"; sourceTree = "<group>"; };
+		00000000000000000000002E /* NoteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NoteDetailView.swift"; sourceTree = "<group>"; };
+		000000000000000000000030 /* NoteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NoteListView.swift"; sourceTree = "<group>"; };
+		000000000000000000000032 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
+		000000000000000000000015 /* Parley.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Parley.entitlements; sourceTree = "<group>"; };
+		000000000000000000000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		000000000000000000000018 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		000000000000000000000034 /* Archivo-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Archivo-Bold.ttf; sourceTree = "<group>"; };
+		000000000000000000000036 /* Archivo-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Archivo-ExtraBold.ttf; sourceTree = "<group>"; };
+		000000000000000000000038 /* Archivo-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Archivo-Regular.ttf; sourceTree = "<group>"; };
+		00000000000000000000003A /* HankenGrotesk-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = HankenGrotesk-Regular.ttf; sourceTree = "<group>"; };
+		00000000000000000000003C /* HankenGrotesk-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = HankenGrotesk-SemiBold.ttf; sourceTree = "<group>"; };
+		00000000000000000000003E /* IBMPlexMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexMono-Medium.ttf; sourceTree = "<group>"; };
+		000000000000000000000040 /* IBMPlexMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = IBMPlexMono-Regular.ttf; sourceTree = "<group>"; };
+		000000000000000000000042 /* Newsreader-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Newsreader-Regular.ttf; sourceTree = "<group>"; };
+		000000000000000000000044 /* Newsreader-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Newsreader-SemiBold.ttf; sourceTree = "<group>"; };
+		000000000000000000000046 /* SpaceGrotesk-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = SpaceGrotesk-Medium.ttf; sourceTree = "<group>"; };
+		000000000000000000000048 /* SpaceGrotesk-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = SpaceGrotesk-Regular.ttf; sourceTree = "<group>"; };
+		00000000000000000000001A /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
+		00000000000000000000001B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		1A0000000000000000000008 /* Frameworks */ = {
+		00000000000000000000000D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -25,18 +77,93 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		1A0000000000000000000002 = {
+		000000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
-				1A0000000000000000000003 /* Parley */,
-				1A0000000000000000000004 /* Products */,
+				000000000000000000000003 /* Parley */,
+				000000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		1A0000000000000000000004 /* Products */ = {
+		000000000000000000000003 /* Parley */ = {
 			isa = PBXGroup;
 			children = (
-				1A0000000000000000000005 /* Parley.app */,
+				00000000000000000000001C /* ParleyApp.swift */,
+				000000000000000000000005 /* Models */,
+				000000000000000000000006 /* Views */,
+				000000000000000000000007 /* Theme */,
+				000000000000000000000008 /* Fonts */,
+				000000000000000000000016 /* Assets.xcassets */,
+				000000000000000000000009 /* Preview Content */,
+				000000000000000000000015 /* Parley.entitlements */,
+			);
+			path = Parley;
+			sourceTree = "<group>";
+		};
+		000000000000000000000005 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				00000000000000000000001E /* Note.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		000000000000000000000006 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				00000000000000000000002E /* NoteDetailView.swift */,
+				000000000000000000000030 /* NoteListView.swift */,
+				000000000000000000000032 /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		000000000000000000000007 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000020 /* AppFonts.swift */,
+				000000000000000000000022 /* Color+Hex.swift */,
+				000000000000000000000024 /* Density.swift */,
+				000000000000000000000026 /* Mood.swift */,
+				000000000000000000000028 /* Theme.swift */,
+				00000000000000000000002A /* ThemeManager.swift */,
+				00000000000000000000002C /* ThemeShadowModifier.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		000000000000000000000008 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000034 /* Archivo-Bold.ttf */,
+				000000000000000000000036 /* Archivo-ExtraBold.ttf */,
+				000000000000000000000038 /* Archivo-Regular.ttf */,
+				00000000000000000000003A /* HankenGrotesk-Regular.ttf */,
+				00000000000000000000003C /* HankenGrotesk-SemiBold.ttf */,
+				00000000000000000000003E /* IBMPlexMono-Medium.ttf */,
+				000000000000000000000040 /* IBMPlexMono-Regular.ttf */,
+				000000000000000000000042 /* Newsreader-Regular.ttf */,
+				000000000000000000000044 /* Newsreader-SemiBold.ttf */,
+				000000000000000000000046 /* SpaceGrotesk-Medium.ttf */,
+				000000000000000000000048 /* SpaceGrotesk-Regular.ttf */,
+				00000000000000000000001A /* OFL.txt */,
+				00000000000000000000001B /* README.md */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		000000000000000000000009 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000018 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		000000000000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				00000000000000000000000B /* Parley.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -44,82 +171,103 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		1A0000000000000000000006 /* Parley */ = {
+		00000000000000000000000A /* Parley */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1A000000000000000000000B /* Build configuration list for PBXNativeTarget "Parley" */;
+			buildConfigurationList = 000000000000000000000010 /* Build configuration list for PBXNativeTarget "Parley" */;
 			buildPhases = (
-				1A0000000000000000000007 /* Sources */,
-				1A0000000000000000000008 /* Frameworks */,
-				1A0000000000000000000009 /* Resources */,
+				00000000000000000000000C /* Sources */,
+				00000000000000000000000D /* Frameworks */,
+				00000000000000000000000E /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			fileSystemSynchronizedGroups = (
-				1A0000000000000000000003 /* Parley */,
-			);
 			name = Parley;
 			productName = Parley;
-			productReference = 1A0000000000000000000005 /* Parley.app */;
+			productReference = 00000000000000000000000B /* Parley.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		1A0000000000000000000001 /* Project object */ = {
+		000000000000000000000001 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
-					1A0000000000000000000006 = {
+					00000000000000000000000A = {
 						CreatedOnToolsVersion = 26.0;
 					};
 				};
 			};
-			buildConfigurationList = 1A000000000000000000000A /* Build configuration list for PBXProject "Parley" */;
+			buildConfigurationList = 00000000000000000000000F /* Build configuration list for PBXProject "Parley" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = 1A0000000000000000000002;
-			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
-			productRefGroup = 1A0000000000000000000004 /* Products */;
+			mainGroup = 000000000000000000000002;
+			productRefGroup = 000000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				1A0000000000000000000006 /* Parley */,
+				00000000000000000000000A /* Parley */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		1A0000000000000000000009 /* Resources */ = {
+		00000000000000000000000E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				000000000000000000000019 /* Preview Assets.xcassets in Resources */,
+				000000000000000000000017 /* Assets.xcassets in Resources */,
+				000000000000000000000035 /* Archivo-Bold.ttf in Resources */,
+				000000000000000000000037 /* Archivo-ExtraBold.ttf in Resources */,
+				000000000000000000000039 /* Archivo-Regular.ttf in Resources */,
+				00000000000000000000003B /* HankenGrotesk-Regular.ttf in Resources */,
+				00000000000000000000003D /* HankenGrotesk-SemiBold.ttf in Resources */,
+				00000000000000000000003F /* IBMPlexMono-Medium.ttf in Resources */,
+				000000000000000000000041 /* IBMPlexMono-Regular.ttf in Resources */,
+				000000000000000000000043 /* Newsreader-Regular.ttf in Resources */,
+				000000000000000000000045 /* Newsreader-SemiBold.ttf in Resources */,
+				000000000000000000000047 /* SpaceGrotesk-Medium.ttf in Resources */,
+				000000000000000000000049 /* SpaceGrotesk-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		1A0000000000000000000007 /* Sources */ = {
+		00000000000000000000000C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				00000000000000000000001D /* ParleyApp.swift in Sources */,
+				00000000000000000000001F /* Note.swift in Sources */,
+				000000000000000000000021 /* AppFonts.swift in Sources */,
+				000000000000000000000023 /* Color+Hex.swift in Sources */,
+				000000000000000000000025 /* Density.swift in Sources */,
+				000000000000000000000027 /* Mood.swift in Sources */,
+				000000000000000000000029 /* Theme.swift in Sources */,
+				00000000000000000000002B /* ThemeManager.swift in Sources */,
+				00000000000000000000002D /* ThemeShadowModifier.swift in Sources */,
+				00000000000000000000002F /* NoteDetailView.swift in Sources */,
+				000000000000000000000031 /* NoteListView.swift in Sources */,
+				000000000000000000000033 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		1A000000000000000000000C /* Debug */ = {
+		000000000000000000000011 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -180,7 +328,7 @@
 			};
 			name = Debug;
 		};
-		1A000000000000000000000D /* Release */ = {
+		000000000000000000000012 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -233,18 +381,9 @@
 			};
 			name = Release;
 		};
-		1A000000000000000000000E /* Debug */ = {
+		000000000000000000000013 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Parley/Parley.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"Parley/Preview Content\"";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -255,9 +394,18 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad[sdk=iphonesimulator*]" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone[sdk=iphoneos*]" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone[sdk=iphonesimulator*]" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Parley/Parley.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Parley/Preview Content\"";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lessane.Parley;
@@ -270,18 +418,9 @@
 			};
 			name = Debug;
 		};
-		1A000000000000000000000F /* Release */ = {
+		000000000000000000000014 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Parley/Parley.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"Parley/Preview Content\"";
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -292,9 +431,18 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad[sdk=iphonesimulator*]" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone[sdk=iphoneos*]" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone[sdk=iphonesimulator*]" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Parley/Parley.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"Parley/Preview Content\"";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lessane.Parley;
@@ -310,25 +458,26 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1A000000000000000000000A /* Build configuration list for PBXProject "Parley" */ = {
+		00000000000000000000000F /* Build configuration list for PBXProject "Parley" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				1A000000000000000000000C /* Debug */,
-				1A000000000000000000000D /* Release */,
+				000000000000000000000011 /* Debug */,
+				000000000000000000000012 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1A000000000000000000000B /* Build configuration list for PBXNativeTarget "Parley" */ = {
+		000000000000000000000010 /* Build configuration list for PBXNativeTarget "Parley" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				1A000000000000000000000E /* Debug */,
-				1A000000000000000000000F /* Release */,
+				000000000000000000000013 /* Debug */,
+				000000000000000000000014 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
 	};
-	rootObject = 1A0000000000000000000001 /* Project object */;
+	rootObject = 000000000000000000000001 /* Project object */;
 }

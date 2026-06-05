@@ -13,6 +13,9 @@ struct NoteListView: View {
     /// Calendar + Reminders (injected in `ParleyApp`).
     @Environment(EventKitService.self) private var eventKit
 
+    /// CloudKit sync status (injected in `ParleyApp`).
+    @Environment(SyncMonitor.self) private var syncMonitor
+
     /// `@Query` is SwiftData's live-fetch property wrapper. It runs the fetch,
     /// hands us the results, and re-renders automatically when matching data
     /// changes. We sort newest-first.
@@ -88,6 +91,10 @@ struct NoteListView: View {
                     isLoading: loadingMeetings,
                     onPick: createNote(from:)
                 )
+            }
+            // Pinned sync-status chip at the foot of the sidebar.
+            .safeAreaInset(edge: .bottom) {
+                SyncStatusChip(theme: theme, status: syncMonitor.status)
             }
         } detail: {
             // DETAIL
@@ -223,6 +230,49 @@ private struct NoteRow: View {
     }
 }
 
+/// A small footer chip showing CloudKit sync status, styled to the mood.
+private struct SyncStatusChip: View {
+    let theme: Theme
+    let status: SyncMonitor.Status
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .symbolEffect(.rotate, options: .repeating, isActive: isSyncing)
+            Text(label)
+        }
+        .font(theme.monoFont(10.5, relativeTo: .caption2))
+        .foregroundStyle(isError ? theme.rec : theme.inkFaint)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 8)
+        .background(theme.paperSunk)
+        .overlay(alignment: .top) { Rectangle().fill(theme.line).frame(height: theme.borderWidth) }
+    }
+
+    private var isSyncing: Bool { status == .syncing }
+    private var isError: Bool { if case .error = status { return true }; return false }
+
+    private var icon: String {
+        switch status {
+        case .localOnly: "internaldrive"
+        case .idle:      "icloud"
+        case .syncing:   "arrow.triangle.2.circlepath"
+        case .synced:    "checkmark.icloud"
+        case .error:     "exclamationmark.icloud"
+        }
+    }
+
+    private var label: String {
+        switch status {
+        case .localOnly: "On this device"
+        case .idle:      "iCloud"
+        case .syncing:   "Syncing…"
+        case .synced:    "Synced"
+        case .error:     "Sync issue"
+        }
+    }
+}
+
 /// A mood-styled empty state. We render our own (instead of
 /// `ContentUnavailableView`) so the mood's fonts and colors are visible even
 /// when there are no notes — otherwise an empty screen looks unthemed.
@@ -254,7 +304,9 @@ private struct ThemedEmptyState: View {
 
 #Preview {
     NoteListView()
-        // Previews need their own container and theme manager.
+        // Previews need their own container and the injected managers.
         .modelContainer(for: Note.self, inMemory: true)
         .environment(ThemeManager())
+        .environment(EventKitService())
+        .environment(SyncMonitor(cloudEnabled: false))
 }

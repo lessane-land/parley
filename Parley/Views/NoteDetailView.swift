@@ -254,4 +254,5 @@ struct NoteDetailView: View {
     }
     .modelContainer(container)
     .environment(ThemeManager())
+    .environment(EventKitService())
 }

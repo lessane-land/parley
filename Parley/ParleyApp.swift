@@ -19,31 +19,39 @@ struct ParleyApp: App {
     /// The SwiftData store — now CloudKit-backed for cross-device sync.
     private let modelContainer: ModelContainer
 
+    /// Reports CloudKit sync activity to the UI.
+    @State private var syncMonitor: SyncMonitor
+
     init() {
         // Register the bundled fonts before any view renders, so custom faces
         // are available on first paint. Then build the shared theme state.
         AppFonts.registerAll()
         _themeManager = State(initialValue: ThemeManager())
-        modelContainer = Self.makeModelContainer()
+
+        let (container, cloudEnabled) = Self.makeModelContainer()
+        modelContainer = container
+        _syncMonitor = State(initialValue: SyncMonitor(cloudEnabled: cloudEnabled))
     }
 
     /// Builds the SwiftData container with CloudKit sync (private database), and
     /// falls back to a local-only store if CloudKit isn't available — so the app
     /// always launches even before iCloud/entitlements are fully provisioned.
+    /// Returns whether CloudKit actually started, for the sync indicator.
     ///
     /// SwiftData syncs via CloudKit when the model is CloudKit-compatible (all
     /// properties optional or defaulted, no unique constraints — which `Note`
     /// satisfies) and the iCloud + CloudKit entitlements are present. `.automatic`
     /// uses the container declared in the entitlements.
-    private static func makeModelContainer() -> ModelContainer {
+    private static func makeModelContainer() -> (ModelContainer, Bool) {
         let schema = Schema([Note.self])
         let cloudConfig = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
         if let container = try? ModelContainer(for: schema, configurations: cloudConfig) {
-            return container
+            return (container, true)
         }
         // CloudKit unavailable (not signed in, no entitlement yet, Simulator): keep working locally.
         let localConfig = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
-        return try! ModelContainer(for: schema, configurations: localConfig)
+        return ((try? ModelContainer(for: schema, configurations: localConfig))
+            ?? (try! ModelContainer(for: schema)), false)
     }
 
     var body: some Scene {
@@ -52,6 +60,7 @@ struct ParleyApp: App {
                 // Make the managers available to every view via the environment.
                 .environment(themeManager)
                 .environment(eventKit)
+                .environment(syncMonitor)
                 // Tint (selection, controls) follows the mood's accent…
                 .tint(themeManager.theme.accent)
                 // …and the whole window goes light/dark to match the mood.

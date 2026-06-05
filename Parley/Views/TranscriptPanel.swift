@@ -14,7 +14,6 @@ struct TranscriptPanel: View {
     let volatile: String          // in-flight partial (only while recording)
     let state: TranscriptionService.State
     let startedAt: Date?
-    let onToggleRecord: () -> Void
 
     private var isRecording: Bool { state == .recording }
 
@@ -27,7 +26,7 @@ struct TranscriptPanel: View {
         .moodCard(theme, fill: theme.paperSunk)
     }
 
-    // MARK: Header (label · status · record button)
+    // MARK: Header (label · live status)
 
     private var header: some View {
         HStack(spacing: 10) {
@@ -36,13 +35,15 @@ struct TranscriptPanel: View {
                 .tracking(1.4)
                 .foregroundStyle(theme.inkSoft)
 
-            if isRecording {
-                livePill
-            }
-
             Spacer()
 
-            recordButton
+            if isRecording {
+                livePill
+            } else if let label = busyLabel {
+                Text(label)
+                    .font(theme.monoFont(11))
+                    .foregroundStyle(theme.inkFaint)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -62,36 +63,12 @@ struct TranscriptPanel: View {
         }
     }
 
-    private var recordButton: some View {
-        Button(action: onToggleRecord) {
-            HStack(spacing: 7) {
-                Image(systemName: isRecording ? "stop.fill" : "mic.fill")
-                Text(recordLabel)
-                    .font(.subheadline.weight(.semibold))
-            }
-            .foregroundStyle(isRecording ? Color.white : theme.accentInk)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 999)
-                    .fill(isRecording ? theme.rec : theme.accentTint)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 999)
-                    .strokeBorder(isRecording ? .clear : theme.accentLine, lineWidth: theme.borderWidth)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(state == .preparing || state == .downloadingModel || state == .finishing)
-    }
-
-    private var recordLabel: String {
+    private var busyLabel: String? {
         switch state {
         case .preparing: "Starting…"
-        case .downloadingModel: "Downloading…"
+        case .downloadingModel: "Downloading model…"
         case .finishing: "Stopping…"
-        case .recording: "Stop"
-        default: "Record"
+        default: nil
         }
     }
 

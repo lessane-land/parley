@@ -42,6 +42,10 @@ struct NoteDetailView: View {
         var id: Int { rawValue }
     }
 
+    /// On iPad, the notes surface is either keyboard (Type) or Pencil (Draw).
+    @State private var penMode: PenMode = .type
+    private enum PenMode: Hashable { case type, draw }
+
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var hSize
     #endif
@@ -96,6 +100,7 @@ struct NoteDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
+            ToolbarItem { recordControl }
             ToolbarItem {
                 Button { activeSheet = .summary } label: {
                     Label("Summarize", systemImage: "sparkles")
@@ -242,22 +247,66 @@ struct NoteDetailView: View {
     }
 
     private var notesColumn: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
+            #if os(iOS)
+            if showsHandwriting { penModeBar }
+            #endif
+            notesSurface
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// One surface: typed notes with the Pencil canvas overlaid. The active mode
+    /// owns touches (the other layer is hit-test-transparent), so on iPad you
+    /// type *and* draw on the same page — the design's unified notes canvas.
+    private var notesSurface: some View {
+        ZStack(alignment: .topLeading) {
             typedNotes
-                .padding(.leading, 16)
-                .overlay(alignment: .leading) {
-                    // Notebook margin rule (the design's .pk-notes::before).
-                    Rectangle().fill(theme.accentLine).frame(width: 1)
-                }
-                .frame(maxHeight: showsHandwriting ? 220 : .infinity)
+                .allowsHitTesting(typedActive)
 
             #if os(iOS)
             if showsHandwriting {
-                handwriting
+                DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw)
+                    .id(canvasID)
+                    .allowsHitTesting(penMode == .draw)
             }
             #endif
         }
+        .padding(.leading, 16)
+        .overlay(alignment: .leading) {
+            // Notebook margin rule (the design's .pk-notes::before).
+            Rectangle().fill(theme.accentLine).frame(width: 1)
+        }
     }
+
+    /// Typed layer accepts touches unless we're actively drawing on iPad.
+    private var typedActive: Bool {
+        !showsHandwriting || penMode == .type
+    }
+
+    #if os(iOS)
+    private var penModeBar: some View {
+        HStack(spacing: 10) {
+            Picker("Input", selection: $penMode) {
+                Label("Type", systemImage: "keyboard").tag(PenMode.type)
+                Label("Draw", systemImage: "pencil.tip").tag(PenMode.draw)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+
+            Spacer()
+
+            if penMode == .draw {
+                Button { showClearDrawing = true } label: {
+                    Label("Clear", systemImage: "eraser").font(.caption)
+                }
+                .tint(theme.accent)
+                .disabled(note.drawing == nil)
+            }
+        }
+    }
+    #endif
 
     private var transcriptPanel: some View {
         TranscriptPanel(
@@ -266,8 +315,7 @@ struct NoteDetailView: View {
             text: note.transcript,
             volatile: transcription.volatileText,
             state: transcription.state,
-            startedAt: transcription.startedAt,
-            onToggleRecord: toggleRecord
+            startedAt: transcription.startedAt
         )
     }
 
@@ -289,32 +337,54 @@ struct NoteDetailView: View {
             }
     }
 
-    #if os(iOS)
-    private var handwriting: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("HANDWRITING")
-                    .font(theme.monoFont(11))
-                    .tracking(1.2)
-                    .foregroundStyle(theme.inkFaint)
-                Spacer()
-                Button {
-                    showClearDrawing = true
-                } label: {
-                    Label("Clear", systemImage: "eraser")
-                        .font(.caption)
-                }
-                .tint(theme.accent)
-                .disabled(note.drawing == nil)
-            }
+    // MARK: Top-bar record control (the design's REC pill + circular stop)
 
-            DrawingCanvas(data: $note.drawing, inkColor: theme.ink)
-                .id(canvasID)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .moodCard(theme)
+    @ViewBuilder
+    private var recordControl: some View {
+        if transcription.isRecording {
+            HStack(spacing: 8) {
+                if let startedAt = transcription.startedAt {
+                    TimelineView(.periodic(from: startedAt, by: 1)) { _ in
+                        HStack(spacing: 5) {
+                            Circle().fill(theme.rec).frame(width: 7, height: 7)
+                            Text(elapsed(since: startedAt))
+                                .font(theme.monoFont(12, relativeTo: .subheadline))
+                                .foregroundStyle(theme.rec)
+                        }
+                    }
+                }
+                Button { toggleRecord() } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.caption)
+                        .foregroundStyle(theme.paperRaised)
+                        .padding(8)
+                        .background(theme.ink, in: Circle())
+                }
+                .buttonStyle(.plain)
+            }
+        } else {
+            Button { toggleRecord() } label: {
+                Label(recordLabel, systemImage: "mic.fill")
+            }
+            .disabled(transcription.state == .preparing
+                      || transcription.state == .downloadingModel
+                      || transcription.state == .finishing)
         }
     }
-    #endif
+
+    private var recordLabel: String {
+        switch transcription.state {
+        case .preparing: "Starting…"
+        case .downloadingModel: "Downloading…"
+        case .finishing: "Stopping…"
+        default: "Record"
+        }
+    }
+
+    private func elapsed(since start: Date) -> String {
+        let s = max(0, Int(Date().timeIntervalSince(start)))
+        return String(format: "%02d:%02d", s / 60, s % 60)
+    }
 
     private func toggleRecord() {
         Task {

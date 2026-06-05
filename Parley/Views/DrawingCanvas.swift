@@ -22,10 +22,15 @@ struct DrawingCanvas: UIViewRepresentable {
     /// The mood's ink color, used as the default pen color.
     var inkColor: Color
 
+    /// Whether this canvas is the active input layer (Draw mode). When false the
+    /// tool picker hides and the canvas resigns first responder so the text layer
+    /// underneath can be typed in.
+    var isActive: Bool = true
+
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = PKCanvasView()
         canvas.drawingPolicy = .anyInput        // Pencil *or* finger, so it's usable without a Pencil too
-        canvas.backgroundColor = .clear         // let the themed paper show through
+        canvas.backgroundColor = .clear         // overlays the typed notes; paper shows through
         canvas.isOpaque = false
         canvas.delegate = context.coordinator
         context.coordinator.canvas = canvas
@@ -39,24 +44,29 @@ struct DrawingCanvas: UIViewRepresentable {
             canvas.drawing = drawing
         }
 
-        // The floating tool picker (pens, eraser, colors, ruler).
-        let picker = context.coordinator.toolPicker
-        picker.setVisible(true, forFirstResponder: canvas)
-        picker.addObserver(canvas)
-        // Becoming first responder is what makes the picker appear; defer a tick
-        // so it happens after the view is in the window.
-        DispatchQueue.main.async { canvas.becomeFirstResponder() }
+        context.coordinator.toolPicker.addObserver(canvas)
+        applyActive(isActive, to: canvas, context: context)
 
         return canvas
     }
 
     func updateUIView(_ canvas: PKCanvasView, context: Context) {
-        // Keep the coordinator's notion of "the binding" current so its delegate
-        // callback writes to the right place. We intentionally do NOT reload
-        // `canvas.drawing` from `data` here — the detail view is rebuilt per note
-        // (via `.id`), so each note already gets a fresh canvas in `makeUIView`,
-        // and reloading mid-stroke would fight the user's input.
+        // Keep the coordinator's binding current so its delegate writes to the
+        // right place. We don't reload `canvas.drawing` from `data` — the detail
+        // is rebuilt per note (via `.id`), so each note gets a fresh canvas.
         context.coordinator.parent = self
+        applyActive(isActive, to: canvas, context: context)
+    }
+
+    /// Show/hide the tool picker and grab/release first responder with the mode.
+    private func applyActive(_ active: Bool, to canvas: PKCanvasView, context: Context) {
+        let picker = context.coordinator.toolPicker
+        picker.setVisible(active, forFirstResponder: canvas)
+        if active, !canvas.isFirstResponder {
+            DispatchQueue.main.async { canvas.becomeFirstResponder() }
+        } else if !active, canvas.isFirstResponder {
+            DispatchQueue.main.async { canvas.resignFirstResponder() }
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

@@ -467,7 +467,8 @@ struct NoteDetailView: View {
             canLabelSpeakers: !transcription.isRecording,
             knownSpeakers: knownSpeakers,
             onAssignSpeaker: assignSpeaker,
-            onNewSpeaker: promptNewSpeaker
+            onNewSpeaker: promptNewSpeaker,
+            onRenameSpeaker: renameSpeaker
         )
     }
 
@@ -592,6 +593,13 @@ struct NoteDetailView: View {
     private func promptNewSpeaker(_ id: UUID) {
         speakerDraft = note.transcriptSegments.first { $0.id == id }?.speaker ?? ""
         editingSpeakerID = id
+    }
+
+    /// Rename a speaker from the legend chip — opens the prompt against any line
+    /// of that speaker, so saving renames the whole group.
+    private func renameSpeaker(_ label: String) {
+        guard let id = note.transcriptSegments.first(where: { $0.speaker == label })?.id else { return }
+        promptNewSpeaker(id)
     }
 
     /// Commit a typed speaker name. If the line already has a label (e.g. an

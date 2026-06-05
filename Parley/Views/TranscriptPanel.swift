@@ -20,6 +20,7 @@ struct TranscriptPanel: View {
     var knownSpeakers: [String] = []        // names already used in this note (quick-pick)
     var onAssignSpeaker: ((UUID, String?) -> Void)? = nil   // pick an existing name, or clear (nil)
     var onNewSpeaker: ((UUID) -> Void)? = nil               // ask the owner to prompt for a new name
+    var onRenameSpeaker: ((String) -> Void)? = nil          // rename a whole speaker (from the legend)
 
     private var isRecording: Bool { state == .recording }
 
@@ -119,6 +120,55 @@ struct TranscriptPanel: View {
     /// falls back to sentence-splitting flat `text` (older notes). The live line
     /// is the active (accent) node at the bottom.
     private var transcriptTimeline: some View {
+        VStack(spacing: 0) {
+            speakerLegend
+            timelineScroll
+        }
+    }
+
+    /// A tappable chip per speaker — the discoverable way to rename. Tapping
+    /// renames every line of that speaker. Hidden while recording.
+    @ViewBuilder
+    private var speakerLegend: some View {
+        let names = distinctSpeakers
+        if canLabelSpeakers, !names.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(names, id: \.self) { name in
+                        Button { onRenameSpeaker?(name) } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "person.crop.circle")
+                                Text(name)
+                                Image(systemName: "pencil")
+                            }
+                            .font(theme.monoFont(10.5, relativeTo: .caption2))
+                            .foregroundStyle(theme.accentInk)
+                            .padding(.horizontal, 9).padding(.vertical, 5)
+                            .background(theme.accentTint, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Rename \(name)")
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+            }
+            Divider().overlay(theme.line)
+        }
+    }
+
+    /// Distinct speaker names in first-appearance order.
+    private var distinctSpeakers: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for segment in segments {
+            if let name = segment.speaker, !name.isEmpty, seen.insert(name).inserted {
+                result.append(name)
+            }
+        }
+        return result
+    }
+
+    private var timelineScroll: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

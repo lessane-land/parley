@@ -66,11 +66,13 @@ final class TranscriptionService {
             // The device locale may be a combination with no model (e.g. en-ES =
             // English in Spain), so resolve to a supported locale that matches the
             // language rather than demanding an exact region match.
+            // `supportedLocales` is empty on the Simulator (no on-device speech
+            // models). Use it to pick a good region when present; otherwise fall
+            // back to a best guess and still try — on a real device the model
+            // downloads; on the Simulator `start`/install throws a clearer error.
             let supported = await SpeechTranscriber.supportedLocales
-            guard let locale = Self.resolveLocale(from: supported, preferred: preferredLanguage) else {
-                state = .unavailable("Speech transcription isn't available on this device.")
-                return
-            }
+            let locale = Self.resolveLocale(from: supported, preferred: preferredLanguage)
+                ?? Self.fallbackLocale(preferred: preferredLanguage)
 
             let transcriber = SpeechTranscriber(
                 locale: locale,
@@ -231,6 +233,20 @@ final class TranscriptionService {
         }
 
         return supported.first(where: { $0.identifier(.bcp47) == "en-US" }) ?? supported.first
+    }
+
+    /// A reasonable default region for a language when the supported list is
+    /// unavailable (e.g. Simulator), so we can still attempt a real-device run.
+    static func fallbackLocale(preferred: String?) -> Locale {
+        let language = preferred
+            ?? Locale.current.language.languageCode?.identifier
+            ?? "en"
+        let defaults = [
+            "en": "en-US", "es": "es-ES", "fr": "fr-FR", "de": "de-DE",
+            "it": "it-IT", "pt": "pt-BR", "nl": "nl-NL",
+            "zh": "zh-CN", "ja": "ja-JP", "ko": "ko-KR"
+        ]
+        return Locale(identifier: defaults[language] ?? "en-US")
     }
 }
 

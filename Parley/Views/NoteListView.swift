@@ -1,45 +1,43 @@
 import SwiftUI
 import SwiftData
 
-/// The master/detail screen: list of notes on the left, editor on the right.
+/// The home screen: a sidebar (brand, search, Record CTA, All/Recent/tag filters)
+/// listing note cards, with the editor in the detail pane.
 struct NoteListView: View {
-    /// The `ModelContext` SwiftData injected from `.modelContainer`. It's the
-    /// handle we use to insert and delete notes; saves are automatic.
     @Environment(\.modelContext) private var context
-
-    /// The shared appearance state (injected in `ParleyApp`).
     @Environment(ThemeManager.self) private var themeManager
-
-    /// Calendar + Reminders (injected in `ParleyApp`).
     @Environment(EventKitService.self) private var eventKit
-
-    /// CloudKit sync status (injected in `ParleyApp`).
     @Environment(SyncMonitor.self) private var syncMonitor
 
-    /// `@Query` is SwiftData's live-fetch property wrapper. It runs the fetch,
-    /// hands us the results, and re-renders automatically when matching data
-    /// changes. We sort newest-first.
     @Query(sort: \Note.createdAt, order: .reverse) private var notes: [Note]
+    @Query(sort: \Tag.name) private var allTags: [Tag]
 
-    /// Which note the detail pane is showing. `Note?` because nothing may be
-    /// selected. The sidebar `List` binds its selection to this.
     @State private var selection: Note?
-
-    /// iOS/iPadOS: whether the settings sheet is showing. (macOS uses Cmd-,.)
     @State private var showingSettings = false
 
-    /// Today's-meetings sheet state.
+    // Today's-meetings sheet
     @State private var showingToday = false
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
+
+    // Sidebar filtering
+    @State private var searchText = ""
+    @State private var scope: Scope = .all
+
+    /// Set when the Record CTA makes a note, so the detail auto-starts recording.
+    @State private var recordIntentID: PersistentIdentifier?
+
+    private enum Scope: Equatable {
+        case all, recent
+        case tag(PersistentIdentifier)
+    }
 
     private var theme: Theme { themeManager.theme }
 
     var body: some View {
         NavigationSplitView {
-            // SIDEBAR
             List(selection: $selection) {
-                ForEach(notes) { note in
+                ForEach(filteredNotes) { note in
                     NoteRow(note: note, theme: theme, selected: note == selection)
                         .tag(note)
                         .listRowBackground(Color.clear)
@@ -49,9 +47,12 @@ struct NoteListView: View {
                 .onDelete(perform: deleteNotes)
             }
             .listStyle(.plain)
-            .scrollContentBackground(.hidden)   // let the mood's paper show through
+            .scrollContentBackground(.hidden)
             .background(theme.paperSunk)
-            .navigationTitle("Notes")
+            .navigationTitle("")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem {
                     Button(action: addNote) {
@@ -71,18 +72,8 @@ struct NoteListView: View {
                 }
                 #endif
             }
-            .overlay {
-                if notes.isEmpty {
-                    ThemedEmptyState(
-                        theme: theme,
-                        icon: "note.text",
-                        title: "No Notes",
-                        message: "Tap the compose button to create your first note."
-                    )
-                }
-            }
-            // Attached to the sidebar (a different view than the Settings sheet)
-            // so the two sheets don't fight.
+            .safeAreaInset(edge: .top) { sidebarHeader }
+            .overlay { emptyOverlay }
             .sheet(isPresented: $showingToday) {
                 TodayMeetingsSheet(
                     theme: theme,
@@ -92,17 +83,17 @@ struct NoteListView: View {
                     onPick: createNote(from:)
                 )
             }
-            // Pinned sync-status chip at the foot of the sidebar.
             .safeAreaInset(edge: .bottom) {
                 SyncStatusChip(theme: theme, status: syncMonitor.status)
             }
         } detail: {
-            // DETAIL
             if let selection {
-                // `id:` forces SwiftUI to build a fresh editor when the selected
-                // note changes, instead of reusing the previous one's state.
-                NoteDetailView(note: selection)
-                    .id(selection.id)
+                NoteDetailView(
+                    note: selection,
+                    autoRecord: selection.persistentModelID == recordIntentID,
+                    onAutoRecordConsumed: { recordIntentID = nil }
+                )
+                .id(selection.id)
             } else {
                 ThemedEmptyState(
                     theme: theme,
@@ -114,9 +105,6 @@ struct NoteListView: View {
                 .background(theme.paper)
             }
         }
-        // Accent (selection, toolbar buttons) follows the mood, in addition to
-        // the app-level tint — belt and suspenders so the navigation chrome
-        // picks it up reliably.
         .tint(theme.accent)
         #if !os(macOS)
         .sheet(isPresented: $showingSettings) {
@@ -134,14 +122,145 @@ struct NoteListView: View {
         #endif
     }
 
-    /// Insert a new empty note and immediately select it so the user can type.
+    // MARK: Sidebar header
+
+    private var sidebarHeader: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 9) {
+                brandMark
+                Text("Parley")
+                    .font(theme.titleFont(20, relativeTo: .title3))
+                    .tracking(theme.titleTracking)
+                    .foregroundStyle(theme.ink)
+                Spacer()
+            }
+            searchField
+            recordCTA
+            filterChips
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
+        .background(theme.paperSunk)
+    }
+
+    private var brandMark: some View {
+        RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 8)
+            .fill(theme.accent)
+            .frame(width: 30, height: 30)
+            .overlay(
+                Text("P")
+                    .font(theme.titleFont(17, relativeTo: .headline))
+                    .foregroundStyle(.white)
+            )
+    }
+
+    private var searchField: some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
+        return HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(theme.inkFaint)
+            TextField("Search", text: $searchText)
+                .textFieldStyle(.plain)
+                .foregroundStyle(theme.ink)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(theme.inkFaint)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .font(theme.bodyFont(14))
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(theme.paperRaised, in: shape)
+        .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+    }
+
+    private var recordCTA: some View {
+        Button { createAndRecord() } label: {
+            HStack(spacing: 9) {
+                Image(systemName: "mic.fill")
+                Text("Record meeting").font(.subheadline.weight(.semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(theme.accent, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 12))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                FilterChip(theme: theme, label: "All", count: notes.count, isOn: scope == .all) { scope = .all }
+                FilterChip(theme: theme, label: "Recent", count: recentCount, isOn: scope == .recent) { scope = .recent }
+                ForEach(allTags) { tag in
+                    FilterChip(theme: theme, label: tag.name, count: tag.notes?.count ?? 0, color: tag.color,
+                               isOn: scope == .tag(tag.persistentModelID)) {
+                        scope = .tag(tag.persistentModelID)
+                    }
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+    }
+
+    @ViewBuilder
+    private var emptyOverlay: some View {
+        if notes.isEmpty {
+            ThemedEmptyState(theme: theme, icon: "note.text", title: "No Notes",
+                             message: "Tap Record, or the compose button, to start your first note.")
+        } else if filteredNotes.isEmpty {
+            ThemedEmptyState(theme: theme, icon: "magnifyingglass", title: "No matches",
+                             message: "Nothing matches your search or filter.")
+        }
+    }
+
+    // MARK: Filtering
+
+    private var recentCutoff: Date {
+        Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .distantPast
+    }
+
+    private var recentCount: Int {
+        notes.filter { $0.createdAt >= recentCutoff }.count
+    }
+
+    private var filteredNotes: [Note] {
+        notes.filter { matchesSearch($0) && matchesScope($0) }
+    }
+
+    private func matchesSearch(_ note: Note) -> Bool {
+        guard !searchText.isEmpty else { return true }
+        return note.title.localizedCaseInsensitiveContains(searchText)
+            || note.body.localizedCaseInsensitiveContains(searchText)
+            || note.transcript.localizedCaseInsensitiveContains(searchText)
+    }
+
+    private func matchesScope(_ note: Note) -> Bool {
+        switch scope {
+        case .all: return true
+        case .recent: return note.createdAt >= recentCutoff
+        case .tag(let id): return (note.tags ?? []).contains { $0.persistentModelID == id }
+        }
+    }
+
+    // MARK: Actions
+
     private func addNote() {
         let note = Note()
         context.insert(note)
         selection = note
     }
 
-    /// Show the meetings sheet and (re)load today's events.
+    private func createAndRecord() {
+        let note = Note(title: "New recording")
+        context.insert(note)
+        selection = note
+        recordIntentID = note.persistentModelID
+    }
+
     private func openToday() {
         showingToday = true
         loadingMeetings = true
@@ -151,7 +270,6 @@ struct NoteListView: View {
         }
     }
 
-    /// Create a note pre-filled from a meeting — or reopen the existing one.
     private func createNote(from meeting: Meeting) {
         if let existing = notes.first(where: { $0.calendarEventID == meeting.id }) {
             selection = existing
@@ -167,7 +285,6 @@ struct NoteListView: View {
         selection = note
     }
 
-    /// The pre-filled header: time range + attendees.
     private func meetingHeader(_ meeting: Meeting) -> String {
         let time = meeting.start.formatted(date: .omitted, time: .shortened)
             + "–" + meeting.end.formatted(date: .omitted, time: .shortened)
@@ -178,25 +295,54 @@ struct NoteListView: View {
         return lines.joined(separator: "\n") + "\n\n"
     }
 
-    /// `onDelete` hands us the offsets of the swiped/edited rows; map them back
-    /// to model objects and delete. SwiftData persists the change automatically.
     private func deleteNotes(at offsets: IndexSet) {
+        let shown = filteredNotes
         for index in offsets {
-            let note = notes[index]
+            let note = shown[index]
             if note == selection { selection = nil }
             context.delete(note)
         }
     }
 }
 
-/// A single note card in the sidebar — the design's `.pk-card`: title, a short
-/// snippet, and a date, wrapped in the mood's card shape.
+/// A pill filter for the sidebar (All / Recent / a tag).
+private struct FilterChip: View {
+    let theme: Theme
+    let label: String
+    var count: Int? = nil
+    var color: Color? = nil
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 99)
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let color { Circle().fill(color).frame(width: 7, height: 7) }
+                Text(label).font(theme.bodyFont(12.5))
+                if let count {
+                    Text("\(count)")
+                        .font(theme.monoFont(10.5, relativeTo: .caption2))
+                        .foregroundStyle(theme.inkFaint)
+                }
+            }
+            .foregroundStyle(isOn ? theme.accentInk : theme.inkSoft)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background(isOn ? theme.accentTint : theme.paperRaised, in: shape)
+            .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+        }
+        .buttonStyle(.plain)
+        .lineLimit(1)
+    }
+}
+
+/// A single note card in the sidebar — title, snippet, tags, and a date.
 private struct NoteRow: View {
     let note: Note
     let theme: Theme
     let selected: Bool
 
-    /// First non-empty line of the body, for the card snippet.
     private var snippet: String {
         note.body
             .split(separator: "\n", omittingEmptySubsequences: true)
@@ -218,6 +364,20 @@ private struct NoteRow: View {
                     .font(theme.bodyFont(12.5))
                     .foregroundStyle(theme.inkSoft)
                     .lineLimit(2)
+            }
+
+            if let tags = note.tags, !tags.isEmpty {
+                HStack(spacing: 5) {
+                    ForEach(Array(tags.prefix(3))) { tag in
+                        HStack(spacing: 4) {
+                            Circle().fill(tag.color).frame(width: 6, height: 6)
+                            Text(tag.name).font(theme.monoFont(9.5, relativeTo: .caption2))
+                        }
+                        .foregroundStyle(theme.inkSoft)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(theme.paperSunk, in: Capsule())
+                    }
+                }
             }
 
             Text(note.createdAt, format: .dateTime.month().day().hour().minute())
@@ -273,9 +433,7 @@ private struct SyncStatusChip: View {
     }
 }
 
-/// A mood-styled empty state. We render our own (instead of
-/// `ContentUnavailableView`) so the mood's fonts and colors are visible even
-/// when there are no notes — otherwise an empty screen looks unthemed.
+/// A mood-styled empty state, shown when there are no notes / no matches.
 private struct ThemedEmptyState: View {
     let theme: Theme
     let icon: String
@@ -304,7 +462,6 @@ private struct ThemedEmptyState: View {
 
 #Preview {
     NoteListView()
-        // Previews need their own container and the injected managers.
         .modelContainer(for: Note.self, inMemory: true)
         .environment(ThemeManager())
         .environment(EventKitService())

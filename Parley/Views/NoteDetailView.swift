@@ -9,8 +9,15 @@ struct NoteDetailView: View {
     /// Typing/drawing mutates the tracked object directly; SwiftData autosaves.
     @Bindable var note: Note
 
+    /// When the Record CTA created this note, auto-start recording on appear.
+    var autoRecord: Bool = false
+    var onAutoRecordConsumed: () -> Void = {}
+
+    @Environment(\.modelContext) private var context
     @Environment(ThemeManager.self) private var themeManager
     @Environment(EventKitService.self) private var eventKit
+
+    @Query(sort: \Tag.name) private var allTags: [Tag]
 
     /// One transcription engine per open note. `@State` keeps it alive for the
     /// view's lifetime; the detail is rebuilt per note (via `.id`), so each note
@@ -23,6 +30,9 @@ struct NoteDetailView: View {
     /// Recreating the canvas (via `.id`) forces a reload — used by "Clear".
     @State private var canvasID = UUID()
     @State private var showClearDrawing = false
+    @State private var didAutoStart = false
+    @State private var showingNewTag = false
+    @State private var newTagName = ""
 
     /// One enum-driven sheet so multiple `.sheet`s don't fight.
     @State private var activeSheet: DetailSheet?
@@ -137,12 +147,25 @@ struct NoteDetailView: View {
         } message: {
             Text("This removes the Pencil strokes on this note. Your typed text is kept.")
         }
+        .alert("New Tag", isPresented: $showingNewTag) {
+            TextField("Name", text: $newTagName)
+            Button("Add") { createTag() }
+            Button("Cancel", role: .cancel) {}
+        }
+        // Auto-start recording when opened via the Record CTA.
+        .onAppear {
+            if autoRecord, !didAutoStart, !transcription.isRecording {
+                didAutoStart = true
+                onAutoRecordConsumed()
+                toggleRecord()
+            }
+        }
     }
 
     // MARK: Pieces
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 6) {
             TextField("Title", text: $note.title)
                 .font(theme.titleFont(26, relativeTo: .title))
                 .tracking(theme.titleTracking)
@@ -152,7 +175,70 @@ struct NoteDetailView: View {
             Text(note.createdAt, format: .dateTime.weekday().month().day().hour().minute())
                 .font(theme.monoFont(11))
                 .foregroundStyle(theme.inkFaint)
+
+            tagsRow
         }
+    }
+
+    private var tagsRow: some View {
+        HStack(spacing: 6) {
+            ForEach(note.tags ?? []) { tag in
+                HStack(spacing: 4) {
+                    Circle().fill(tag.color).frame(width: 6, height: 6)
+                    Text(tag.name).font(theme.monoFont(10, relativeTo: .caption2))
+                }
+                .foregroundStyle(theme.inkSoft)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(theme.paperRaised, in: Capsule())
+                .overlay(Capsule().strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+            }
+
+            Menu {
+                ForEach(allTags) { tag in
+                    Button { toggle(tag) } label: {
+                        if isAssigned(tag) { Label(tag.name, systemImage: "checkmark") } else { Text(tag.name) }
+                    }
+                }
+                if !allTags.isEmpty { Divider() }
+                Button { newTagName = ""; showingNewTag = true } label: { Label("New Tag…", systemImage: "plus") }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "tag")
+                    Text("Tag")
+                }
+                .font(theme.bodyFont(12))
+                .foregroundStyle(theme.accentInk)
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(theme.accentTint, in: Capsule())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func isAssigned(_ tag: Tag) -> Bool {
+        (note.tags ?? []).contains { $0.persistentModelID == tag.persistentModelID }
+    }
+
+    private func toggle(_ tag: Tag) {
+        var tags = note.tags ?? []
+        if let index = tags.firstIndex(where: { $0.persistentModelID == tag.persistentModelID }) {
+            tags.remove(at: index)
+        } else {
+            tags.append(tag)
+        }
+        note.tags = tags
+    }
+
+    private func createTag() {
+        let name = newTagName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        let color = Tag.palette[allTags.count % Tag.palette.count]
+        let tag = Tag(name: name, colorHex: color)
+        context.insert(tag)
+        toggle(tag)
     }
 
     private var notesColumn: some View {

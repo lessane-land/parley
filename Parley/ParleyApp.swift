@@ -43,7 +43,7 @@ struct ParleyApp: App {
     /// satisfies) and the iCloud + CloudKit entitlements are present. `.automatic`
     /// uses the container declared in the entitlements.
     private static func makeModelContainer() -> (ModelContainer, Bool) {
-        let schema = Schema([Note.self])
+        let schema = Schema([Note.self, Tag.self])
         let cloudConfig = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
         if let container = try? ModelContainer(for: schema, configurations: cloudConfig) {
             return (container, true)

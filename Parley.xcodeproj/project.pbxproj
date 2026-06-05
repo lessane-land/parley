@@ -11,6 +11,7 @@
 		000000000000000000000019 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000018 /* Preview Assets.xcassets */; };
 		00000000000000000000001D /* ParleyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000001C /* ParleyApp.swift */; };
 		00000000000000000000001F /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000001E /* Note.swift */; };
+		0000000000000000000000F2 /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F1 /* Tag.swift */; };
 		000000000000000000000021 /* AppFonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000020 /* AppFonts.swift */; };
 		000000000000000000000023 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000022 /* Color+Hex.swift */; };
 		000000000000000000000025 /* Density.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000024 /* Density.swift */; };
@@ -52,6 +53,7 @@
 		00000000000000000000001B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		00000000000000000000001C /* ParleyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParleyApp.swift; sourceTree = "<group>"; };
 		00000000000000000000001E /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
+		0000000000000000000000F1 /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
 		000000000000000000000020 /* AppFonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFonts.swift; sourceTree = "<group>"; };
 		000000000000000000000022 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		000000000000000000000024 /* Density.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Density.swift; sourceTree = "<group>"; };
@@ -131,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				00000000000000000000001E /* Note.swift */,
+				0000000000000000000000F1 /* Tag.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -286,6 +289,7 @@
 			files = (
 				00000000000000000000001D /* ParleyApp.swift in Sources */,
 				00000000000000000000001F /* Note.swift in Sources */,
+				0000000000000000000000F2 /* Tag.swift in Sources */,
 				000000000000000000000021 /* AppFonts.swift in Sources */,
 				000000000000000000000023 /* Color+Hex.swift in Sources */,
 				000000000000000000000025 /* Density.swift in Sources */,

@@ -34,6 +34,10 @@ final class Note {
     /// Optional → lightweight migration.
     var summaryData: Data?
 
+    /// Tags attached to this note. Optional to-many (CloudKit requirement); the
+    /// inverse is declared on `Tag.notes`.
+    var tags: [Tag]?
+
     /// Handwriting layer (iPad). A `PKDrawing` serialized via its
     /// `dataRepresentation()`. Optional because most notes have no drawing, and
     /// because adding an *optional* property is a SwiftData **lightweight

@@ -23,7 +23,7 @@ final class Note {
 
     var title: String = ""
     var body: String = ""
-    var createdAt: Date = .now
+    var createdAt: Date = Date()
 
     /// The live, on-device transcript captured while recording. Kept separate
     /// from `body` (the user's own notes) so we can merge them into a summary

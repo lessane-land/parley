@@ -37,6 +37,13 @@ struct DrawingCanvas: UIViewRepresentable {
         canvas.isOpaque = false
         canvas.alwaysBounceVertical = true      // makes the scrollability discoverable
         canvas.showsVerticalScrollIndicator = true
+        // PKCanvasView is a UIScrollView; its default `.automatic` inset behavior
+        // folds the surrounding safe area into an *adjusted content inset*, which
+        // shoves a saved drawing to the right (blank gutter on the left, strokes
+        // clipped on the right) while the typed layer underneath stays put. Pin it
+        // so the ink lines up with the text on every open.
+        canvas.contentInsetAdjustmentBehavior = .never
+        canvas.contentInset = .zero
         canvas.delegate = context.coordinator
         context.coordinator.canvas = canvas
 

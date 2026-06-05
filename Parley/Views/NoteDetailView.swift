@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+#if os(macOS)
+import AppKit
+#endif
 
 /// The note detail: the user's own notes (typed everywhere, handwritten on iPad)
 /// alongside the live transcript. On a wide layout (iPad/Mac) they sit side by
@@ -50,6 +53,13 @@ struct NoteDetailView: View {
     @State private var penMode: PenMode = .type
     private enum PenMode: Hashable { case type, draw }
 
+    /// Notes ⟷ transcript layout: which panel comes first, and how the space is
+    /// divided. `splitFraction` is the size of the first panel (0.2…0.8); the
+    /// divider drags it, a double-tap resets to an even split.
+    @State private var swapped = false
+    @State private var splitFraction: CGFloat = 0.5
+    @State private var dragBase: CGFloat?
+
     private var theme: Theme { themeManager.theme }
     private var density: Density { themeManager.density }
 
@@ -89,6 +99,7 @@ struct NoteDetailView: View {
         #endif
         .toolbar {
             ToolbarItem { recordControl }
+            ToolbarItem { swapControl }
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
         .sheet(item: $activeSheet) { which in
@@ -290,19 +301,79 @@ struct NoteDetailView: View {
         .overlay(alignment: .top) { Rectangle().fill(theme.line).frame(height: theme.borderWidth) }
     }
 
+    /// Notes and transcript with a draggable divider between them; `swapped`
+    /// flips which one leads. Side-by-side when wide, stacked otherwise.
     @ViewBuilder
     private func splitContent(wide: Bool) -> some View {
-        if wide {
-            HStack(alignment: .top, spacing: 16) {
-                notesColumn.frame(maxWidth: .infinity, maxHeight: .infinity)
-                transcriptPanel.frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        } else {
-            VStack(spacing: 16) {
-                notesColumn.frame(maxWidth: .infinity, maxHeight: .infinity)
-                transcriptPanel.frame(maxWidth: .infinity, maxHeight: .infinity)
+        let first = swapped ? AnyView(transcriptPanel) : AnyView(notesColumn)
+        let second = swapped ? AnyView(notesColumn) : AnyView(transcriptPanel)
+
+        GeometryReader { geo in
+            let total = wide ? geo.size.width : geo.size.height
+            let thickness: CGFloat = 18
+            let firstLen = max(0, (total - thickness) * clampedFraction)
+
+            if wide {
+                HStack(spacing: 0) {
+                    first.frame(width: firstLen).frame(maxHeight: .infinity)
+                    splitHandle(wide: true, total: total)
+                    second.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    first.frame(maxWidth: .infinity).frame(height: firstLen)
+                    splitHandle(wide: false, total: total)
+                    second.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
+    }
+
+    private var clampedFraction: CGFloat { min(max(splitFraction, 0.2), 0.8) }
+
+    /// The drag affordance between the two panels: drag to resize, double-tap to
+    /// even it out. A horizontal bar when stacked, a vertical bar when side-by-side.
+    private func splitHandle(wide: Bool, total: CGFloat) -> some View {
+        ZStack {
+            Rectangle().fill(Color.clear)
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(theme.inkGhost)
+                .frame(width: wide ? 3 : 40, height: wide ? 40 : 3)
+        }
+        .frame(width: wide ? 18 : nil, height: wide ? nil : 18)
+        .frame(maxWidth: wide ? nil : .infinity, maxHeight: wide ? .infinity : nil)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    let base = dragBase ?? clampedFraction
+                    dragBase = base
+                    let delta = (wide ? value.translation.width : value.translation.height) / max(total, 1)
+                    splitFraction = min(max(base + delta, 0.2), 0.8)
+                }
+                .onEnded { _ in dragBase = nil }
+        )
+        .onTapGesture(count: 2) { withAnimation(.snappy) { splitFraction = 0.5 } }
+        .accessibilityLabel("Resize notes and transcript")
+        #if os(macOS)
+        .onHover { inside in
+            if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+        }
+        #endif
+    }
+
+    private var swapControl: some View {
+        Button {
+            // Flip the order *and* invert the fraction so each panel keeps its
+            // current size after moving to the other side.
+            withAnimation(.snappy) {
+                swapped.toggle()
+                splitFraction = 1 - splitFraction
+            }
+        } label: {
+            Label("Swap notes and transcript", systemImage: "arrow.left.arrow.right")
+        }
+        .accessibilityLabel("Swap notes and transcript")
     }
 
     private var notesColumn: some View {

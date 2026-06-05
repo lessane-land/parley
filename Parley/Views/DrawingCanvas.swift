@@ -29,9 +29,14 @@ struct DrawingCanvas: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = PKCanvasView()
-        canvas.drawingPolicy = .anyInput        // Pencil *or* finger, so it's usable without a Pencil too
+        // Pencil draws; a finger *scrolls* instead of drawing. PKCanvasView is a
+        // scroll view, so with `.pencilOnly` one-finger drags pan the canvas —
+        // which is what lets handwriting extend past one screen.
+        canvas.drawingPolicy = .pencilOnly
         canvas.backgroundColor = .clear         // overlays the typed notes; paper shows through
         canvas.isOpaque = false
+        canvas.alwaysBounceVertical = true      // makes the scrollability discoverable
+        canvas.showsVerticalScrollIndicator = true
         canvas.delegate = context.coordinator
         context.coordinator.canvas = canvas
 
@@ -56,6 +61,20 @@ struct DrawingCanvas: UIViewRepresentable {
         // is rebuilt per note (via `.id`), so each note gets a fresh canvas.
         context.coordinator.parent = self
         applyActive(isActive, to: canvas, context: context)
+        Self.growContent(canvas)
+    }
+
+    /// Grow the scrollable content so there's always room below the lowest stroke
+    /// to keep writing (and to scroll). PKCanvasView doesn't auto-extend, so we
+    /// size it to the drawing's extent plus roughly half a screen of headroom.
+    static func growContent(_ canvas: PKCanvasView) {
+        let viewport = canvas.bounds.height
+        guard viewport > 0 else { return }
+        let drawingBottom = canvas.drawing.bounds.isNull ? 0 : canvas.drawing.bounds.maxY
+        let height = max(viewport, drawingBottom + viewport * 0.5)
+        if abs(canvas.contentSize.height - height) > 1 {
+            canvas.contentSize = CGSize(width: canvas.bounds.width, height: height)
+        }
     }
 
     /// Show/hide the tool picker and grab/release first responder with the mode.
@@ -82,6 +101,7 @@ struct DrawingCanvas: UIViewRepresentable {
         /// binding → SwiftData persists it.
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             parent.data = canvasView.drawing.dataRepresentation()
+            DrawingCanvas.growContent(canvasView)
         }
     }
 }

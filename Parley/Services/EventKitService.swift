@@ -1,0 +1,144 @@
+import Foundation
+import EventKit
+
+/// Calendar + Reminders, behind one small service (per the "capability behind a
+/// manager" convention). Reads today's meetings and writes action items as
+/// reminders — all local, via Apple's EventKit. Nothing syncs to a third party.
+///
+/// `@MainActor @Observable` so views can read the access states.
+@MainActor
+@Observable
+final class EventKitService {
+    enum Access { case unknown, granted, denied }
+
+    private(set) var calendarAccess: Access = .unknown
+    private(set) var remindersAccess: Access = .unknown
+
+    /// One store serves both calendar and reminders.
+    private let store = EKEventStore()
+
+    // MARK: Calendar
+
+    /// Today's timed meetings, soonest first, as plain value types (we don't let
+    /// `EKEvent` leak into the views).
+    func todaysMeetings() async -> [Meeting] {
+        guard await ensureCalendarAccess() else { return [] }
+
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: Date())
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
+
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        return store.events(matching: predicate)
+            .filter { !$0.isAllDay }
+            .sorted { $0.startDate < $1.startDate }
+            .map(Meeting.init)
+    }
+
+    // MARK: Reminders
+
+    /// Saves each title as a reminder in the default list. Returns how many were
+    /// written.
+    @discardableResult
+    func addReminders(_ titles: [String]) async -> Int {
+        guard await ensureRemindersAccess() else { return 0 }
+        guard let list = store.defaultCalendarForNewReminders() else { return 0 }
+
+        var saved = 0
+        for title in titles {
+            let reminder = EKReminder(eventStore: store)
+            reminder.title = title
+            reminder.calendar = list
+            if (try? store.save(reminder, commit: false)) != nil { saved += 1 }
+        }
+        try? store.commit()
+        return saved
+    }
+
+    // MARK: Access
+
+    private func ensureCalendarAccess() async -> Bool {
+        switch EKEventStore.authorizationStatus(for: .event) {
+        case .fullAccess, .authorized:
+            calendarAccess = .granted
+            return true
+        case .notDetermined:
+            let granted = (try? await store.requestFullAccessToEvents()) ?? false
+            calendarAccess = granted ? .granted : .denied
+            return granted
+        default:
+            calendarAccess = .denied
+            return false
+        }
+    }
+
+    private func ensureRemindersAccess() async -> Bool {
+        switch EKEventStore.authorizationStatus(for: .reminder) {
+        case .fullAccess, .authorized:
+            remindersAccess = .granted
+            return true
+        case .notDetermined:
+            let granted = (try? await store.requestFullAccessToReminders()) ?? false
+            remindersAccess = granted ? .granted : .denied
+            return granted
+        default:
+            remindersAccess = .denied
+            return false
+        }
+    }
+}
+
+/// A plain, view-friendly snapshot of a calendar event.
+struct Meeting: Identifiable {
+    let id: String
+    let title: String
+    let start: Date
+    let end: Date
+    let attendees: [String]
+
+    init(_ event: EKEvent) {
+        id = event.eventIdentifier ?? UUID().uuidString
+        title = event.title ?? "Untitled meeting"
+        start = event.startDate
+        end = event.endDate
+        attendees = (event.attendees ?? []).compactMap(\.name)
+    }
+}
+
+/// Heuristic action-item detection. This is a deliberate **placeholder** for
+/// Phase 3 — Phase 4 replaces it with on-device Foundation Models extraction.
+/// For now it picks out checklist/bullet lines and a few keyword prefixes.
+enum ActionItemDetector {
+    static func detect(in text: String) -> [String] {
+        let bulletMarkers = ["- [ ]", "- []", "[]", "- ", "* ", "• ", "· "]
+        let keywordPrefixes = ["todo:", "todo ", "action item:", "action:", "ai:", "follow up:", "follow-up:"]
+
+        var items: [String] = []
+        for rawLine in text.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+            let lower = line.lowercased()
+
+            var item: String?
+            for marker in bulletMarkers where line.hasPrefix(marker) {
+                item = String(line.dropFirst(marker.count)); break
+            }
+            if item == nil {
+                for keyword in keywordPrefixes where lower.hasPrefix(keyword) {
+                    item = String(line.dropFirst(keyword.count)); break
+                }
+            }
+            if item == nil, lower.contains("action item") {
+                item = line
+            }
+
+            if let cleaned = item?.trimmingCharacters(in: .whitespaces), !cleaned.isEmpty {
+                items.append(cleaned)
+            }
+        }
+
+        // De-duplicate, preserving order.
+        var seen = Set<String>()
+        return items.filter { seen.insert($0.lowercased()).inserted }
+    }
+}

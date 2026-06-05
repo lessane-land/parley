@@ -51,6 +51,7 @@ struct DrawingCanvas: UIViewRepresentable {
 
         context.coordinator.toolPicker.addObserver(canvas)
         applyActive(isActive, to: canvas, context: context)
+        context.coordinator.appliedActive = isActive
 
         return canvas
     }
@@ -60,7 +61,13 @@ struct DrawingCanvas: UIViewRepresentable {
         // right place. We don't reload `canvas.drawing` from `data` — the detail
         // is rebuilt per note (via `.id`), so each note gets a fresh canvas.
         context.coordinator.parent = self
-        applyActive(isActive, to: canvas, context: context)
+        // Only react to an actual Type⟷Draw change. Re-applying on every update
+        // would keep stealing first responder back from text fields (the title,
+        // a speaker name…), so their keyboard could never appear on iPad.
+        if context.coordinator.appliedActive != isActive {
+            context.coordinator.appliedActive = isActive
+            applyActive(isActive, to: canvas, context: context)
+        }
         Self.growContent(canvas)
     }
 
@@ -94,6 +101,9 @@ struct DrawingCanvas: UIViewRepresentable {
         var parent: DrawingCanvas
         let toolPicker = PKToolPicker()
         weak var canvas: PKCanvasView?
+        /// The last Draw/Type state we acted on, so `updateUIView` only reacts to
+        /// real changes (and never re-steals first responder from a text field).
+        var appliedActive: Bool?
 
         init(_ parent: DrawingCanvas) { self.parent = parent }
 
@@ -102,6 +112,15 @@ struct DrawingCanvas: UIViewRepresentable {
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             parent.data = canvasView.drawing.dataRepresentation()
             DrawingCanvas.growContent(canvasView)
+        }
+
+        /// The user actually started drawing — bring the canvas (and its tool
+        /// picker) up *now*, rather than us forcing first responder on every
+        /// update. This is what lets the Pencil reactivate the canvas after the
+        /// keyboard was used on the title, without fighting text fields.
+        func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+            if !canvasView.isFirstResponder { canvasView.becomeFirstResponder() }
+            toolPicker.setVisible(true, forFirstResponder: canvasView)
         }
     }
 }

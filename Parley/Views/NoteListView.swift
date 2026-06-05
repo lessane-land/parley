@@ -161,19 +161,51 @@ struct NoteListView: View {
             // iPad/Mac: rail + grid, with Ask as an inline right column and Settings
             // as a right slide-over — both "aside", not modal sheets.
             HStack(spacing: 0) {
-                rail.frame(width: 268)
-                verticalDivider
+                if railFloats {
+                    floatingRail
+                } else {
+                    rail.frame(width: 268)
+                    verticalDivider
+                }
                 grid
                 if usesSidePanels && showingAsk {
                     verticalDivider
                     chatColumn.transition(.move(edge: .trailing))
                 }
             }
+            // When the rail floats (iPad), the margins around it show the mood's
+            // paper + grain, so the panel reads as a card on the same canvas.
+            .background { if railFloats { Color.clear.moodPaper(theme) } }
             .overlay { if usesSidePanels { settingsSlideOver } }
         } else {
             grid
                 .searchable(text: $searchText)
         }
+    }
+
+    /// On iPad the rail floats as a card (cleaner top, design-accurate); on Mac it
+    /// stays flush against the window edge (the look you already liked).
+    private var railFloats: Bool {
+        #if os(macOS)
+        false
+        #else
+        true
+        #endif
+    }
+
+    /// The rail as a floating panel: inset from the edges with the mood's card
+    /// shape (border + shadow), so it sits *on* the paper rather than butting the
+    /// nav bar. Each mood styles the card differently via its tokens.
+    private var floatingRail: some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
+        return rail
+            .frame(width: 256)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+            .themeShadow(theme.shadow)
+            .padding(.leading, 14)
+            .padding(.trailing, 12)
+            .padding(.vertical, 14)
     }
 
     private var verticalDivider: some View {

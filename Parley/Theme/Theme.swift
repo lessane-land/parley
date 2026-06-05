@@ -35,6 +35,9 @@ struct Theme: Equatable {
     var borderWidth: CGFloat    // --pk-border-w
     var shadow: ThemeShadow?    // --pk-shadow-card (nil = no shadow)
 
+    /// Optional background grid (terminal's hairline grid, Swiss's columns).
+    var grid: ThemeGrid = .none
+
     // Typography — exact PostScript names of the bundled faces (see AppFonts).
     var titleFontName: String   // headings / note titles  (--pk-serif role)
     var bodyFontName: String    // the user's note text     (--pk-serif / --pk-sans)
@@ -47,9 +50,6 @@ struct Theme: Equatable {
     /// Whether the mood is fundamentally light or dark. Drives the window's
     /// `preferredColorScheme` so system chrome (status bar, etc.) matches.
     var colorScheme: ColorScheme
-
-    /// Optional background grid (terminal's hairline grid, Swiss's columns).
-    var grid: ThemeGrid = .none
 
     // MARK: Font builders
     // `relativeTo:` makes the custom font scale with Dynamic Type (accessibility),

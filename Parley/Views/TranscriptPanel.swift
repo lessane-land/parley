@@ -93,12 +93,9 @@ struct TranscriptPanel: View {
     private var transcriptText: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                // Confirmed text + the live guess, as one flowing paragraph.
-                (Text(text)
-                    .foregroundColor(theme.ink2)
-                 + Text(text.isEmpty ? "" : " ")
-                 + Text(volatile)
-                    .foregroundColor(theme.accentInk))
+                // Confirmed text (ink) + the live guess (accent) as one paragraph,
+                // built with AttributedString to avoid the deprecated Text `+`.
+                Text(flowing)
                     .font(theme.bodyFont(density.bodySize, relativeTo: .body))
                     .lineSpacing(density.lineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -108,6 +105,17 @@ struct TranscriptPanel: View {
             .onChange(of: text) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
             .onChange(of: volatile) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
         }
+    }
+
+    private var flowing: AttributedString {
+        var result = AttributedString(text)
+        result.foregroundColor = theme.ink2
+        if !volatile.isEmpty {
+            var tail = AttributedString((text.isEmpty ? "" : " ") + volatile)
+            tail.foregroundColor = theme.accentInk
+            result += tail
+        }
+        return result
     }
 
     private func message(_ title: String, detail: String, icon: String) -> some View {

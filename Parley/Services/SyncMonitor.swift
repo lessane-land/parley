@@ -30,18 +30,22 @@ final class SyncMonitor {
             queue: .main
         ) { [weak self] notification in
             guard
-                let self,
                 let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
                     as? NSPersistentCloudKitContainer.Event
             else { return }
 
-            // `endDate == nil` means the work is still in progress.
-            if event.endDate == nil {
-                self.status = .syncing
-            } else if let error = event.error {
-                self.status = .error(error.localizedDescription)
-            } else {
-                self.status = .synced
+            // The observer runs on the main queue, so we're already on the main
+            // actor — assert that to mutate the @MainActor `status` safely.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // `endDate == nil` means the work is still in progress.
+                if event.endDate == nil {
+                    self.status = .syncing
+                } else if let error = event.error {
+                    self.status = .error(error.localizedDescription)
+                } else {
+                    self.status = .synced
+                }
             }
         }
     }

@@ -5,6 +5,10 @@ import SwiftUI
 /// `String`-backed so we can persist the choice by `rawValue`. `CaseIterable`
 /// gives us `Mood.allCases` to render the Settings list. `Identifiable` lets
 /// SwiftUI's `ForEach` track them.
+///
+/// The fonts named below are the real typefaces from the design, bundled and
+/// registered at launch (see AppFonts / Parley/Fonts). We reference each weight
+/// by its exact PostScript name so the right face is always used.
 enum Mood: String, CaseIterable, Identifiable {
     case paper
     case terminal
@@ -31,17 +35,10 @@ enum Mood: String, CaseIterable, Identifiable {
         }
     }
 
-    // NOTE ON FONTS: the design names specific typefaces per mood — Newsreader
-    // (serif), Hanken/Space Grotesk and Archivo (grotesk sans), IBM Plex Mono.
-    // Those aren't system fonts. Rather than ship ~6 font families before we
-    // need them, each theme below expresses the *role* (serif vs. grotesk vs.
-    // mono) via `Font.Design`, which the system fonts approximate well. When you
-    // want pixel-faithful type, drop the .ttf/.otf files into the app, register
-    // them in Info.plist, and we swap these `Font.Design` roles for the real
-    // family names — the rest of the app won't change.
     var theme: Theme {
         switch self {
         case .paper:
+            // Editorial paper: Newsreader serif headings + body, forest accent.
             Theme(
                 paper:       Color(hex: "F6F2E9"),
                 paperRaised: Color(hex: "FBF8F1"),
@@ -61,14 +58,16 @@ enum Mood: String, CaseIterable, Identifiable {
                 cornerRadius: 14,
                 borderWidth: 1,
                 shadow: ThemeShadow(color: Color(hex: "2A2620", opacity: 0.06), radius: 2, x: 0, y: 1),
-                titleDesign: .serif,
-                titleWeight: .semibold,
-                noteDesign: .serif,
-                transcriptDesign: .default,
+                titleFontName: "Newsreader-SemiBold",
+                bodyFontName:  "Newsreader-Regular",
+                monoFontName:  "IBMPlexMono-Regular",
+                titleTracking: -0.3,
+                titleUppercase: false,
                 colorScheme: .light
             )
 
         case .terminal:
+            // Engineered terminal: Space Grotesk + IBM Plex Mono, amber on near-black.
             Theme(
                 paper:       Color(hex: "0B0E14"),
                 paperRaised: Color(hex: "141A24"),
@@ -88,14 +87,16 @@ enum Mood: String, CaseIterable, Identifiable {
                 cornerRadius: 0,
                 borderWidth: 1,
                 shadow: nil,
-                titleDesign: .default,
-                titleWeight: .medium,
-                noteDesign: .default,
-                transcriptDesign: .monospaced, // IBM Plex Mono transcript
+                titleFontName: "SpaceGrotesk-Medium",
+                bodyFontName:  "SpaceGrotesk-Regular",
+                monoFontName:  "IBMPlexMono-Regular", // IBM Plex Mono transcript/labels
+                titleTracking: 0.2,
+                titleUppercase: false,
                 colorScheme: .dark
             )
 
         case .swiss:
+            // Swiss international: Archivo neo-grotesque, signal red, uppercase heads.
             Theme(
                 paper:       Color(hex: "FFFFFF"),
                 paperRaised: Color(hex: "FFFFFF"),
@@ -115,14 +116,16 @@ enum Mood: String, CaseIterable, Identifiable {
                 cornerRadius: 0,
                 borderWidth: 1,
                 shadow: nil,
-                titleDesign: .default,
-                titleWeight: .bold,
-                noteDesign: .default,
-                transcriptDesign: .default,
+                titleFontName: "Archivo-Bold",
+                bodyFontName:  "Archivo-Regular",
+                monoFontName:  "IBMPlexMono-Regular",
+                titleTracking: -0.5,
+                titleUppercase: true,
                 colorScheme: .light
             )
 
         case .neubrutalist:
+            // Neubrutalist: Archivo ExtraBold heads + Space Grotesk body, blue + lime.
             Theme(
                 paper:       Color(hex: "F5F3EC"),
                 paperRaised: Color(hex: "FFFFFF"),
@@ -142,10 +145,11 @@ enum Mood: String, CaseIterable, Identifiable {
                 cornerRadius: 0,
                 borderWidth: 2,
                 shadow: ThemeShadow(color: Color(hex: "1A1A1A"), radius: 0, x: 4, y: 4),
-                titleDesign: .default,
-                titleWeight: .heavy,
-                noteDesign: .default,
-                transcriptDesign: .default,
+                titleFontName: "Archivo-ExtraBold",
+                bodyFontName:  "SpaceGrotesk-Regular",
+                monoFontName:  "IBMPlexMono-Regular",
+                titleTracking: -0.3,
+                titleUppercase: false,
                 colorScheme: .light
             )
         }

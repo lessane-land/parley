@@ -120,11 +120,13 @@ private struct NoteRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(note.title.isEmpty ? "New Note" : note.title)
-                .font(.system(.headline, design: theme.titleDesign).weight(theme.titleWeight))
+                .font(theme.titleFont(17, relativeTo: .headline))
+                .tracking(theme.titleTracking)
+                .textCase(theme.titleUppercase ? .uppercase : nil)
                 .foregroundStyle(theme.ink)
                 .lineLimit(1)
             Text(note.createdAt, format: .dateTime.month().day().hour().minute())
-                .font(.caption)
+                .font(theme.monoFont(11, relativeTo: .caption))
                 .foregroundStyle(theme.inkFaint)
         }
         .padding(.vertical, 2)

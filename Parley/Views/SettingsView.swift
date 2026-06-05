@@ -107,11 +107,13 @@ struct ThemePreviewCard: View {
 
         VStack(alignment: .leading, spacing: 8) {
             Text("Design review")
-                .font(.system(.title3, design: theme.titleDesign).weight(theme.titleWeight))
+                .font(theme.titleFont(20, relativeTo: .title3))
+                .tracking(theme.titleTracking)
+                .textCase(theme.titleUppercase ? .uppercase : nil)
                 .foregroundStyle(theme.ink)
 
             Text("Shipped the new onboarding. Decision: defer CloudKit until enrolled — owner follows up Friday.")
-                .font(.system(size: density.bodySize, design: theme.noteDesign))
+                .font(theme.bodyFont(density.bodySize))
                 .foregroundStyle(theme.ink2)
                 .lineSpacing(density.lineSpacing)
                 .fixedSize(horizontal: false, vertical: true)
@@ -119,7 +121,7 @@ struct ThemePreviewCard: View {
             HStack(spacing: 6) {
                 Circle().fill(theme.rec).frame(width: 7, height: 7)
                 Text("REC 12:04")
-                    .font(.system(.caption2, design: .monospaced))
+                    .font(theme.monoFont(11, relativeTo: .caption2))
                     .foregroundStyle(theme.inkSoft)
             }
             .padding(.top, 2)

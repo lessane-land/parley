@@ -17,7 +17,8 @@ struct NoteDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Title", text: $note.title)
-                .font(.system(.title, design: theme.titleDesign).weight(theme.titleWeight))
+                .font(theme.titleFont(26, relativeTo: .title))
+                .tracking(theme.titleTracking)
                 .foregroundStyle(theme.ink)
                 .textFieldStyle(.plain)
 
@@ -27,7 +28,7 @@ struct NoteDetailView: View {
                 .frame(height: theme.borderWidth)
 
             TextEditor(text: $note.body)
-                .font(.system(size: density.bodySize, design: theme.noteDesign))
+                .font(theme.bodyFont(density.bodySize))
                 .foregroundStyle(theme.ink2)
                 .lineSpacing(density.lineSpacing)
                 .scrollContentBackground(.hidden)
@@ -35,7 +36,7 @@ struct NoteDetailView: View {
                     // SwiftUI's TextEditor has no placeholder, so we fake one.
                     if note.body.isEmpty {
                         Text("Start typing your notes…")
-                            .font(.system(size: density.bodySize, design: theme.noteDesign))
+                            .font(theme.bodyFont(density.bodySize))
                             .foregroundStyle(theme.inkFaint)
                             .padding(.top, 8)
                             .padding(.leading, 5)

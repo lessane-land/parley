@@ -10,7 +10,14 @@ import SwiftData
 struct ParleyApp: App {
     /// The shared appearance state. `@State` here means the App owns this single
     /// instance for the app's lifetime; we inject it into every scene below.
-    @State private var themeManager = ThemeManager()
+    @State private var themeManager: ThemeManager
+
+    init() {
+        // Register the bundled fonts before any view renders, so custom faces
+        // are available on first paint. Then build the shared theme state.
+        AppFonts.registerAll()
+        _themeManager = State(initialValue: ThemeManager())
+    }
 
     var body: some Scene {
         WindowGroup {

@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// A resolved set of design tokens for one mood. Views read these instead of
-/// hard-coding colors, so switching mood restyles the whole app from one place.
+/// hard-coding colors or fonts, so switching mood restyles the whole app from
+/// one place. These map 1:1 to the `--pk-*` CSS custom properties in the design.
 ///
-/// These map 1:1 to the `--pk-*` CSS custom properties in the Parley design.
 /// `struct` (value type) is right here: a theme is just immutable data we copy
 /// around freely; there's nothing to mutate or share by reference.
 struct Theme: Equatable {
@@ -35,17 +35,35 @@ struct Theme: Equatable {
     var borderWidth: CGFloat    // --pk-border-w
     var shadow: ThemeShadow?    // --pk-shadow-card (nil = no shadow)
 
-    // Typography roles. We express the design's font *intent* via SwiftUI's
-    // font "design" (serif / monospaced / default-grotesk). See note in Mood.swift
-    // about the named fonts (Newsreader, Space Grotesk, …) vs. these system roles.
-    var titleDesign: Font.Design       // headings / note titles
-    var titleWeight: Font.Weight
-    var noteDesign: Font.Design         // the user's own note text
-    var transcriptDesign: Font.Design   // live transcript (used from Phase 2 on)
+    // Typography — exact PostScript names of the bundled faces (see AppFonts).
+    var titleFontName: String   // headings / note titles  (--pk-serif role)
+    var bodyFontName: String    // the user's note text     (--pk-serif / --pk-sans)
+    var monoFontName: String    // functional/mono labels   (--pk-tx-font when mono)
+
+    // Per-mood title treatment (matches the mood-specific CSS).
+    var titleTracking: CGFloat  // letter-spacing in points (≈ em × size)
+    var titleUppercase: Bool    // Swiss sets headings uppercase
 
     /// Whether the mood is fundamentally light or dark. Drives the window's
     /// `preferredColorScheme` so system chrome (status bar, etc.) matches.
     var colorScheme: ColorScheme
+
+    // MARK: Font builders
+    // `relativeTo:` makes the custom font scale with Dynamic Type (accessibility),
+    // anchored to a standard text style. `Font.custom` falls back to the system
+    // font if the name isn't registered.
+
+    func titleFont(_ size: CGFloat, relativeTo style: Font.TextStyle = .title) -> Font {
+        .custom(titleFontName, size: size, relativeTo: style)
+    }
+
+    func bodyFont(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom(bodyFontName, size: size, relativeTo: style)
+    }
+
+    func monoFont(_ size: CGFloat, relativeTo style: Font.TextStyle = .caption) -> Font {
+        .custom(monoFontName, size: size, relativeTo: style)
+    }
 }
 
 /// A drop shadow expressed the way CSS does it: color + blur radius + offset.

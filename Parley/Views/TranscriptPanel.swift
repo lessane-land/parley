@@ -93,29 +93,38 @@ struct TranscriptPanel: View {
     private var transcriptText: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                // Confirmed text (ink) + the live guess (accent) as one paragraph,
-                // built with AttributedString to avoid the deprecated Text `+`.
-                Text(flowing)
-                    .font(theme.bodyFont(density.bodySize, relativeTo: .body))
-                    .lineSpacing(density.lineSpacing)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .id("bottom")
+                VStack(alignment: .leading, spacing: 10) {
+                    if !text.isEmpty {
+                        Text(text)
+                            .font(theme.bodyFont(density.bodySize, relativeTo: .body))
+                            .foregroundStyle(theme.ink2)
+                            .lineSpacing(density.lineSpacing)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    // The live "current line" — the design's highlighted block
+                    // with a left accent bar.
+                    if !volatile.isEmpty {
+                        Text(volatile)
+                            .font(theme.bodyFont(density.bodySize, relativeTo: .body))
+                            .foregroundStyle(theme.ink)
+                            .lineSpacing(density.lineSpacing)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 12)
+                            .background(theme.accentTint, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 7))
+                            .overlay(alignment: .leading) {
+                                Rectangle().fill(theme.accent).frame(width: 2.5)
+                            }
+                    }
+
+                    Color.clear.frame(height: 1).id("bottom")
+                }
+                .padding(16)
             }
             .onChange(of: text) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
             .onChange(of: volatile) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
         }
-    }
-
-    private var flowing: AttributedString {
-        var result = AttributedString(text)
-        result.foregroundColor = theme.ink2
-        if !volatile.isEmpty {
-            var tail = AttributedString((text.isEmpty ? "" : " ") + volatile)
-            tail.foregroundColor = theme.accentInk
-            result += tail
-        }
-        return result
     }
 
     private func message(_ title: String, detail: String, icon: String) -> some View {

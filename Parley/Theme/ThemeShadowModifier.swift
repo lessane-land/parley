@@ -26,6 +26,13 @@ extension View {
         background {
             ZStack {
                 theme.paper
+                if theme.colorScheme == .light {
+                    // Faint paper grain — the design's layered radial highlights.
+                    RadialGradient(colors: [.white.opacity(0.35), .clear],
+                                   center: .topLeading, startRadius: 0, endRadius: 520)
+                    RadialGradient(colors: [.black.opacity(0.02), .clear],
+                                   center: .bottomTrailing, startRadius: 0, endRadius: 480)
+                }
                 MoodGrid(theme: theme)
             }
             .ignoresSafeArea()

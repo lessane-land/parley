@@ -46,21 +46,8 @@ struct NoteDetailView: View {
     @State private var penMode: PenMode = .type
     private enum PenMode: Hashable { case type, draw }
 
-    #if os(iOS)
-    @Environment(\.horizontalSizeClass) private var hSize
-    #endif
-
     private var theme: Theme { themeManager.theme }
     private var density: Density { themeManager.density }
-
-    /// Side-by-side on iPad/Mac; stacked on iPhone.
-    private var isWide: Bool {
-        #if os(macOS)
-        true
-        #else
-        hSize == .regular
-        #endif
-    }
 
     /// Handwriting is an iPad feature (and respects the Settings toggle).
     private var showsHandwriting: Bool {
@@ -73,28 +60,25 @@ struct NoteDetailView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
+        GeometryReader { proxy in
+            // Side-by-side when wider than tall (landscape / Mac); stacked when
+            // taller than wide (iPad portrait / iPhone) — note on top, transcript
+            // below, a horizontal cut across the screen.
+            let wide = proxy.size.width >= proxy.size.height
 
-            Rectangle()
-                .fill(theme.line)
-                .frame(height: theme.borderWidth)
+            VStack(alignment: .leading, spacing: 12) {
+                header
 
-            if isWide {
-                HStack(alignment: .top, spacing: 16) {
-                    notesColumn.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    transcriptPanel.frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            } else {
-                VStack(spacing: 16) {
-                    notesColumn.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    transcriptPanel.frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+                Rectangle()
+                    .fill(theme.line)
+                    .frame(height: theme.borderWidth)
+
+                splitContent(wide: wide)
             }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .moodPaper(theme)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .moodPaper(theme)
         .navigationTitle(note.title.isEmpty ? "New Note" : note.title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -244,6 +228,21 @@ struct NoteDetailView: View {
         let tag = Tag(name: name, colorHex: color)
         context.insert(tag)
         toggle(tag)
+    }
+
+    @ViewBuilder
+    private func splitContent(wide: Bool) -> some View {
+        if wide {
+            HStack(alignment: .top, spacing: 16) {
+                notesColumn.frame(maxWidth: .infinity, maxHeight: .infinity)
+                transcriptPanel.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        } else {
+            VStack(spacing: 16) {
+                notesColumn.frame(maxWidth: .infinity, maxHeight: .infinity)
+                transcriptPanel.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
     }
 
     private var notesColumn: some View {

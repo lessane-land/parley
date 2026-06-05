@@ -61,21 +61,26 @@ final class TranscriptionService {
         guard await ensureMicrophonePermission() else { state = .denied; return }
 
         do {
+            // Speech models are keyed by language *and* region (en-US, es-ES, …).
+            // The device locale may be a combination with no model (e.g. en-ES =
+            // English in Spain), so resolve to a supported locale that matches the
+            // language rather than demanding an exact region match.
+            let supported = await SpeechTranscriber.supportedLocales
+            guard let locale = Self.resolveLocale(from: supported) else {
+                state = .unavailable("Speech transcription isn't available on this device.")
+                return
+            }
+
             let transcriber = SpeechTranscriber(
-                locale: Locale.current,
+                locale: locale,
                 transcriptionOptions: [],
                 reportingOptions: [.volatileResults],
                 attributeOptions: [.audioTimeRange]
             )
             self.transcriber = transcriber
 
-            guard await isLocaleSupported(transcriber) else {
-                state = .unavailable("Speech isn't supported for \(Locale.current.identifier).")
-                return
-            }
-
             // Make sure the on-device model for this locale is installed.
-            let modelInstalled = await isModelInstalled()
+            let modelInstalled = await isModelInstalled(locale)
             if !modelInstalled {
                 state = .downloadingModel
                 if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
@@ -198,15 +203,26 @@ final class TranscriptionService {
         resultsTask = nil
     }
 
-    private func isLocaleSupported(_ transcriber: SpeechTranscriber) async -> Bool {
-        let supported = await SpeechTranscriber.supportedLocales
-        let target = Locale.current.identifier(.bcp47)
-        return supported.contains { $0.identifier(.bcp47) == target }
+    /// Pick a supported locale: exact match first, then same language (so an
+    /// `en-ES` device still gets English), then `en-US`, then anything supported.
+    static func resolveLocale(from supported: [Locale]) -> Locale? {
+        let current = Locale.current
+        if let exact = supported.first(where: { $0.identifier(.bcp47) == current.identifier(.bcp47) }) {
+            return exact
+        }
+        if let language = current.language.languageCode?.identifier,
+           let sameLanguage = supported.first(where: { $0.language.languageCode?.identifier == language }) {
+            return sameLanguage
+        }
+        if let english = supported.first(where: { $0.identifier(.bcp47) == "en-US" }) {
+            return english
+        }
+        return supported.first
     }
 
-    private func isModelInstalled() async -> Bool {
+    private func isModelInstalled(_ locale: Locale) async -> Bool {
         let installed = await SpeechTranscriber.installedLocales
-        let target = Locale.current.identifier(.bcp47)
+        let target = locale.identifier(.bcp47)
         return installed.contains { $0.identifier(.bcp47) == target }
     }
 

@@ -52,19 +52,51 @@ final class EventKitService {
 
     // MARK: Reminders
 
-    /// The user's reminders (incomplete by default), soonest due first — for the
-    /// in-app Reminders list.
+    /// The title of the dedicated reminders list Parley owns. Action items the app
+    /// creates go here, and the in-app Reminders screen reads only from it — so the
+    /// app's reminders stay grouped and separate from the user's other lists.
+    private let parleyListTitle = "Parley"
+
+    /// Parley's reminders (incomplete by default), soonest due first — for the
+    /// in-app Reminders list. Reads only from the "Parley" list; if it doesn't
+    /// exist yet (nothing's been added), returns empty.
     func fetchReminders(includingCompleted: Bool = false) async -> [ReminderItem] {
         guard await ensureRemindersAccess() else { return [] }
+        guard let list = findParleyList() else { return [] }
         let predicate = includingCompleted
-            ? store.predicateForReminders(in: nil)
-            : store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil)
+            ? store.predicateForReminders(in: [list])
+            : store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: [list])
         let reminders: [EKReminder] = await withCheckedContinuation { continuation in
             _ = store.fetchReminders(matching: predicate) { continuation.resume(returning: $0 ?? []) }
         }
         return reminders
             .sorted { ($0.dueDateComponents?.date ?? .distantFuture) < ($1.dueDateComponents?.date ?? .distantFuture) }
             .map(ReminderItem.init)
+    }
+
+    /// The existing "Parley" reminders list, or nil if it hasn't been created yet.
+    private func findParleyList() -> EKCalendar? {
+        store.calendars(for: .reminder).first { $0.title == parleyListTitle }
+    }
+
+    /// The "Parley" reminders list, creating it on first use. A reminders calendar
+    /// needs a source that supports reminders — we borrow the default reminders
+    /// list's source (iCloud/local), falling back to a local source.
+    private func getOrCreateParleyList() -> EKCalendar? {
+        if let existing = findParleyList() { return existing }
+        let calendar = EKCalendar(for: .reminder, eventStore: store)
+        calendar.title = parleyListTitle
+        calendar.source = store.defaultCalendarForNewReminders()?.source
+            ?? store.sources.first { $0.sourceType == .local }
+            ?? store.sources.first
+        guard calendar.source != nil else { return nil }
+        do {
+            try store.saveCalendar(calendar, commit: true)
+            return calendar
+        } catch {
+            // Lost a race, or the source rejected it — fall back to whatever exists.
+            return findParleyList()
+        }
     }
 
     /// Mark a reminder complete/incomplete by its identifier.
@@ -83,12 +115,13 @@ final class EventKitService {
         await addReminders(titles.map { ReminderDraft(title: $0, due: nil) })
     }
 
-    /// Saves each draft as a reminder, carrying its due date through to the
-    /// Reminders app when one was set. Returns how many were written.
+    /// Saves each draft as a reminder in Parley's own list (created on first use),
+    /// carrying its due date through to the Reminders app when one was set. Returns
+    /// how many were written.
     @discardableResult
     func addReminders(_ drafts: [ReminderDraft]) async -> Int {
         guard await ensureRemindersAccess() else { return 0 }
-        guard let list = store.defaultCalendarForNewReminders() else { return 0 }
+        guard let list = getOrCreateParleyList() else { return 0 }
 
         var saved = 0
         for draft in drafts {

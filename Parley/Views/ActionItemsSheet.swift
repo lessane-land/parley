@@ -40,7 +40,7 @@ struct ActionItemsSheet: View {
     private var content: some View {
         if let resultCount {
             message("Added \(resultCount) to Reminders",
-                    resultCount > 0 ? "Find them in the Reminders app." : "Nothing was written.",
+                    resultCount > 0 ? "Find them in the Parley list in Reminders." : "Nothing was written.",
                     "checkmark.circle")
         } else if detected.isEmpty {
             message("No action items found",

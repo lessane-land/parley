@@ -13,8 +13,20 @@ struct SummaryView: View {
     let onAddReminders: ([String]) async -> Int
 
     @Environment(ThemeManager.self) private var themeManager
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSize
+    #endif
     @State private var summary: MeetingSummary?
     @State private var remindedTitles: Set<String> = []
+
+    /// Two columns (doc + sources) when wide; stacked otherwise.
+    private var isWide: Bool {
+        #if os(iOS)
+        hSize == .regular
+        #else
+        true
+        #endif
+    }
 
     var body: some View {
         content
@@ -24,7 +36,10 @@ struct SummaryView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                if summary != nil {
+                if let summary {
+                    ToolbarItem(placement: .primaryAction) {
+                        ShareLink(item: shareText(summary)) { Label("Share", systemImage: "square.and.arrow.up") }
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         Button { Task { await generate() } } label: {
                             Label("Regenerate", systemImage: "arrow.clockwise")
@@ -87,95 +102,85 @@ struct SummaryView: View {
         .padding(24)
     }
 
+    // MARK: Summary document (the design's two-column layout)
+
     private func summaryBody(_ summary: MeetingSummary) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 22) {
+                summaryHeader
+                if isWide {
+                    HStack(alignment: .top, spacing: 26) {
+                        docColumn(summary).frame(maxWidth: .infinity, alignment: .leading)
+                        sidebar(summary).frame(width: 300)
+                    }
+                } else {
+                    docColumn(summary)
+                    sidebar(summary)
+                }
+            }
+            .padding(20)
+        }
+    }
+
+    private var summaryHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(note.title.isEmpty ? "Untitled" : note.title)
+                .font(theme.titleFont(26, relativeTo: .title))
+                .tracking(theme.titleTracking)
+                .textCase(theme.titleUppercase ? .uppercase : nil)
+                .foregroundStyle(theme.ink)
+            HStack(spacing: 8) {
+                Text((note.startDate ?? note.createdAt), format: .dateTime.weekday().month().day())
+                if !note.attendees.isEmpty {
+                    Text("·")
+                    Text("\(note.attendees.count) people")
+                }
+            }
+            .font(theme.monoFont(11))
+            .foregroundStyle(theme.inkFaint)
+            Label("Summarized on device", systemImage: "sparkles")
+                .font(theme.monoFont(10, relativeTo: .caption2))
+                .foregroundStyle(theme.accentInk)
+                .padding(.horizontal, 9).padding(.vertical, 4)
+                .background(theme.accentTint, in: Capsule())
+        }
+    }
+
+    // MARK: Doc column
+
+    @ViewBuilder
+    private func docColumn(_ summary: MeetingSummary) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Summary", systemImage: "sparkles")
+                    .font(theme.monoFont(11)).tracking(1.4).foregroundStyle(theme.accentInk)
                 if !summary.overview.isEmpty {
-                    // Lede — larger, no card, the way the design opens a summary.
                     Text(summary.overview)
-                        .font(theme.titleFont(20, relativeTo: .title3))
+                        .font(theme.titleFont(21, relativeTo: .title3))
                         .foregroundStyle(theme.ink)
+                        .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                if !summary.decisions.isEmpty {
-                    section("Decisions", icon: "checkmark.seal") { decisionsView(summary.decisions) }
-                }
-
-                if !summary.actionItems.isEmpty {
-                    section("Action items", icon: "checklist") { actionItemsView(summary) }
-                }
-
-                if !summary.openQuestions.isEmpty {
-                    section("Open questions", icon: "questionmark.circle") { bullets(summary.openQuestions) }
-                }
             }
-            .padding(16)
+            if !summary.decisions.isEmpty { decisionsSection(summary.decisions) }
+            if !summary.actionItems.isEmpty { actionItemsSection(summary) }
+            if !summary.openQuestions.isEmpty { openQuestionsSection(summary.openQuestions) }
         }
     }
 
-    private func actionItemsView(_ summary: MeetingSummary) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(summary.actionItems) { item in
-                HStack(alignment: .top, spacing: 10) {
-                    Button { toggleDone(item) } label: {
-                        Image(systemName: item.done ? "checkmark.circle.fill" : "circle")
-                            .font(.title3)
-                            .foregroundStyle(item.done ? theme.accent : theme.inkFaint)
-                    }
-                    .buttonStyle(.plain)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.title)
-                            .font(theme.bodyFont(15))
-                            .foregroundStyle(item.done ? theme.inkFaint : theme.ink2)
-                            .strikethrough(item.done)
-                        if !item.owner.isEmpty {
-                            Label(item.owner, systemImage: "person")
-                                .font(theme.monoFont(10.5, relativeTo: .caption2))
-                                .foregroundStyle(theme.accentInk)
-                        }
-                    }
-
-                    Spacer(minLength: 8)
-
-                    Button { Task { await remind([item.title]) } } label: {
-                        Image(systemName: remindedTitles.contains(item.title) ? "checkmark.circle" : "bell.badge.plus")
-                            .foregroundStyle(theme.accent)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(remindedTitles.contains(item.title))
-                    .accessibilityLabel("Add to Reminders")
-                }
-            }
-
-            Divider().overlay(theme.line)
-
-            Button { Task { await remind(summary.actionItems.map(\.title)) } } label: {
-                Label("Send all to Reminders", systemImage: "plus.circle")
-                    .font(.subheadline.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .tint(theme.accent)
-        }
-    }
-
-    private func decisionsView(_ decisions: [Decision]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func decisionsSection(_ decisions: [Decision]) -> some View {
+        VStack(alignment: .leading, spacing: 11) {
+            sectionHeader("Decisions", count: decisions.count)
             ForEach(decisions) { decision in
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(theme.accent)
-                        .padding(.top, 2)
+                HStack(alignment: .top, spacing: 10) {
+                    decisionMark
                     VStack(alignment: .leading, spacing: 3) {
                         Text(decision.text)
-                            .font(theme.bodyFont(15))
-                            .foregroundStyle(theme.ink2)
+                            .font(theme.bodyFont(15)).foregroundStyle(theme.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
                         if !decision.rationale.isEmpty {
                             Text(decision.rationale)
-                                .font(theme.bodyFont(13))
-                                .foregroundStyle(theme.inkSoft)
+                                .font(theme.bodyFont(12.5)).foregroundStyle(theme.inkSoft)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -184,19 +189,191 @@ struct SummaryView: View {
         }
     }
 
-    // MARK: Building blocks
-
-    private func section<V: View>(_ title: String, icon: String, @ViewBuilder _ inner: () -> V) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: icon)
-                .font(theme.monoFont(11))
-                .tracking(1.2)
-                .foregroundStyle(theme.inkSoft)
-            inner()
+    private func actionItemsSection(_ summary: MeetingSummary) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Action items", count: summary.actionItems.count)
+            ForEach(summary.actionItems) { item in actionRow(item) }
+            Button { Task { await remind(summary.actionItems.map(\.title)) } } label: {
+                Label("Send all to Reminders", systemImage: "plus.circle")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .tint(theme.accent)
+            .padding(.top, 2)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func actionRow(_ item: ActionItem) -> some View {
+        HStack(spacing: 11) {
+            Button { toggleDone(item) } label: { checkbox(item.done) }.buttonStyle(.plain)
+            Text(item.title)
+                .font(theme.bodyFont(14))
+                .foregroundStyle(item.done ? theme.inkFaint : theme.ink2)
+                .strikethrough(item.done)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if !item.owner.isEmpty { avatar(item.owner, size: 22) }
+            if let due = item.due, !due.isEmpty {
+                Text(due).font(theme.monoFont(10, relativeTo: .caption2)).foregroundStyle(theme.inkSoft)
+            }
+            Button { Task { await remind([item.title]) } } label: {
+                Image(systemName: remindedTitles.contains(item.title) ? "checkmark.circle" : "bell.badge.plus")
+                    .foregroundStyle(theme.accent)
+            }
+            .buttonStyle(.plain)
+            .disabled(remindedTitles.contains(item.title))
+            .accessibilityLabel("Add to Reminders")
+        }
+        .padding(12)
         .moodCard(theme)
+    }
+
+    private func openQuestionsSection(_ items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Open questions", count: items.count)
+            bullets(items)
+        }
+    }
+
+    // MARK: Sidebar (sources + key moments)
+
+    @ViewBuilder
+    private func sidebar(_ summary: MeetingSummary) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sideHeader("Sources")
+            sourceRow(icon: "pencil", title: "My notes", subtitle: notesSubtitle)
+            sourceRow(icon: "waveform", title: "Full transcript", subtitle: transcriptSubtitle)
+            if !summary.keyQuotes.isEmpty {
+                sideHeader("Key moments").padding(.top, 6)
+                ForEach(summary.keyQuotes) { quoteRow($0) }
+            }
+            Label("Generated on this device · no cloud, no account", systemImage: "bolt.fill")
+                .font(theme.bodyFont(10.5)).foregroundStyle(theme.inkFaint)
+                .padding(.top, 8)
+        }
+    }
+
+    private func sourceRow(icon: String, title: String, subtitle: String) -> some View {
+        HStack(spacing: 11) {
+            Image(systemName: icon)
+                .foregroundStyle(theme.accentInk)
+                .frame(width: 32, height: 32)
+                .background(theme.accentTint, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(theme.bodyFont(13).weight(.semibold)).foregroundStyle(theme.ink)
+                Text(subtitle).font(theme.bodyFont(11)).foregroundStyle(theme.inkFaint)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(11)
+        .moodCard(theme)
+    }
+
+    private func quoteRow(_ quote: KeyQuote) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Capsule().fill(theme.accent).frame(width: 2.5)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("“\(quote.text)”")
+                    .font(theme.bodyFont(13)).italic().foregroundStyle(theme.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !quote.speaker.isEmpty {
+                    HStack(spacing: 6) {
+                        avatar(quote.speaker, size: 16)
+                        Text(quote.speaker).font(theme.monoFont(10, relativeTo: .caption2)).foregroundStyle(theme.inkSoft)
+                    }
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    // MARK: Small pieces
+
+    private func sectionHeader(_ title: String, count: Int) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(theme.titleFont(16, relativeTo: .headline))
+                .tracking(theme.titleTracking)
+                .textCase(theme.titleUppercase ? .uppercase : nil)
+                .foregroundStyle(theme.ink)
+            Text("\(count)")
+                .font(theme.monoFont(10.5, relativeTo: .caption2)).foregroundStyle(theme.inkSoft)
+                .padding(.horizontal, 7).padding(.vertical, 2)
+                .background(theme.paperRaised, in: Capsule())
+                .overlay(Capsule().strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+        }
+    }
+
+    private func sideHeader(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(theme.monoFont(10.5)).tracking(1.4).foregroundStyle(theme.inkFaint)
+    }
+
+    private var decisionMark: some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 5, style: .continuous)
+        return shape.fill(theme.accentTint)
+            .frame(width: 20, height: 20)
+            .overlay(shape.strokeBorder(theme.accent, lineWidth: 1.5))
+            .overlay(Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(theme.accentInk))
+            .padding(.top, 1)
+    }
+
+    private func checkbox(_ done: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 5, style: .continuous)
+        return shape.fill(done ? theme.accent : Color.clear)
+            .frame(width: 20, height: 20)
+            .overlay(shape.strokeBorder(done ? theme.accent : theme.inkGhost, lineWidth: 1.8))
+            .overlay { if done { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) } }
+    }
+
+    private func avatar(_ name: String, size: CGFloat) -> some View {
+        Text(Self.initials(name))
+            .font(.system(size: size * 0.42, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(theme.accent, in: Circle())
+    }
+
+    private var notesSubtitle: String {
+        var parts: [String] = []
+        if !note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { parts.append("Typed") }
+        if note.drawing != nil { parts.append("handwritten") }
+        return parts.isEmpty ? "Empty" : parts.joined(separator: " + ")
+    }
+
+    private var transcriptSubtitle: String {
+        guard !note.transcript.isEmpty else { return "No transcript" }
+        let words = note.transcript.split(whereSeparator: { $0 == " " || $0.isNewline }).count
+        let speakers = Set(note.transcriptSegments.compactMap(\.speaker)).count
+        return speakers > 0 ? "\(words) words · \(speakers) speakers" : "\(words) words"
+    }
+
+    static func initials(_ name: String) -> String {
+        let letters = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+        return (letters.isEmpty ? String(name.prefix(1)) : letters).uppercased()
+    }
+
+    private func shareText(_ summary: MeetingSummary) -> String {
+        var lines: [String] = [note.title.isEmpty ? "Summary" : note.title, ""]
+        if !summary.overview.isEmpty { lines.append(summary.overview); lines.append("") }
+        if !summary.decisions.isEmpty {
+            lines.append("DECISIONS")
+            lines.append(contentsOf: summary.decisions.map { "• \($0.text)" })
+            lines.append("")
+        }
+        if !summary.actionItems.isEmpty {
+            lines.append("ACTION ITEMS")
+            lines.append(contentsOf: summary.actionItems.map { item in
+                "□ \(item.title)"
+                    + (item.owner.isEmpty ? "" : " — \(item.owner)")
+                    + ((item.due?.isEmpty ?? true) ? "" : " (\(item.due!))")
+            })
+            lines.append("")
+        }
+        if !summary.openQuestions.isEmpty {
+            lines.append("OPEN QUESTIONS")
+            lines.append(contentsOf: summary.openQuestions.map { "• \($0)" })
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func bullets(_ items: [String]) -> some View {
@@ -234,7 +411,8 @@ struct SummaryView: View {
             tone: themeManager.summaryTone,
             includeDecisions: themeManager.extractDecisions,
             includeActionItems: themeManager.extractActionItems,
-            includeOpenQuestions: themeManager.extractOpenQuestions
+            includeOpenQuestions: themeManager.extractOpenQuestions,
+            includeKeyQuotes: themeManager.extractKeyQuotes
         )
         if let result {
             summary = result

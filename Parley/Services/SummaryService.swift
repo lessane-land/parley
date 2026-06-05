@@ -8,14 +8,43 @@ struct MeetingSummary: Codable, Equatable {
     var decisions: [Decision]
     var actionItems: [ActionItem]
     var openQuestions: [String]
+    var keyQuotes: [KeyQuote]
+
+    init(overview: String, decisions: [Decision], actionItems: [ActionItem],
+         openQuestions: [String], keyQuotes: [KeyQuote] = []) {
+        self.overview = overview
+        self.decisions = decisions
+        self.actionItems = actionItems
+        self.openQuestions = openQuestions
+        self.keyQuotes = keyQuotes
+    }
+
+    /// Lenient decoder so summaries cached before a field existed (e.g. `keyQuotes`)
+    /// still load — missing keys fall back to empty rather than failing the decode.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        overview = try c.decodeIfPresent(String.self, forKey: .overview) ?? ""
+        decisions = try c.decodeIfPresent([Decision].self, forKey: .decisions) ?? []
+        actionItems = try c.decodeIfPresent([ActionItem].self, forKey: .actionItems) ?? []
+        openQuestions = try c.decodeIfPresent([String].self, forKey: .openQuestions) ?? []
+        keyQuotes = try c.decodeIfPresent([KeyQuote].self, forKey: .keyQuotes) ?? []
+    }
 }
 
-/// One action item: the generated task + owner, plus the user's checkbox state.
+/// One action item: the generated task + owner + due, plus the user's checkbox.
 struct ActionItem: Codable, Equatable, Identifiable {
     var id: UUID = UUID()
     var title: String
     var owner: String = ""     // empty == no owner mentioned
+    var due: String?           // short due like "Thu" / "This wk", or nil
     var done: Bool = false
+}
+
+/// A notable line pulled from the transcript (Settings ▸ AI ▸ "Key quotes").
+struct KeyQuote: Codable, Equatable, Identifiable {
+    var id: UUID = UUID()
+    var text: String
+    var speaker: String = ""
 }
 
 /// One decision: what was decided, plus an optional rationale (the "why").
@@ -59,6 +88,8 @@ private struct SummaryDraft {
     var actions: [ActionDraft]
     @Guide(description: "Open questions or unresolved topics needing follow-up. Empty if none.")
     var openQuestions: [String]
+    @Guide(description: "A few short, notable verbatim quotes from the transcript. Empty if none.")
+    var keyQuotes: [KeyQuoteDraft]
 }
 
 @Generable
@@ -67,6 +98,16 @@ private struct ActionDraft {
     var title: String
     @Guide(description: "The person responsible, or empty if none was mentioned.")
     var owner: String
+    @Guide(description: "A short due hint like \"Thu\" or \"This week\", or empty if none.")
+    var due: String
+}
+
+@Generable
+private struct KeyQuoteDraft {
+    @Guide(description: "A short, notable quote, roughly verbatim.")
+    var text: String
+    @Guide(description: "Who said it, or empty if unclear.")
+    var speaker: String
 }
 
 @Generable
@@ -110,7 +151,8 @@ final class SummaryService {
                    tone: SummaryTone = .balanced,
                    includeDecisions: Bool = true,
                    includeActionItems: Bool = true,
-                   includeOpenQuestions: Bool = true) async -> MeetingSummary? {
+                   includeOpenQuestions: Bool = true,
+                   includeKeyQuotes: Bool = false) async -> MeetingSummary? {
         if let message = availabilityMessage() {
             state = .unavailable(message)
             return nil
@@ -134,8 +176,11 @@ final class SummaryService {
             return MeetingSummary(
                 overview: draft.overview,
                 decisions: includeDecisions ? draft.decisions.map { Decision(text: $0.text, rationale: $0.rationale) } : [],
-                actionItems: includeActionItems ? draft.actions.map { ActionItem(title: $0.title, owner: $0.owner) } : [],
-                openQuestions: includeOpenQuestions ? draft.openQuestions : []
+                actionItems: includeActionItems ? draft.actions.map {
+                    ActionItem(title: $0.title, owner: $0.owner, due: $0.due.isEmpty ? nil : $0.due)
+                } : [],
+                openQuestions: includeOpenQuestions ? draft.openQuestions : [],
+                keyQuotes: includeKeyQuotes ? draft.keyQuotes.map { KeyQuote(text: $0.text, speaker: $0.speaker) } : []
             )
         } catch {
             state = .unavailable(error.localizedDescription)

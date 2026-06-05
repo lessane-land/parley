@@ -580,7 +580,8 @@ struct NoteDetailView: View {
             tone: themeManager.summaryTone,
             includeDecisions: themeManager.extractDecisions,
             includeActionItems: themeManager.extractActionItems,
-            includeOpenQuestions: themeManager.extractOpenQuestions
+            includeOpenQuestions: themeManager.extractOpenQuestions,
+            includeKeyQuotes: themeManager.extractKeyQuotes
         )
         if let result { note.summaryData = try? JSONEncoder().encode(result) }
     }

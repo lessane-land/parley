@@ -109,11 +109,25 @@ struct TranscriptSegment: Codable, Equatable, Identifiable {
     var text: String
     var at: Date?
     var speaker: String?
+    /// User flagged this line as an action item.
+    var flagged: Bool = false
 
-    init(id: UUID = UUID(), text: String, at: Date? = nil, speaker: String? = nil) {
+    init(id: UUID = UUID(), text: String, at: Date? = nil, speaker: String? = nil, flagged: Bool = false) {
         self.id = id
         self.text = text
         self.at = at
         self.speaker = speaker
+        self.flagged = flagged
+    }
+
+    /// Lenient decode so segments stored before a field existed (e.g. `flagged`)
+    /// still load — missing keys fall back rather than failing the decode.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        at = try c.decodeIfPresent(Date.self, forKey: .at)
+        speaker = try c.decodeIfPresent(String.self, forKey: .speaker)
+        flagged = try c.decodeIfPresent(Bool.self, forKey: .flagged) ?? false
     }
 }

@@ -65,6 +65,10 @@ struct NoteDetailView: View {
     /// `dragBase` is just the fraction captured at the start of a divider drag.
     @State private var dragBase: CGFloat?
 
+    /// Whether the transcript panel is shown. Collapsing it gives notes the full
+    /// surface; a toolbar button (and the panel's chevron) toggle it.
+    @State private var showTranscript = true
+
     private var theme: Theme { themeManager.theme }
     private var density: Density { themeManager.density }
 
@@ -104,6 +108,7 @@ struct NoteDetailView: View {
         #endif
         .toolbar {
             ToolbarItem { recordControl }
+            ToolbarItem { transcriptToggle }
             ToolbarItem { swapControl }
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
@@ -112,7 +117,7 @@ struct NoteDetailView: View {
             case .actionItems:
                 ActionItemsSheet(
                     theme: theme,
-                    detected: ActionItemDetector.detect(in: note.body + "\n" + note.transcript),
+                    detected: dedupe(flaggedActions + ActionItemDetector.detect(in: note.body + "\n" + note.transcript)),
                     access: eventKit.remindersAccess,
                     onAdd: { await eventKit.addReminders($0) }
                 )
@@ -322,10 +327,18 @@ struct NoteDetailView: View {
     /// `layoutSwapped` flips which one leads. Side-by-side when wide, stacked otherwise.
     @ViewBuilder
     private func splitContent(wide: Bool) -> some View {
+        if showTranscript {
+            splitWithTranscript(wide: wide)
+        } else {
+            notesColumn   // transcript collapsed → notes get the whole surface
+        }
+    }
+
+    private func splitWithTranscript(wide: Bool) -> some View {
         let first = themeManager.layoutSwapped ? AnyView(transcriptPanel) : AnyView(notesColumn)
         let second = themeManager.layoutSwapped ? AnyView(notesColumn) : AnyView(transcriptPanel)
 
-        GeometryReader { geo in
+        return GeometryReader { geo in
             let total = wide ? geo.size.width : geo.size.height
             let thickness: CGFloat = 18
             let firstLen = max(0, (total - thickness) * clampedFraction)
@@ -391,6 +404,27 @@ struct NoteDetailView: View {
             Label("Swap notes and transcript", systemImage: "arrow.left.arrow.right")
         }
         .accessibilityLabel("Swap notes and transcript")
+    }
+
+    /// Collapse / show the transcript panel.
+    private var transcriptToggle: some View {
+        Button { withAnimation(.snappy) { showTranscript.toggle() } } label: {
+            Label(showTranscript ? "Hide transcript" : "Show transcript",
+                  systemImage: showTranscript ? "captions.bubble.fill" : "captions.bubble")
+        }
+        .accessibilityLabel(showTranscript ? "Hide transcript" : "Show transcript")
+    }
+
+    /// De-duplicate strings (order-preserving, case-insensitive, drops blanks).
+    private func dedupe(_ items: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for item in items {
+            let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, seen.insert(trimmed.lowercased()).inserted else { continue }
+            result.append(trimmed)
+        }
+        return result
     }
 
     private var notesColumn: some View {
@@ -469,8 +503,23 @@ struct NoteDetailView: View {
             knownSpeakers: knownSpeakers,
             onAssignSpeaker: assignSpeaker,
             onNewSpeaker: promptNewSpeaker,
-            onRenameSpeaker: renameSpeaker
+            onRenameSpeaker: renameSpeaker,
+            onToggleFlag: toggleFlag,
+            onCollapse: { withAnimation(.snappy) { showTranscript = false } }
         )
+    }
+
+    /// Flag/unflag a transcript line as an action item.
+    private func toggleFlag(_ id: UUID) {
+        var segments = note.transcriptSegments
+        guard let index = segments.firstIndex(where: { $0.id == id }) else { return }
+        segments[index].flagged.toggle()
+        note.transcriptSegments = segments
+    }
+
+    /// Transcript lines the user flagged as action items.
+    private var flaggedActions: [String] {
+        note.transcriptSegments.filter(\.flagged).map(\.text)
     }
 
     private var typedNotes: some View {
@@ -555,6 +604,8 @@ struct NoteDetailView: View {
                 note.transcriptSegments = transcription.finalizedSegments
                 await autoSummarizeIfEnabled()
             } else {
+                // Reveal the transcript so the live text is visible while recording.
+                withAnimation(.snappy) { showTranscript = true }
                 // Seed the session with the existing transcript. Older notes have
                 // flat text but no segments — wrap that as one block so resuming
                 // keeps the prior content visible on the timeline.

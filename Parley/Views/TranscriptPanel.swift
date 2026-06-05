@@ -21,6 +21,8 @@ struct TranscriptPanel: View {
     var onAssignSpeaker: ((UUID, String?) -> Void)? = nil   // pick an existing name, or clear (nil)
     var onNewSpeaker: ((UUID) -> Void)? = nil               // ask the owner to prompt for a new name
     var onRenameSpeaker: ((String) -> Void)? = nil          // rename a whole speaker (from the legend)
+    var onToggleFlag: ((UUID) -> Void)? = nil               // flag/unflag a line as an action item
+    var onCollapse: (() -> Void)? = nil                     // hide the transcript panel
 
     private var isRecording: Bool { state == .recording }
 
@@ -54,6 +56,16 @@ struct TranscriptPanel: View {
                 Text(label)
                     .font(theme.monoFont(11))
                     .foregroundStyle(theme.inkFaint)
+            }
+
+            if let onCollapse {
+                Button(action: onCollapse) {
+                    Image(systemName: "chevron.right.2")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(theme.inkFaint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Hide transcript")
             }
         }
         .padding(.horizontal, 16)
@@ -174,7 +186,7 @@ struct TranscriptPanel: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if segments.isEmpty { fallbackRows } else { segmentRows }
                     if !volatile.isEmpty {
-                        timelineRow(text: volatile, time: nil, speaker: nil, active: true, isLast: true, id: nil)
+                        timelineRow(text: volatile, time: nil, speaker: nil, flagged: false, active: true, isLast: true, id: nil)
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
@@ -187,25 +199,25 @@ struct TranscriptPanel: View {
 
     @ViewBuilder private var segmentRows: some View {
         ForEach(Array(segments.enumerated()), id: \.element.id) { index, seg in
-            timelineRow(text: seg.text, time: seg.at, speaker: seg.speaker, active: false,
-                        isLast: index == segments.count - 1 && volatile.isEmpty, id: seg.id)
+            timelineRow(text: seg.text, time: seg.at, speaker: seg.speaker, flagged: seg.flagged,
+                        active: false, isLast: index == segments.count - 1 && volatile.isEmpty, id: seg.id)
         }
     }
 
     @ViewBuilder private var fallbackRows: some View {
         let confirmed = sentences(text)
         ForEach(Array(confirmed.enumerated()), id: \.offset) { index, sentence in
-            timelineRow(text: sentence, time: nil, speaker: nil, active: false,
-                        isLast: index == confirmed.count - 1 && volatile.isEmpty, id: nil)
+            timelineRow(text: sentence, time: nil, speaker: nil, flagged: false,
+                        active: false, isLast: index == confirmed.count - 1 && volatile.isEmpty, id: nil)
         }
     }
 
-    private func timelineRow(text: String, time: Date?, speaker: String?, active: Bool, isLast: Bool, id: UUID?) -> some View {
+    private func timelineRow(text: String, time: Date?, speaker: String?, flagged: Bool, active: Bool, isLast: Bool, id: UUID?) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            nodeColumn(active: active, speaker: speaker, isLast: isLast, id: id)
+            nodeColumn(active: active, speaker: speaker, flagged: flagged, isLast: isLast, id: id)
 
             VStack(alignment: .leading, spacing: 3) {
-                if time != nil || speaker != nil {
+                if time != nil || speaker != nil || flagged {
                     HStack(spacing: 5) {
                         if let time {
                             Text(time, format: .dateTime.hour().minute())
@@ -214,6 +226,9 @@ struct TranscriptPanel: View {
                         if let speaker {
                             if time != nil { Text("·").foregroundStyle(theme.inkFaint) }
                             Text(speaker).foregroundStyle(theme.accentInk)
+                        }
+                        if flagged {
+                            Label("Action", systemImage: "flag.fill").foregroundStyle(theme.accentInk)
                         }
                     }
                     .font(theme.monoFont(9.5, relativeTo: .caption2))
@@ -231,7 +246,7 @@ struct TranscriptPanel: View {
     /// The spine + node. A segment with a speaker shows its initials; when
     /// `canLabelSpeakers`, the node is a menu to pick an existing name, add a new
     /// one, or clear it.
-    private func nodeColumn(active: Bool, speaker: String?, isLast: Bool, id: UUID?) -> some View {
+    private func nodeColumn(active: Bool, speaker: String?, flagged: Bool, isLast: Bool, id: UUID?) -> some View {
         let labelable = canLabelSpeakers && id != nil && !active
         return ZStack(alignment: .top) {
             Rectangle()
@@ -241,13 +256,13 @@ struct TranscriptPanel: View {
 
             if labelable, let id {
                 Menu {
-                    speakerMenu(id: id, current: speaker)
+                    speakerMenu(id: id, current: speaker, flagged: flagged)
                 } label: {
                     nodeBadge(active: active, speaker: speaker)
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
-                .accessibilityLabel("Set speaker")
+                .accessibilityLabel("Line options")
             } else {
                 nodeBadge(active: active, speaker: speaker)
             }
@@ -256,7 +271,12 @@ struct TranscriptPanel: View {
     }
 
     @ViewBuilder
-    private func speakerMenu(id: UUID, current: String?) -> some View {
+    private func speakerMenu(id: UUID, current: String?, flagged: Bool) -> some View {
+        Button { onToggleFlag?(id) } label: {
+            Label(flagged ? "Unflag action item" : "Flag as action item",
+                  systemImage: flagged ? "flag.slash" : "flag")
+        }
+        Divider()
         ForEach(knownSpeakers, id: \.self) { name in
             Button { onAssignSpeaker?(id, name) } label: {
                 if name == current { Label(name, systemImage: "checkmark") } else { Text(name) }

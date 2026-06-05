@@ -160,12 +160,27 @@ final class TranscriptionService {
     private func startEngine(convertingTo analyzerFormat: AVAudioFormat?) throws {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .spokenAudio, options: [.duckOthers])
+        // `.record` (input only) — we never play audio back, so we must NOT pass
+        // `.duckOthers` here: ducking is only valid on output-bearing categories
+        // (.playback/.playAndRecord/…), and combining it with `.record` makes
+        // setCategory throw paramErr (OSStatus -50). `.allowBluetooth` lets a
+        // paired headset/mic be the input source.
+        try session.setCategory(.record, mode: .spokenAudio, options: [.allowBluetooth])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         #endif
 
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
+
+        // A zero-sample-rate / zero-channel format means the input route isn't
+        // ready (no mic, or the session didn't activate). Installing a tap with
+        // such a format also throws paramErr (-50), so fail with a clear message.
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+            throw NSError(
+                domain: "Parley.Transcription", code: -50,
+                userInfo: [NSLocalizedDescriptionKey: "No audio input is available. Check the microphone and that it isn't in use by another app."]
+            )
+        }
 
         // Captured locally so the background tap never touches main-actor state.
         let continuation = self.continuation

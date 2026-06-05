@@ -54,10 +54,9 @@ struct NoteDetailView: View {
     }
 
     /// On iPad, the notes surface is either keyboard (Type) or Pencil (Draw).
-    /// Defaults to **Type** so the keyboard works the instant you tap the notes;
-    /// the overlaid Pencil canvas blocks typing while active, so Draw is opt-in via
-    /// the Type/Draw toggle.
-    @State private var penMode: PenMode = .type
+    /// Defaults to **Draw** (Pencil-first). The keyboard still works for the title
+    /// and other fields; tap **Type** to type into the notes body.
+    @State private var penMode: PenMode = .draw
     private enum PenMode: Hashable { case type, draw }
 
     /// Notes ⟷ transcript layout (order + split ratio) is a persisted preference
@@ -128,7 +127,12 @@ struct NoteDetailView: View {
                 theme: theme,
                 note: note,
                 service: summaryService,
-                onAddReminders: { await eventKit.addReminders($0) }
+                onAddReminders: { await eventKit.addReminders($0) },
+                onOpenNotes: { showingSummary = false },
+                onOpenTranscript: {
+                    showingSummary = false
+                    withAnimation(.snappy) { showTranscript = true }
+                }
             )
         }
         // Persist confirmed transcript text + segments as they stream in.
@@ -529,7 +533,9 @@ struct NoteDetailView: View {
             .lineSpacing(density.lineSpacing)
             .scrollContentBackground(.hidden)
             .overlay(alignment: .topLeading) {
-                if note.body.isEmpty {
+                // Only when typing is the active mode — in Draw mode the prompt
+                // is misleading (and the user asked not to see it on iPad).
+                if note.body.isEmpty && typedActive {
                     Text("Start typing your notes…")
                         .font(theme.bodyFont(density.bodySize))
                         .foregroundStyle(theme.inkFaint)

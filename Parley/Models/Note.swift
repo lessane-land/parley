@@ -45,6 +45,9 @@ final class Note {
     var endDate: Date?
     var attendees: [String] = []
 
+    /// Pinned to the top of the dashboard (and shown in an accent style).
+    var pinned: Bool = false
+
     /// The last on-device AI summary (a `MeetingSummary` encoded as JSON).
     /// Optional → lightweight migration.
     var summaryData: Data?
@@ -72,7 +75,7 @@ final class Note {
     /// convenience: when we add CloudKit sync in a later phase, CloudKit requires
     /// every SwiftData property to be optional or have a default, so starting this
     /// way avoids a migration headache down the road.
-    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "", calendarEventID: String? = nil, startDate: Date? = nil, endDate: Date? = nil, attendees: [String] = [], summaryData: Data? = nil, transcriptData: Data? = nil) {
+    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "", calendarEventID: String? = nil, startDate: Date? = nil, endDate: Date? = nil, attendees: [String] = [], pinned: Bool = false, summaryData: Data? = nil, transcriptData: Data? = nil) {
         self.id = id
         self.title = title
         self.body = body
@@ -83,6 +86,7 @@ final class Note {
         self.startDate = startDate
         self.endDate = endDate
         self.attendees = attendees
+        self.pinned = pinned
         self.summaryData = summaryData
         self.transcriptData = transcriptData
     }

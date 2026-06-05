@@ -8,6 +8,7 @@ struct NotesGridView: View {
     let notes: [Note]
     let onOpen: (Note) -> Void
     let onDelete: (Note) -> Void
+    let onTogglePin: (Note) -> Void
 
     private var columns: [GridItem] { [GridItem(.adaptive(minimum: 240), spacing: 14)] }
 
@@ -34,22 +35,15 @@ struct NotesGridView: View {
                                 NoteCard(theme: theme, note: note)
                             }
                             .buttonStyle(.plain)
-                            // Visible "⋯" with a mood-styled menu so delete is
-                            // discoverable without a right-click (Mac has no swipe).
-                            .overlay(alignment: .topTrailing) {
-                                MoodMenu(theme: theme) {
-                                    MoodMenuRow(theme: theme, title: "Delete", icon: "trash", destructive: true) {
-                                        onDelete(note)
-                                    }
-                                } label: {
-                                    Image(systemName: "ellipsis")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(theme.inkFaint)
-                                        .frame(width: 26, height: 26)
-                                        .background(theme.paperRaised, in: Circle())
-                                        .overlay(Circle().strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+                            // Long-press (iPad) / right-click (Mac) → actions.
+                            .contextMenu {
+                                Button { onTogglePin(note) } label: {
+                                    Label(note.pinned ? "Unpin" : "Pin",
+                                          systemImage: note.pinned ? "pin.slash" : "pin")
                                 }
-                                .padding(8)
+                                Button(role: .destructive) { onDelete(note) } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
                         }
                     }
@@ -89,23 +83,57 @@ struct NoteCard: View {
             .map(String.init) ?? ""
     }
 
+    /// Small status chips derived from the note's content.
+    private var metaItems: [(icon: String, text: String)] {
+        var items: [(String, String)] = []
+        if let start = note.startDate {
+            items.append(("clock", start.formatted(date: .omitted, time: .shortened)))
+        }
+        if !note.transcript.isEmpty { items.append(("waveform", "Recorded")) }
+        if note.summaryData != nil { items.append(("sparkles", "Summary")) }
+        if !note.attendees.isEmpty { items.append(("person.2", "\(note.attendees.count)")) }
+        return items
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(note.title.isEmpty ? "New Note" : note.title)
-                .font(theme.titleFont(18, relativeTo: .headline))
-                .tracking(theme.titleTracking)
-                .textCase(theme.titleUppercase ? .uppercase : nil)
-                .foregroundStyle(theme.ink)
-                .lineLimit(1)
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .top, spacing: 6) {
+                Text(note.title.isEmpty ? "New Note" : note.title)
+                    .font(theme.titleFont(18, relativeTo: .headline))
+                    .tracking(theme.titleTracking)
+                    .textCase(theme.titleUppercase ? .uppercase : nil)
+                    .foregroundStyle(theme.ink)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if note.pinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.accent)
+                }
+            }
 
             if !snippet.isEmpty {
                 Text(snippet)
                     .font(theme.bodyFont(13))
                     .foregroundStyle(theme.inkSoft)
-                    .lineLimit(4)
+                    .lineLimit(3)
             }
 
             Spacer(minLength: 0)
+
+            if !metaItems.isEmpty {
+                HStack(spacing: 9) {
+                    ForEach(Array(metaItems.enumerated()), id: \.offset) { _, item in
+                        HStack(spacing: 3) {
+                            Image(systemName: item.icon).font(.system(size: 9))
+                            Text(item.text)
+                        }
+                        .font(theme.monoFont(9.5, relativeTo: .caption2))
+                        .foregroundStyle(theme.inkSoft)
+                    }
+                }
+                .lineLimit(1)
+            }
 
             if let tags = note.tags, !tags.isEmpty {
                 HStack(spacing: 5) {
@@ -126,8 +154,15 @@ struct NoteCard: View {
                 .foregroundStyle(theme.inkFaint)
         }
         .padding(16)
-        .frame(height: 175, alignment: .topLeading)
+        .frame(height: 192, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
         .moodCard(theme)
+        .overlay {
+            // Pinned notes read differently in the dashboard.
+            if note.pinned {
+                RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
+                    .strokeBorder(theme.accent, lineWidth: 2)
+            }
+        }
     }
 }

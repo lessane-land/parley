@@ -11,6 +11,8 @@ struct SummaryView: View {
     @Bindable var note: Note
     let service: SummaryService
     let onAddReminders: ([String]) async -> Int
+    var onOpenNotes: () -> Void = {}        // jump back to the note's typed/handwritten notes
+    var onOpenTranscript: () -> Void = {}   // jump back to the transcript
 
     @Environment(ThemeManager.self) private var themeManager
     #if os(iOS)
@@ -240,8 +242,8 @@ struct SummaryView: View {
     private func sidebar(_ summary: MeetingSummary) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sideHeader("Sources")
-            sourceRow(icon: "pencil", title: "My notes", subtitle: notesSubtitle)
-            sourceRow(icon: "waveform", title: "Full transcript", subtitle: transcriptSubtitle)
+            sourceRow(icon: "pencil", title: "My notes", subtitle: notesSubtitle, action: onOpenNotes)
+            sourceRow(icon: "waveform", title: "Full transcript", subtitle: transcriptSubtitle, action: onOpenTranscript)
             if !summary.keyQuotes.isEmpty {
                 sideHeader("Key moments").padding(.top, 6)
                 ForEach(summary.keyQuotes) { quoteRow($0) }
@@ -252,20 +254,24 @@ struct SummaryView: View {
         }
     }
 
-    private func sourceRow(icon: String, title: String, subtitle: String) -> some View {
-        HStack(spacing: 11) {
-            Image(systemName: icon)
-                .foregroundStyle(theme.accentInk)
-                .frame(width: 32, height: 32)
-                .background(theme.accentTint, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 8, style: .continuous))
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(theme.bodyFont(13).weight(.semibold)).foregroundStyle(theme.ink)
-                Text(subtitle).font(theme.bodyFont(11)).foregroundStyle(theme.inkFaint)
+    private func sourceRow(icon: String, title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                Image(systemName: icon)
+                    .foregroundStyle(theme.accentInk)
+                    .frame(width: 32, height: 32)
+                    .background(theme.accentTint, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(theme.bodyFont(13).weight(.semibold)).foregroundStyle(theme.ink)
+                    Text(subtitle).font(theme.bodyFont(11)).foregroundStyle(theme.inkFaint)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(theme.inkFaint)
             }
-            Spacer(minLength: 0)
+            .padding(11)
+            .moodCard(theme)
         }
-        .padding(11)
-        .moodCard(theme)
+        .buttonStyle(.plain)
     }
 
     private func quoteRow(_ quote: KeyQuote) -> some View {

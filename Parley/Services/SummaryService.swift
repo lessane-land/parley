@@ -106,7 +106,11 @@ final class SummaryService {
         }
     }
 
-    func summarize(notes: String, transcript: String, attendees: [String] = []) async -> MeetingSummary? {
+    func summarize(notes: String, transcript: String, attendees: [String] = [],
+                   tone: SummaryTone = .balanced,
+                   includeDecisions: Bool = true,
+                   includeActionItems: Bool = true,
+                   includeOpenQuestions: Bool = true) async -> MeetingSummary? {
         if let message = availabilityMessage() {
             state = .unavailable(message)
             return nil
@@ -116,7 +120,7 @@ final class SummaryService {
         let session = LanguageModelSession(instructions: """
         You are a meeting-notes assistant. From a user's sparse notes and a full \
         transcript, produce a clean, faithful summary. Only include information \
-        supported by the inputs — never invent facts. Be concise. If a section \
+        supported by the inputs — never invent facts. \(tone.guidance) If a section \
         has nothing, return an empty list.
         """)
         do {
@@ -125,11 +129,13 @@ final class SummaryService {
                 generating: SummaryDraft.self
             ).content
             state = .idle
+            // Honor the "Always extract" toggles regardless of what the model
+            // returned, so a turned-off section is reliably empty.
             return MeetingSummary(
                 overview: draft.overview,
-                decisions: draft.decisions.map { Decision(text: $0.text, rationale: $0.rationale) },
-                actionItems: draft.actions.map { ActionItem(title: $0.title, owner: $0.owner) },
-                openQuestions: draft.openQuestions
+                decisions: includeDecisions ? draft.decisions.map { Decision(text: $0.text, rationale: $0.rationale) } : [],
+                actionItems: includeActionItems ? draft.actions.map { ActionItem(title: $0.title, owner: $0.owner) } : [],
+                openQuestions: includeOpenQuestions ? draft.openQuestions : []
             )
         } catch {
             state = .unavailable(error.localizedDescription)

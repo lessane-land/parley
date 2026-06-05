@@ -11,6 +11,7 @@ struct SummaryView: View {
     let service: SummaryService
     let onAddReminders: ([String]) async -> Int
 
+    @Environment(ThemeManager.self) private var themeManager
     @State private var summary: MeetingSummary?
     @State private var remindedTitles: Set<String> = []
 
@@ -227,7 +228,13 @@ struct SummaryView: View {
 
     private func generate() async {
         remindedTitles = []
-        let result = await service.summarize(notes: note.body, transcript: note.transcript, attendees: note.attendees)
+        let result = await service.summarize(
+            notes: note.body, transcript: note.transcript, attendees: note.attendees,
+            tone: themeManager.summaryTone,
+            includeDecisions: themeManager.extractDecisions,
+            includeActionItems: themeManager.extractActionItems,
+            includeOpenQuestions: themeManager.extractOpenQuestions
+        )
         if let result {
             summary = result
             persist()

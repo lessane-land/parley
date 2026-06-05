@@ -50,6 +50,18 @@ final class ThemeManager {
     var layoutSwapped: Bool { didSet { UserDefaults.standard.set(layoutSwapped, forKey: Self.layoutSwappedKey) } }
     var splitFraction: Double { didSet { UserDefaults.standard.set(splitFraction, forKey: Self.splitFractionKey) } }
 
+    // MARK: AI & Summarize (the design's Settings ▸ AI section)
+
+    /// Draft a summary automatically the moment a recording stops.
+    var autoSummarize: Bool { didSet { UserDefaults.standard.set(autoSummarize, forKey: Self.autoSummarizeKey) } }
+    /// How terse/verbose the generated summary should be.
+    var summaryTone: SummaryTone { didSet { UserDefaults.standard.set(summaryTone.rawValue, forKey: Self.summaryToneKey) } }
+    /// Which structured pieces the summary should always pull out.
+    var extractDecisions: Bool { didSet { UserDefaults.standard.set(extractDecisions, forKey: Self.extractDecisionsKey) } }
+    var extractActionItems: Bool { didSet { UserDefaults.standard.set(extractActionItems, forKey: Self.extractActionItemsKey) } }
+    var extractOpenQuestions: Bool { didSet { UserDefaults.standard.set(extractOpenQuestions, forKey: Self.extractOpenQuestionsKey) } }
+    var extractKeyQuotes: Bool { didSet { UserDefaults.standard.set(extractKeyQuotes, forKey: Self.extractKeyQuotesKey) } }
+
     /// The fully resolved tokens for the current mood + overrides. Views read
     /// `themeManager.theme`.
     var theme: Theme {
@@ -110,6 +122,12 @@ final class ThemeManager {
     private static let languageKey = "parley.transcriptionLanguage"
     private static let layoutSwappedKey = "parley.layoutSwapped"
     private static let splitFractionKey = "parley.splitFraction"
+    private static let autoSummarizeKey = "parley.autoSummarize"
+    private static let summaryToneKey = "parley.summaryTone"
+    private static let extractDecisionsKey = "parley.extractDecisions"
+    private static let extractActionItemsKey = "parley.extractActionItems"
+    private static let extractOpenQuestionsKey = "parley.extractOpenQuestions"
+    private static let extractKeyQuotesKey = "parley.extractKeyQuotes"
 
     private func persist(_ value: String?, _ key: String) {
         let d = UserDefaults.standard
@@ -130,5 +148,27 @@ final class ThemeManager {
         transcriptionLanguage = d.string(forKey: Self.languageKey)
         layoutSwapped = d.object(forKey: Self.layoutSwappedKey) as? Bool ?? false
         splitFraction = d.object(forKey: Self.splitFractionKey) as? Double ?? 0.5
+        autoSummarize = d.object(forKey: Self.autoSummarizeKey) as? Bool ?? true
+        summaryTone = SummaryTone(rawValue: d.string(forKey: Self.summaryToneKey) ?? "") ?? .balanced
+        extractDecisions = d.object(forKey: Self.extractDecisionsKey) as? Bool ?? true
+        extractActionItems = d.object(forKey: Self.extractActionItemsKey) as? Bool ?? true
+        extractOpenQuestions = d.object(forKey: Self.extractOpenQuestionsKey) as? Bool ?? true
+        extractKeyQuotes = d.object(forKey: Self.extractKeyQuotesKey) as? Bool ?? false
+    }
+}
+
+/// How verbose the on-device summary should be (Settings ▸ AI ▸ Summary tone).
+enum SummaryTone: String, CaseIterable, Identifiable {
+    case brief, balanced, detailed
+    var id: String { rawValue }
+    var name: String { rawValue.capitalized }
+
+    /// A line folded into the model instructions.
+    var guidance: String {
+        switch self {
+        case .brief: "Be very concise — short phrases, only the essentials."
+        case .balanced: "Be concise but complete."
+        case .detailed: "Be thorough; capture nuance and context."
+        }
     }
 }

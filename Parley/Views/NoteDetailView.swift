@@ -552,6 +552,7 @@ struct NoteDetailView: View {
                 // FluidAudio); persist the labeled segments when it finishes.
                 await transcription.identifySpeakers()
                 note.transcriptSegments = transcription.finalizedSegments
+                await autoSummarizeIfEnabled()
             } else {
                 // Seed the session with the existing transcript. Older notes have
                 // flat text but no segments — wrap that as one block so resuming
@@ -567,6 +568,20 @@ struct NoteDetailView: View {
                 )
             }
         }
+    }
+
+    /// Draft a summary in the background right after a recording stops, when
+    /// Settings ▸ AI ▸ Auto-summarize is on — so it's ready when the user opens it.
+    private func autoSummarizeIfEnabled() async {
+        guard themeManager.autoSummarize, !note.transcript.isEmpty else { return }
+        let result = await summaryService.summarize(
+            notes: note.body, transcript: note.transcript, attendees: note.attendees,
+            tone: themeManager.summaryTone,
+            includeDecisions: themeManager.extractDecisions,
+            includeActionItems: themeManager.extractActionItems,
+            includeOpenQuestions: themeManager.extractOpenQuestions
+        )
+        if let result { note.summaryData = try? JSONEncoder().encode(result) }
     }
 
     /// Speaker names already used in this note (for the quick-pick menu), distinct

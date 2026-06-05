@@ -1,5 +1,10 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UniformTypeIdentifiers
+#if canImport(UIKit)
+import UIKit
+#endif
 #if os(macOS)
 import AppKit
 #endif
@@ -68,6 +73,13 @@ struct NoteDetailView: View {
     /// surface; a toolbar button (and the panel's chevron) toggle it.
     @State private var showTranscript = true
 
+    /// Attachments: the photo picker / file importer presentation flags, the
+    /// pending photo selections, and the attachment currently being previewed.
+    @State private var showPhotoPicker = false
+    @State private var photoItems: [PhotosPickerItem] = []
+    @State private var importingFile = false
+    @State private var previewAttachment: Attachment?
+
     private var theme: Theme { themeManager.theme }
     private var density: Density { themeManager.density }
 
@@ -107,10 +119,19 @@ struct NoteDetailView: View {
         #endif
         .toolbar {
             ToolbarItem { recordControl }
+            ToolbarItem { attachControl }
             ToolbarItem { transcriptToggle }
             ToolbarItem { swapControl }
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems, maxSelectionCount: 10, matching: .images)
+        .onChange(of: photoItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await addPhotos(items) }
+        }
+        .fileImporter(isPresented: $importingFile, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            handleFileImport(result)
+        }
         .sheet(item: $activeSheet) { which in
             switch which {
             case .actionItems:
@@ -201,6 +222,78 @@ struct NoteDetailView: View {
             meetingMeta
 
             tagsRow
+
+            attachmentsStrip
+        }
+    }
+
+    /// A horizontal strip of attachment tiles (image thumbnails / file icons).
+    /// Hidden when the note has none; the paperclip toolbar menu adds them.
+    @ViewBuilder
+    private var attachmentsStrip: some View {
+        let items = (note.attachments ?? []).sorted { $0.createdAt < $1.createdAt }
+        if !items.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(items) { attachment in attachmentCard(attachment) }
+                }
+                .padding(.vertical, 2)
+            }
+            // Attached to the strip (not the top-level body) so it never competes
+            // with the action-items sheet for presentation.
+            .sheet(item: $previewAttachment) { attachment in
+                AttachmentPreviewSheet(theme: theme, attachment: attachment)
+            }
+        }
+    }
+
+    private func attachmentCard(_ attachment: Attachment) -> some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9, style: .continuous)
+        return Button { previewAttachment = attachment } label: {
+            VStack(spacing: 0) {
+                ZStack {
+                    if let data = attachment.data,
+                       AttachmentSupport.isImage(attachment),
+                       let image = AttachmentSupport.image(from: data) {
+                        image.resizable().scaledToFill()
+                    } else {
+                        theme.paperSunk
+                        Image(systemName: AttachmentSupport.icon(attachment))
+                            .font(.system(size: 20))
+                            .foregroundStyle(theme.accent)
+                    }
+                }
+                .frame(width: 104, height: 58)
+                .clipped()
+
+                Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
+                    .font(theme.monoFont(9.5, relativeTo: .caption2))
+                    .foregroundStyle(theme.inkSoft)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(width: 104, alignment: .leading)
+                    .padding(.horizontal, 7).padding(.vertical, 5)
+            }
+            .frame(width: 104)
+            .background(theme.paperRaised)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) { removeAttachment(attachment) } label: {
+                Label("Remove", systemImage: "trash")
+            }
+        }
+    }
+
+    /// The paperclip menu: attach a photo (PhotosPicker) or any file (importer).
+    private var attachControl: some View {
+        Menu {
+            Button { showPhotoPicker = true } label: { Label("Photo", systemImage: "photo") }
+            Button { importingFile = true } label: { Label("File", systemImage: "doc") }
+        } label: {
+            Label("Attach", systemImage: "paperclip")
         }
     }
 
@@ -293,6 +386,52 @@ struct NoteDetailView: View {
         let tag = Tag(name: name, colorHex: color)
         context.insert(tag)
         toggle(tag)
+    }
+
+    // MARK: Attachments
+
+    /// Load each picked photo's bytes off the PhotosPicker item and attach it.
+    private func addPhotos(_ items: [PhotosPickerItem]) async {
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+            let type = item.supportedContentTypes.first
+            let uti = type?.identifier ?? UTType.image.identifier
+            let ext = type?.preferredFilenameExtension ?? "jpg"
+            addAttachment(data: data, filename: "Photo \(Self.stamp()).\(ext)", typeIdentifier: uti)
+        }
+        photoItems = []
+    }
+
+    /// Read each imported file (honoring security-scoped access) and attach it.
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result else { return }
+        for url in urls {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let uti = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType?.identifier
+                ?? UTType.data.identifier
+            addAttachment(data: data, filename: url.lastPathComponent, typeIdentifier: uti)
+        }
+    }
+
+    private func addAttachment(data: Data, filename: String, typeIdentifier: String) {
+        let attachment = Attachment(filename: filename, typeIdentifier: typeIdentifier, data: data)
+        context.insert(attachment)
+        // Append on the note side; SwiftData sets the inverse (`attachment.note`).
+        note.attachments = (note.attachments ?? []) + [attachment]
+    }
+
+    private func removeAttachment(_ attachment: Attachment) {
+        note.attachments?.removeAll { $0.persistentModelID == attachment.persistentModelID }
+        context.delete(attachment)
+    }
+
+    /// A short, filename-safe timestamp so attached photos get distinct names.
+    private static func stamp() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "MMM-d-HHmmss"
+        return f.string(from: Date())
     }
 
     /// The design's bottom action bar: a quiet hint on the left, the Action
@@ -696,6 +835,102 @@ struct NoteDetailView: View {
             segments[i].speaker = newName
         }
         note.transcriptSegments = segments
+    }
+}
+
+// MARK: - Attachment helpers + preview
+
+/// Cross-platform helpers for rendering attachments — kept in one place so the
+/// strip tiles and the preview sheet agree on icons, thumbnails, and temp files.
+enum AttachmentSupport {
+    /// Whether this attachment is an image we can render a thumbnail/preview for.
+    static func isImage(_ attachment: Attachment) -> Bool {
+        UTType(attachment.typeIdentifier)?.conforms(to: .image) ?? false
+    }
+
+    /// Build a SwiftUI `Image` from raw bytes, using the platform's image type.
+    static func image(from data: Data) -> Image? {
+        #if canImport(UIKit)
+        if let ui = UIImage(data: data) { return Image(uiImage: ui) }
+        #elseif canImport(AppKit)
+        if let ns = NSImage(data: data) { return Image(nsImage: ns) }
+        #endif
+        return nil
+    }
+
+    /// An SF Symbol that suits the attachment's type.
+    static func icon(_ attachment: Attachment) -> String {
+        guard let type = UTType(attachment.typeIdentifier) else { return "doc" }
+        if type.conforms(to: .image) { return "photo" }
+        if type.conforms(to: .pdf) { return "doc.richtext" }
+        if type.conforms(to: .movie) || type.conforms(to: .audiovisualContent) { return "film" }
+        if type.conforms(to: .audio) { return "waveform" }
+        if type.conforms(to: .spreadsheet) { return "tablecells" }
+        if type.conforms(to: .archive) { return "doc.zipper" }
+        if type.conforms(to: .text) { return "doc.text" }
+        return "doc"
+    }
+
+    /// Write the bytes to a temp file (named like the attachment) so it can be
+    /// shared/opened in another app. Returns nil if there's nothing to write.
+    static func writeTemp(_ attachment: Attachment) -> URL? {
+        guard let data = attachment.data else { return nil }
+        let name = attachment.filename.isEmpty ? attachment.id.uuidString : attachment.filename
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        do { try data.write(to: url); return url } catch { return nil }
+    }
+}
+
+/// A simple, cross-platform preview: large image for pictures, an icon + Share
+/// for other files (so the user can open them in another app). No QuickLook
+/// dependency, so it builds the same on iOS, iPadOS, and macOS.
+private struct AttachmentPreviewSheet: View {
+    let theme: Theme
+    let attachment: Attachment
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var shareURL: URL?
+
+    var body: some View {
+        NavigationStack {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.paperSunk)
+                .navigationTitle(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                    if let shareURL {
+                        ToolbarItem { ShareLink(item: shareURL) }
+                    }
+                }
+                .onAppear { shareURL = AttachmentSupport.writeTemp(attachment) }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let data = attachment.data,
+           AttachmentSupport.isImage(attachment),
+           let image = AttachmentSupport.image(from: data) {
+            ScrollView([.horizontal, .vertical]) {
+                image.resizable().scaledToFit().frame(maxWidth: .infinity)
+            }
+        } else {
+            VStack(spacing: 14) {
+                Image(systemName: AttachmentSupport.icon(attachment))
+                    .font(.system(size: 48)).foregroundStyle(theme.accent)
+                Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
+                    .font(theme.bodyFont(15)).foregroundStyle(theme.ink)
+                    .multilineTextAlignment(.center)
+                Text("Use Share to open this file in another app.")
+                    .font(theme.bodyFont(12)).foregroundStyle(theme.inkSoft)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 }
 

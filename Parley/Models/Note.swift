@@ -63,6 +63,13 @@ final class Note {
     /// inverse is declared on `Tag.notes`.
     var tags: [Tag]?
 
+    /// Files and images attached to this note (photos, PDFs, docs). Optional
+    /// to-many (CloudKit requirement); `.cascade` so deleting the note removes its
+    /// attachments too. The inverse is `Attachment.note`. The bytes themselves live
+    /// in external storage (see `Attachment.data`), so notes stay light.
+    @Relationship(deleteRule: .cascade, inverse: \Attachment.note)
+    var attachments: [Attachment]?
+
     /// Handwriting layer (iPad). A `PKDrawing` serialized via its
     /// `dataRepresentation()`. Optional because most notes have no drawing, and
     /// because adding an *optional* property is a SwiftData **lightweight
@@ -101,6 +108,36 @@ final class Note {
         set {
             transcriptData = newValue.isEmpty ? nil : (try? JSONEncoder().encode(newValue))
         }
+    }
+}
+
+/// A file or image attached to a note (photo, PDF, document…). The raw bytes
+/// live in **external storage** so they don't bloat the SQLite row — and so
+/// CloudKit ships them as assets later. CloudKit-safe like `Note`: every property
+/// is optional or has a declaration-level default, and the relationship back to
+/// the note is the optional inverse of `Note.attachments`.
+@Model
+final class Attachment {
+    var id: UUID = UUID()
+    var filename: String = ""
+
+    /// Uniform Type Identifier (e.g. "public.jpeg", "com.adobe.pdf"). Drives the
+    /// icon and whether we render a thumbnail vs. a generic file tile.
+    var typeIdentifier: String = ""
+    var createdAt: Date = Date()
+
+    /// The raw bytes. `.externalStorage` keeps large blobs out of the row.
+    @Attribute(.externalStorage) var data: Data?
+
+    /// The owning note — the inverse of `Note.attachments`.
+    var note: Note?
+
+    init(id: UUID = UUID(), filename: String = "", typeIdentifier: String = "", createdAt: Date = .now, data: Data? = nil) {
+        self.id = id
+        self.filename = filename
+        self.typeIdentifier = typeIdentifier
+        self.createdAt = createdAt
+        self.data = data
     }
 }
 

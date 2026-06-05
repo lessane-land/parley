@@ -92,6 +92,9 @@ struct NoteCard: View {
         if !note.transcript.isEmpty { items.append(("waveform", "Recorded")) }
         if note.summaryData != nil { items.append(("sparkles", "Summary")) }
         if !note.attendees.isEmpty { items.append(("person.2", "\(note.attendees.count)")) }
+        if let attachments = note.attachments, !attachments.isEmpty {
+            items.append(("paperclip", "\(attachments.count)"))
+        }
         return items
     }
 

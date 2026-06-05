@@ -75,18 +75,11 @@ struct ParleyApp: App {
         // Inject the (CloudKit-backed) container; views read it via `@Query`
         // and `@Environment(\.modelContext)`.
         .modelContainer(modelContainer)
-
         #if os(macOS)
-        // On macOS, preferences live under the app menu (Parley ▸ Settings…, Cmd-,)
-        // via the dedicated `Settings` scene — not a sheet. Same `themeManager`
-        // instance, so changes here update the main window live.
-        Settings {
-            SettingsView()
-                .environment(themeManager)
-                .tint(themeManager.theme.accent)
-                .preferredColorScheme(themeManager.theme.colorScheme)
-                .frame(width: 460, height: 560)
-        }
+        // Merge the toolbar into the title bar so there's no tall, empty title
+        // strip above the content. Settings is the in-window slide-over (opened
+        // from the toolbar), so there's no separate `Settings` window.
+        .windowToolbarStyle(.unifiedCompact)
         #endif
     }
 }

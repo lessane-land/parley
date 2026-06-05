@@ -61,7 +61,12 @@ struct SettingsView: View {
             if cfg.faceOptions.count > 1 {
                 valueRow(cfg.faceLabel) {
                     Picker(cfg.faceLabel, selection: Binding(
-                        get: { manager.faceName ?? cfg.faceDefault },
+                        // Clamp to a valid option — during a mood switch the stored
+                        // face can momentarily not belong to the new mood's list.
+                        get: {
+                            let current = manager.faceName ?? cfg.faceDefault
+                            return cfg.faceOptions.contains(current) ? current : cfg.faceDefault
+                        },
                         set: { manager.faceName = $0 }
                     )) {
                         ForEach(cfg.faceOptions, id: \.self) { Text($0).tag($0) }

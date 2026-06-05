@@ -39,6 +39,17 @@ final class TranscriptionService {
     /// When the current session began (for the timer).
     private(set) var startedAt: Date?
 
+    /// The locale transcription actually resolved to for this session (Automatic
+    /// picks one; this is what it landed on). Surfaced so the UI can show which
+    /// language it's listening for — on-device transcription is single-language.
+    private(set) var activeLocale: Locale?
+
+    /// A compact label for `activeLocale`, e.g. "EN-US" / "ES-ES", or nil before
+    /// the first session.
+    var activeLanguageLabel: String? {
+        activeLocale.map { $0.identifier(.bcp47).uppercased() }
+    }
+
     var isRecording: Bool { state == .recording }
 
     // Audio + Speech objects
@@ -73,6 +84,7 @@ final class TranscriptionService {
             let supported = await SpeechTranscriber.supportedLocales
             let locale = Self.resolveLocale(from: supported, preferred: preferredLanguage)
                 ?? Self.fallbackLocale(preferred: preferredLanguage)
+            activeLocale = locale
 
             let transcriber = SpeechTranscriber(
                 locale: locale,

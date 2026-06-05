@@ -14,6 +14,7 @@ struct TranscriptPanel: View {
     let volatile: String          // in-flight partial (only while recording)
     let state: TranscriptionService.State
     let startedAt: Date?
+    var languageLabel: String? = nil   // active transcription locale, e.g. "EN-US"
 
     private var isRecording: Bool { state == .recording }
 
@@ -35,6 +36,10 @@ struct TranscriptPanel: View {
                 .tracking(1.4)
                 .foregroundStyle(theme.inkSoft)
 
+            if let languageLabel {
+                languageChip(languageLabel)
+            }
+
             Spacer()
 
             if isRecording {
@@ -47,6 +52,19 @@ struct TranscriptPanel: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    /// Shows which single language transcription resolved to (Automatic picks
+    /// one), so it's never ambiguous why Spanish-while-set-to-English looks off.
+    private func languageChip(_ label: String) -> some View {
+        Text(label)
+            .font(theme.monoFont(9.5, relativeTo: .caption2))
+            .tracking(0.5)
+            .foregroundStyle(theme.accentInk)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(theme.accentTint, in: Capsule())
+            .accessibilityLabel("Transcription language \(label)")
     }
 
     private var livePill: some View {

@@ -374,7 +374,8 @@ struct NoteDetailView: View {
             text: note.transcript,
             volatile: transcription.volatileText,
             state: transcription.state,
-            startedAt: transcription.startedAt
+            startedAt: transcription.startedAt,
+            languageLabel: transcription.activeLanguageLabel
         )
     }
 

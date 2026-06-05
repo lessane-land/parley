@@ -54,9 +54,10 @@ struct NoteDetailView: View {
     }
 
     /// On iPad, the notes surface is either keyboard (Type) or Pencil (Draw).
-    /// Defaults to Draw — on iPad that's the Pencil-first experience; on Mac/iPhone
-    /// there's no canvas so `typedActive` keeps typing working regardless.
-    @State private var penMode: PenMode = .draw
+    /// Defaults to **Type** so the keyboard works the instant you tap the notes;
+    /// the overlaid Pencil canvas blocks typing while active, so Draw is opt-in via
+    /// the Type/Draw toggle.
+    @State private var penMode: PenMode = .type
     private enum PenMode: Hashable { case type, draw }
 
     /// Notes ⟷ transcript layout (order + split ratio) is a persisted preference

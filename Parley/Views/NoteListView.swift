@@ -60,9 +60,9 @@ struct NoteListView: View {
                         onPick: openMeeting
                     )
                 }
-                // Compact (iPhone): Ask is a sheet. On regular width it's the inline
+                // iOS (iPad + iPhone): Ask is a sheet. On macOS it's the inline
                 // column in `home` instead (the binding suppresses the sheet there).
-                .sheet(isPresented: compactAsk) {
+                .sheet(isPresented: sheetAsk) {
                     NavigationStack {
                         ChatView(theme: theme)
                             .navigationTitle("Ask Parley")
@@ -79,8 +79,8 @@ struct NoteListView: View {
         }
         .tint(theme.accent)
         #if !os(macOS)
-        // Compact: Settings is a sheet; on regular width it's the slide-over.
-        .sheet(isPresented: compactSettings) {
+        // iOS: Settings is a sheet (popup). On macOS it's the slide-over instead.
+        .sheet(isPresented: sheetSettings) {
             NavigationStack {
                 SettingsView()
                     .navigationTitle("Settings")
@@ -104,13 +104,22 @@ struct NoteListView: View {
         #endif
     }
 
-    // On regular width the panels are shown aside (column / slide-over), so these
-    // suppress the sheets there and only present them on compact (iPhone).
-    private var compactAsk: Binding<Bool> {
-        Binding(get: { showingAsk && !isRegular }, set: { showingAsk = $0 })
+    /// Settings and Ask appear *aside* (slide-over / column) on macOS, and as
+    /// sheets on iOS (iPad + iPhone) — the placement the design calls for.
+    private var usesSidePanels: Bool {
+        #if os(macOS)
+        true
+        #else
+        false
+        #endif
     }
-    private var compactSettings: Binding<Bool> {
-        Binding(get: { showingSettings && !isRegular }, set: { showingSettings = $0 })
+
+    // Sheets present only when we're NOT using side panels (i.e. on iOS).
+    private var sheetAsk: Binding<Bool> {
+        Binding(get: { showingAsk && !usesSidePanels }, set: { showingAsk = $0 })
+    }
+    private var sheetSettings: Binding<Bool> {
+        Binding(get: { showingSettings && !usesSidePanels }, set: { showingSettings = $0 })
     }
 
     /// The dashboard: rail + grid side by side on iPad/Mac; just the grid on
@@ -124,12 +133,12 @@ struct NoteListView: View {
                 rail.frame(width: 268)
                 verticalDivider
                 grid
-                if showingAsk {
+                if usesSidePanels && showingAsk {
                     verticalDivider
                     chatColumn.transition(.move(edge: .trailing))
                 }
             }
-            .overlay { settingsSlideOver }
+            .overlay { if usesSidePanels { settingsSlideOver } }
         } else {
             grid
                 .searchable(text: $searchText)
@@ -210,7 +219,12 @@ struct NoteListView: View {
         ToolbarItem { Button(action: addNote) { Label("New Note", systemImage: "square.and.pencil") } }
         ToolbarItem { Button { withAnimation(.snappy) { showingAsk.toggle() } } label: { Label("Ask Parley", systemImage: "sparkles") } }
         ToolbarItem { Button { openToday() } label: { Label("Today's Meetings", systemImage: "calendar") } }
-        #if !os(macOS)
+        #if os(macOS)
+        // macOS: Settings opens as a slide-over aside (toggle).
+        ToolbarItem {
+            Button { withAnimation(.snappy) { showingSettings.toggle() } } label: { Label("Settings", systemImage: "slider.horizontal.3") }
+        }
+        #else
         ToolbarItem(placement: .topBarLeading) {
             Button { withAnimation(.snappy) { showingSettings = true } } label: { Label("Settings", systemImage: "slider.horizontal.3") }
         }

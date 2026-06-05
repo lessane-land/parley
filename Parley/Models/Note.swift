@@ -20,14 +20,23 @@ final class Note {
     var body: String
     var createdAt: Date
 
+    /// Handwriting layer (iPad). A `PKDrawing` serialized via its
+    /// `dataRepresentation()`. Optional because most notes have no drawing, and
+    /// because adding an *optional* property is a SwiftData **lightweight
+    /// migration** — existing notes upgrade automatically with no data loss.
+    /// We store raw `Data` rather than importing PencilKit here so the model
+    /// stays platform-neutral (PencilKit doesn't exist on macOS).
+    @Attribute(.externalStorage) var drawing: Data?
+
     /// Every stored property gets a default value here. That isn't just
     /// convenience: when we add CloudKit sync in a later phase, CloudKit requires
     /// every SwiftData property to be optional or have a default, so starting this
     /// way avoids a migration headache down the road.
-    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now) {
+    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil) {
         self.id = id
         self.title = title
         self.body = body
         self.createdAt = createdAt
+        self.drawing = drawing
     }
 }

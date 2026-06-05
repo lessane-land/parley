@@ -16,11 +16,34 @@ struct ParleyApp: App {
     /// (action items → reminders) use one access grant.
     @State private var eventKit = EventKitService()
 
+    /// The SwiftData store — now CloudKit-backed for cross-device sync.
+    private let modelContainer: ModelContainer
+
     init() {
         // Register the bundled fonts before any view renders, so custom faces
         // are available on first paint. Then build the shared theme state.
         AppFonts.registerAll()
         _themeManager = State(initialValue: ThemeManager())
+        modelContainer = Self.makeModelContainer()
+    }
+
+    /// Builds the SwiftData container with CloudKit sync (private database), and
+    /// falls back to a local-only store if CloudKit isn't available — so the app
+    /// always launches even before iCloud/entitlements are fully provisioned.
+    ///
+    /// SwiftData syncs via CloudKit when the model is CloudKit-compatible (all
+    /// properties optional or defaulted, no unique constraints — which `Note`
+    /// satisfies) and the iCloud + CloudKit entitlements are present. `.automatic`
+    /// uses the container declared in the entitlements.
+    private static func makeModelContainer() -> ModelContainer {
+        let schema = Schema([Note.self])
+        let cloudConfig = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
+        if let container = try? ModelContainer(for: schema, configurations: cloudConfig) {
+            return container
+        }
+        // CloudKit unavailable (not signed in, no entitlement yet, Simulator): keep working locally.
+        let localConfig = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
+        return try! ModelContainer(for: schema, configurations: localConfig)
     }
 
     var body: some Scene {
@@ -34,11 +57,9 @@ struct ParleyApp: App {
                 // …and the whole window goes light/dark to match the mood.
                 .preferredColorScheme(themeManager.theme.colorScheme)
         }
-        // `.modelContainer(for:)` is the heart of the SwiftData setup. It builds
-        // the schema from `Note`, opens a local on-disk store (no CloudKit yet),
-        // and injects a `ModelContext` into the environment for `@Query` and
-        // `@Environment(\.modelContext)`. CloudKit later is a change *here only*.
-        .modelContainer(for: Note.self)
+        // Inject the (CloudKit-backed) container; views read it via `@Query`
+        // and `@Environment(\.modelContext)`.
+        .modelContainer(modelContainer)
 
         #if os(macOS)
         // On macOS, preferences live under the app menu (Parley ▸ Settings…, Cmd-,)

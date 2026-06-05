@@ -445,6 +445,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Parley uses the microphone to transcribe your meetings on your device.";
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Parley adds your action items to Reminders.";
@@ -488,6 +489,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Parley uses the microphone to transcribe your meetings on your device.";
+				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Parley adds your action items to Reminders.";

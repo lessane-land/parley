@@ -7,10 +7,12 @@ screen, and a first-class summary screen).
 
 Legend: **S** ≈ ½–1 day · **M** ≈ 1–3 days · **L** ≈ 3+ days. ⚠️ = research/risk.
 
-**Status:** E1 (home rail + grid) ✅ · E3 (structured summary) ✅ · E2 (top-bar
-record + unified Pencil canvas) ✅ · E4 (Tag + ActionItem + meeting metadata —
-partial; Tag & ActionItem done) · E5 in progress (fonts + face pickers + mood
-grids + a11y labels done; iPhone compact layout, tests, prod CloudKit remain).
+**Status:** E1 (home rail + grid; notes open full-screen) ✅ · E2 (top-bar
+record + unified Pencil canvas + bottom Summarize bar + transcript timeline) ✅ ·
+E3 (structured summary) ✅ · E4 (Tag + ActionItem done; meeting metadata as fields
+pending) · E5 (fonts + face pickers + mood grids + paper grain + a11y labels done;
+iPhone compact, tests, prod CloudKit pending). **Not yet compiled/device-tested —
+see `HANDOFF.md`.**
 
 ---
 

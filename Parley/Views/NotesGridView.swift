@@ -34,6 +34,26 @@ struct NotesGridView: View {
                                 NoteCard(theme: theme, note: note)
                             }
                             .buttonStyle(.plain)
+                            // Visible "⋯" so delete is discoverable without a
+                            // right-click (Mac has no swipe-to-delete).
+                            .overlay(alignment: .topTrailing) {
+                                Menu {
+                                    Button(role: .destructive) { onDelete(note) } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(theme.inkFaint)
+                                        .frame(width: 26, height: 26)
+                                        .background(theme.paperRaised, in: Circle())
+                                        .overlay(Circle().strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+                                }
+                                .menuStyle(.button)
+                                .buttonStyle(.plain)
+                                .menuIndicator(.hidden)
+                                .padding(8)
+                            }
                             .contextMenu {
                                 Button(role: .destructive) { onDelete(note) } label: {
                                     Label("Delete", systemImage: "trash")

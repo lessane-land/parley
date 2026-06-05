@@ -26,6 +26,10 @@ struct NoteListView: View {
     @State private var showingSettings = false
     @State private var showingToday = false
     @State private var showingAsk = false
+
+    /// Tag rename: the tag being renamed + draft text.
+    @State private var editingTag: Tag?
+    @State private var tagDraft = ""
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
 
@@ -78,6 +82,18 @@ struct NoteListView: View {
                 }
         }
         .tint(theme.accent)
+        .alert("Rename Tag", isPresented: Binding(
+            get: { editingTag != nil },
+            set: { if !$0 { editingTag = nil } }
+        )) {
+            TextField("Name", text: $tagDraft)
+            Button("Save") {
+                let name = tagDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let tag = editingTag, !name.isEmpty { tag.name = name }
+                editingTag = nil
+            }
+            Button("Cancel", role: .cancel) { editingTag = nil }
+        }
         #if !os(macOS)
         // iOS: Settings is a sheet (popup). On macOS it's the slide-over instead.
         .sheet(isPresented: sheetSettings) {
@@ -366,6 +382,19 @@ struct NoteListView: View {
             .background(on ? theme.accentTint : Color.clear, in: shape)
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button { startRenameTag(tag) } label: { Label("Rename", systemImage: "pencil") }
+            Menu {
+                ForEach(Array(Tag.palette.enumerated()), id: \.offset) { index, hex in
+                    Button { tag.colorHex = hex } label: {
+                        if hex == tag.colorHex { Label("Color \(index + 1)", systemImage: "checkmark") }
+                        else { Text("Color \(index + 1)") }
+                    }
+                }
+            } label: { Label("Color", systemImage: "paintpalette") }
+            Divider()
+            Button(role: .destructive) { deleteTag(tag) } label: { Label("Delete Tag", systemImage: "trash") }
+        }
     }
 
     // MARK: Filtering
@@ -450,6 +479,19 @@ struct NoteListView: View {
     private func deleteNote(_ note: Note) {
         if path.last == note { path.removeLast() }
         context.delete(note)
+    }
+
+    // MARK: Tags
+
+    private func startRenameTag(_ tag: Tag) {
+        tagDraft = tag.name
+        editingTag = tag
+    }
+
+    private func deleteTag(_ tag: Tag) {
+        // If we're currently filtered by this tag, fall back to All Notes.
+        if scope == .tag(tag.persistentModelID) { scope = .all }
+        context.delete(tag)
     }
 }
 

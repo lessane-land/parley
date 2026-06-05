@@ -20,12 +20,65 @@ extension View {
         modifier(ThemeShadowModifier(shadow: shadow))
     }
 
+    /// Paper background plus the mood's faint grid (terminal squares / Swiss
+    /// columns), drawn behind the content.
+    func moodPaper(_ theme: Theme) -> some View {
+        background {
+            ZStack {
+                theme.paper
+                MoodGrid(theme: theme)
+            }
+            .ignoresSafeArea()
+        }
+    }
+
     /// Wraps content in the mood's "card on paper" treatment — fill + border +
     /// corner radius + shadow — so each mood's *shape* shows, not just its
     /// colors: Paper = rounded with a soft shadow, Swiss/Terminal = square
     /// hairline, Neubrutalist = thick black border with a hard offset shadow.
     func moodCard(_ theme: Theme, fill: Color? = nil, selected: Bool = false) -> some View {
         modifier(MoodCardModifier(theme: theme, fill: fill, selected: selected))
+    }
+}
+
+/// Draws the mood's background grid with `Canvas`. Non-interactive.
+private struct MoodGrid: View {
+    let theme: Theme
+
+    var body: some View {
+        Canvas { context, size in
+            switch theme.grid {
+            case .none:
+                break
+            case .squares(let step):
+                draw(in: context, size: size, color: theme.line.opacity(0.6), verticalStep: step, horizontalStep: step)
+            case .columns(let count):
+                let step = size.width / CGFloat(max(1, count))
+                draw(in: context, size: size, color: theme.line.opacity(0.12), verticalStep: step, horizontalStep: nil)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func draw(in context: GraphicsContext, size: CGSize, color: Color, verticalStep: CGFloat, horizontalStep: CGFloat?) {
+        var x = verticalStep
+        while x < size.width {
+            var line = Path()
+            line.move(to: CGPoint(x: x, y: 0))
+            line.addLine(to: CGPoint(x: x, y: size.height))
+            context.stroke(line, with: .color(color), lineWidth: 1)
+            x += verticalStep
+        }
+        if let horizontalStep {
+            var y = horizontalStep
+            while y < size.height {
+                var line = Path()
+                line.move(to: CGPoint(x: 0, y: y))
+                line.addLine(to: CGPoint(x: size.width, y: y))
+                context.stroke(line, with: .color(color), lineWidth: 1)
+                y += horizontalStep
+            }
+        }
     }
 }
 

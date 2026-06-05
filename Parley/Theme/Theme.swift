@@ -48,6 +48,9 @@ struct Theme: Equatable {
     /// `preferredColorScheme` so system chrome (status bar, etc.) matches.
     var colorScheme: ColorScheme
 
+    /// Optional background grid (terminal's hairline grid, Swiss's columns).
+    var grid: ThemeGrid = .none
+
     // MARK: Font builders
     // `relativeTo:` makes the custom font scale with Dynamic Type (accessibility),
     // anchored to a standard text style. `Font.custom` falls back to the system
@@ -64,6 +67,13 @@ struct Theme: Equatable {
     func monoFont(_ size: CGFloat, relativeTo style: Font.TextStyle = .caption) -> Font {
         .custom(monoFontName, size: size, relativeTo: style)
     }
+}
+
+/// A faint background grid, matching the design's mood extras.
+enum ThemeGrid: Equatable {
+    case none
+    case squares(CGFloat)   // terminal: a square hairline grid at this spacing
+    case columns(Int)       // swiss: this many vertical column rules
 }
 
 /// A drop shadow expressed the way CSS does it: color + blur radius + offset.

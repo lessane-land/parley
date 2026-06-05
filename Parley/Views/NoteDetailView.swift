@@ -94,7 +94,7 @@ struct NoteDetailView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(theme.paper)
+        .moodPaper(theme)
         .navigationTitle(note.title.isEmpty ? "New Note" : note.title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -361,6 +361,7 @@ struct NoteDetailView: View {
                         .background(theme.ink, in: Circle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Stop recording")
             }
         } else {
             Button { toggleRecord() } label: {

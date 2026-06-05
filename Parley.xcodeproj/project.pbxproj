@@ -34,6 +34,14 @@
 		000000000000000000000045 /* Newsreader-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000044 /* Newsreader-SemiBold.ttf */; };
 		000000000000000000000047 /* SpaceGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000046 /* SpaceGrotesk-Medium.ttf */; };
 		000000000000000000000049 /* SpaceGrotesk-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000048 /* SpaceGrotesk-Regular.ttf */; };
+		000000000000000000000508 /* Fraunces-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000500 /* Fraunces-Regular.ttf */; };
+		000000000000000000000509 /* Fraunces-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000501 /* Fraunces-SemiBold.ttf */; };
+		00000000000000000000050A /* SourceSerif4-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000502 /* SourceSerif4-Regular.ttf */; };
+		00000000000000000000050B /* SourceSerif4-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000503 /* SourceSerif4-SemiBold.ttf */; };
+		00000000000000000000050C /* Inter-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000504 /* Inter-Regular.ttf */; };
+		00000000000000000000050D /* Inter-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000505 /* Inter-Bold.ttf */; };
+		00000000000000000000050E /* Spectral-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000506 /* Spectral-Regular.ttf */; };
+		00000000000000000000050F /* Spectral-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000507 /* Spectral-SemiBold.ttf */; };
 		0000000000000000000000A2 /* DrawingCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A1 /* DrawingCanvas.swift */; };
 		0000000000000000000000B2 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000B1 /* TranscriptionService.swift */; };
 		0000000000000000000000B4 /* TranscriptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000B3 /* TranscriptPanel.swift */; };
@@ -77,6 +85,14 @@
 		000000000000000000000044 /* Newsreader-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-SemiBold.ttf"; sourceTree = "<group>"; };
 		000000000000000000000046 /* SpaceGrotesk-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SpaceGrotesk-Medium.ttf"; sourceTree = "<group>"; };
 		000000000000000000000048 /* SpaceGrotesk-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SpaceGrotesk-Regular.ttf"; sourceTree = "<group>"; };
+		000000000000000000000500 /* Fraunces-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Regular.ttf"; sourceTree = "<group>"; };
+		000000000000000000000501 /* Fraunces-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-SemiBold.ttf"; sourceTree = "<group>"; };
+		000000000000000000000502 /* SourceSerif4-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSerif4-Regular.ttf"; sourceTree = "<group>"; };
+		000000000000000000000503 /* SourceSerif4-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSerif4-SemiBold.ttf"; sourceTree = "<group>"; };
+		000000000000000000000504 /* Inter-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Regular.ttf"; sourceTree = "<group>"; };
+		000000000000000000000505 /* Inter-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Bold.ttf"; sourceTree = "<group>"; };
+		000000000000000000000506 /* Spectral-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Spectral-Regular.ttf"; sourceTree = "<group>"; };
+		000000000000000000000507 /* Spectral-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Spectral-SemiBold.ttf"; sourceTree = "<group>"; };
 		0000000000000000000000A1 /* DrawingCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingCanvas.swift; sourceTree = "<group>"; };
 		0000000000000000000000B1 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		0000000000000000000000B3 /* TranscriptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptPanel.swift; sourceTree = "<group>"; };
@@ -184,6 +200,14 @@
 				000000000000000000000044 /* Newsreader-SemiBold.ttf */,
 				000000000000000000000046 /* SpaceGrotesk-Medium.ttf */,
 				000000000000000000000048 /* SpaceGrotesk-Regular.ttf */,
+				000000000000000000000500 /* Fraunces-Regular.ttf */,
+				000000000000000000000501 /* Fraunces-SemiBold.ttf */,
+				000000000000000000000502 /* SourceSerif4-Regular.ttf */,
+				000000000000000000000503 /* SourceSerif4-SemiBold.ttf */,
+				000000000000000000000504 /* Inter-Regular.ttf */,
+				000000000000000000000505 /* Inter-Bold.ttf */,
+				000000000000000000000506 /* Spectral-Regular.ttf */,
+				000000000000000000000507 /* Spectral-SemiBold.ttf */,
 				00000000000000000000001A /* OFL.txt */,
 				00000000000000000000001B /* README.md */,
 			);
@@ -280,6 +304,14 @@
 				000000000000000000000045 /* Newsreader-SemiBold.ttf in Resources */,
 				000000000000000000000047 /* SpaceGrotesk-Medium.ttf in Resources */,
 				000000000000000000000049 /* SpaceGrotesk-Regular.ttf in Resources */,
+				000000000000000000000508 /* Fraunces-Regular.ttf in Resources */,
+				000000000000000000000509 /* Fraunces-SemiBold.ttf in Resources */,
+				00000000000000000000050A /* SourceSerif4-Regular.ttf in Resources */,
+				00000000000000000000050B /* SourceSerif4-SemiBold.ttf in Resources */,
+				00000000000000000000050C /* Inter-Regular.ttf in Resources */,
+				00000000000000000000050D /* Inter-Bold.ttf in Resources */,
+				00000000000000000000050E /* Spectral-Regular.ttf in Resources */,
+				00000000000000000000050F /* Spectral-SemiBold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

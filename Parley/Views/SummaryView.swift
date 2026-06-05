@@ -147,6 +147,7 @@ struct SummaryView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(remindedTitles.contains(item.title))
+                    .accessibilityLabel("Add to Reminders")
                 }
             }
 

@@ -58,6 +58,7 @@ enum Mood: String, CaseIterable, Identifiable {
                 cornerRadius: 14,
                 borderWidth: 1,
                 shadow: ThemeShadow(color: Color(hex: "2A2620", opacity: 0.06), radius: 2, x: 0, y: 1),
+                grid: ThemeGrid.none,
                 titleFontName: "Newsreader-SemiBold",
                 bodyFontName:  "Newsreader-Regular",
                 monoFontName:  "IBMPlexMono-Regular",
@@ -87,6 +88,7 @@ enum Mood: String, CaseIterable, Identifiable {
                 cornerRadius: 0,
                 borderWidth: 1,
                 shadow: nil,
+                grid: ThemeGrid.squares(64),
                 titleFontName: "SpaceGrotesk-Medium",
                 bodyFontName:  "SpaceGrotesk-Regular",
                 monoFontName:  "IBMPlexMono-Regular", // IBM Plex Mono transcript/labels
@@ -116,6 +118,7 @@ enum Mood: String, CaseIterable, Identifiable {
                 cornerRadius: 0,
                 borderWidth: 1,
                 shadow: nil,
+                grid: ThemeGrid.columns(6),
                 titleFontName: "Archivo-Bold",
                 bodyFontName:  "Archivo-Regular",
                 monoFontName:  "IBMPlexMono-Regular",
@@ -145,6 +148,7 @@ enum Mood: String, CaseIterable, Identifiable {
                 cornerRadius: 0,
                 borderWidth: 2,
                 shadow: ThemeShadow(color: Color(hex: "1A1A1A"), radius: 0, x: 4, y: 4),
+                grid: ThemeGrid.none,
                 titleFontName: "Archivo-ExtraBold",
                 bodyFontName:  "SpaceGrotesk-Regular",
                 monoFontName:  "IBMPlexMono-Regular",
@@ -165,7 +169,8 @@ enum Mood: String, CaseIterable, Identifiable {
                 highlights: nil, highlightDefault: nil,
                 hasWarmth: true,
                 faceLabel: "Note serif",
-                faceOptions: ["Newsreader"], faceDefault: "Newsreader", faceAffectsBody: true
+                faceOptions: ["Newsreader", "Fraunces", "Source Serif 4", "Spectral"],
+                faceDefault: "Newsreader", faceAffectsBody: true
             )
         case .terminal:
             MoodConfig(
@@ -181,7 +186,7 @@ enum Mood: String, CaseIterable, Identifiable {
                 highlights: nil, highlightDefault: nil,
                 hasWarmth: false,
                 faceLabel: "Grotesque",
-                faceOptions: ["Archivo"], faceDefault: "Archivo", faceAffectsBody: true
+                faceOptions: ["Archivo", "Inter"], faceDefault: "Archivo", faceAffectsBody: true
             )
         case .neubrutalist:
             MoodConfig(
@@ -213,11 +218,15 @@ struct MoodConfig {
 /// Maps a design face name to the bundled PostScript names for title + body.
 func faceFonts(_ face: String) -> (title: String, body: String) {
     switch face {
-    case "Newsreader":     return ("Newsreader-SemiBold", "Newsreader-Regular")
-    case "Space Grotesk":  return ("SpaceGrotesk-Medium", "SpaceGrotesk-Regular")
-    case "IBM Plex Mono":  return ("IBMPlexMono-Medium", "IBMPlexMono-Regular")
-    case "Archivo":        return ("Archivo-Bold", "Archivo-Regular")
-    case "Archivo Black":  return ("Archivo-ExtraBold", "Archivo-Regular")
-    default:               return ("Newsreader-SemiBold", "Newsreader-Regular")
+    case "Newsreader":      return ("Newsreader-SemiBold", "Newsreader-Regular")
+    case "Fraunces":        return ("Fraunces-SemiBold", "Fraunces-Regular")
+    case "Source Serif 4":  return ("SourceSerif4-SemiBold", "SourceSerif4-Regular")
+    case "Spectral":        return ("Spectral-SemiBold", "Spectral-Regular")
+    case "Space Grotesk":   return ("SpaceGrotesk-Medium", "SpaceGrotesk-Regular")
+    case "IBM Plex Mono":   return ("IBMPlexMono-Medium", "IBMPlexMono-Regular")
+    case "Archivo":         return ("Archivo-Bold", "Archivo-Regular")
+    case "Archivo Black":   return ("Archivo-ExtraBold", "Archivo-Regular")
+    case "Inter":           return ("Inter-Bold", "Inter-Regular")
+    default:                return ("Newsreader-SemiBold", "Newsreader-Regular")
     }
 }

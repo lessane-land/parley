@@ -46,7 +46,7 @@ struct NotesGridView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(theme.paper)
+        .moodPaper(theme)
     }
 
     private var emptyState: some View {

@@ -165,6 +165,7 @@ struct NoteListView: View {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(theme.inkFaint)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
             }
         }
         .font(theme.bodyFont(14))

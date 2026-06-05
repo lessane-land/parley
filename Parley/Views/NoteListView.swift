@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// The home screen: a sidebar (brand, search, Record CTA, All/Recent/tag filters)
-/// listing note cards, with the editor in the detail pane.
+/// The home: a left **rail** (brand, search, nav, tags, Record CTA) beside a
+/// **grid** of note cards. Tapping a card — or Record — pushes the editor.
 struct NoteListView: View {
     @Environment(\.modelContext) private var context
     @Environment(ThemeManager.self) private var themeManager
@@ -12,20 +12,17 @@ struct NoteListView: View {
     @Query(sort: \Note.createdAt, order: .reverse) private var notes: [Note]
     @Query(sort: \Tag.name) private var allTags: [Tag]
 
-    @State private var selection: Note?
-    @State private var showingSettings = false
+    /// The editor navigation stack (grid → note).
+    @State private var path: [Note] = []
 
-    // Today's-meetings sheet
+    @State private var searchText = ""
+    @State private var scope: Scope = .all
+    @State private var recordIntentID: PersistentIdentifier?
+
+    @State private var showingSettings = false
     @State private var showingToday = false
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
-
-    // Sidebar filtering
-    @State private var searchText = ""
-    @State private var scope: Scope = .all
-
-    /// Set when the Record CTA makes a note, so the detail auto-starts recording.
-    @State private var recordIntentID: PersistentIdentifier?
 
     private enum Scope: Equatable {
         case all, recent
@@ -36,73 +33,49 @@ struct NoteListView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
-                ForEach(filteredNotes) { note in
-                    NoteRow(note: note, theme: theme, selected: note == selection)
-                        .tag(note)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
-                }
-                .onDelete(perform: deleteNotes)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(theme.paperSunk)
-            .navigationTitle("")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem {
-                    Button(action: addNote) {
-                        Label("New Note", systemImage: "square.and.pencil")
-                    }
-                }
-                ToolbarItem {
-                    Button { openToday() } label: {
-                        Label("Today's Meetings", systemImage: "calendar")
-                    }
-                }
-                #if !os(macOS)
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { showingSettings = true } label: {
-                        Label("Settings", systemImage: "slider.horizontal.3")
-                    }
-                }
-                #endif
-            }
-            .safeAreaInset(edge: .top) { sidebarHeader }
-            .overlay { emptyOverlay }
-            .sheet(isPresented: $showingToday) {
-                TodayMeetingsSheet(
-                    theme: theme,
-                    meetings: meetings,
-                    access: eventKit.calendarAccess,
-                    isLoading: loadingMeetings,
-                    onPick: createNote(from:)
-                )
-            }
-            .safeAreaInset(edge: .bottom) {
-                SyncStatusChip(theme: theme, status: syncMonitor.status)
-            }
+            rail
         } detail: {
-            if let selection {
-                NoteDetailView(
-                    note: selection,
-                    autoRecord: selection.persistentModelID == recordIntentID,
-                    onAutoRecordConsumed: { recordIntentID = nil }
-                )
-                .id(selection.id)
-            } else {
-                ThemedEmptyState(
+            NavigationStack(path: $path) {
+                NotesGridView(
                     theme: theme,
-                    icon: "sidebar.left",
-                    title: "No Note Selected",
-                    message: "Select a note from the list, or create a new one."
+                    title: scopeTitle,
+                    notes: filteredNotes,
+                    onOpen: { path.append($0) },
+                    onDelete: deleteNote
                 )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(theme.paper)
+                .navigationTitle("")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem {
+                        Button(action: addNote) { Label("New Note", systemImage: "square.and.pencil") }
+                    }
+                    ToolbarItem {
+                        Button { openToday() } label: { Label("Today's Meetings", systemImage: "calendar") }
+                    }
+                    #if !os(macOS)
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { showingSettings = true } label: { Label("Settings", systemImage: "slider.horizontal.3") }
+                    }
+                    #endif
+                }
+                .navigationDestination(for: Note.self) { note in
+                    NoteDetailView(
+                        note: note,
+                        autoRecord: note.persistentModelID == recordIntentID,
+                        onAutoRecordConsumed: { recordIntentID = nil }
+                    )
+                }
+                .sheet(isPresented: $showingToday) {
+                    TodayMeetingsSheet(
+                        theme: theme,
+                        meetings: meetings,
+                        access: eventKit.calendarAccess,
+                        isLoading: loadingMeetings,
+                        onPick: openMeeting
+                    )
+                }
             }
         }
         .tint(theme.accent)
@@ -122,37 +95,62 @@ struct NoteListView: View {
         #endif
     }
 
-    // MARK: Sidebar header
+    // MARK: Rail
 
-    private var sidebarHeader: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 9) {
-                brandMark
-                Text("Parley")
-                    .font(theme.titleFont(20, relativeTo: .title3))
-                    .tracking(theme.titleTracking)
-                    .foregroundStyle(theme.ink)
-                Spacer()
+    private var rail: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                HStack(spacing: 9) {
+                    brandMark
+                    Text("Parley")
+                        .font(theme.titleFont(20, relativeTo: .title3))
+                        .tracking(theme.titleTracking)
+                        .foregroundStyle(theme.ink)
+                    Spacer()
+                }
+                searchField
             }
-            searchField
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 3) {
+                    navRow("All Notes", "tray.full", count: notes.count, target: .all)
+                    navRow("Recent", "clock", count: recentCount, target: .recent)
+
+                    if !allTags.isEmpty {
+                        Text("TAGS")
+                            .font(theme.monoFont(10))
+                            .tracking(1.4)
+                            .foregroundStyle(theme.inkFaint)
+                            .padding(.horizontal, 11)
+                            .padding(.top, 16)
+                            .padding(.bottom, 4)
+                        ForEach(allTags) { tag in tagRow(tag) }
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+
             recordCTA
-            filterChips
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+
+            SyncStatusChip(theme: theme, status: syncMonitor.status)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 6)
-        .padding(.bottom, 10)
         .background(theme.paperSunk)
+        .navigationTitle("")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 
     private var brandMark: some View {
         RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 8)
             .fill(theme.accent)
             .frame(width: 30, height: 30)
-            .overlay(
-                Text("P")
-                    .font(theme.titleFont(17, relativeTo: .headline))
-                    .foregroundStyle(.white)
-            )
+            .overlay(Text("P").font(theme.titleFont(17, relativeTo: .headline)).foregroundStyle(.white))
     }
 
     private var searchField: some View {
@@ -190,34 +188,47 @@ struct NoteListView: View {
         .buttonStyle(.plain)
     }
 
-    private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                FilterChip(theme: theme, label: "All", count: notes.count, isOn: scope == .all) { scope = .all }
-                FilterChip(theme: theme, label: "Recent", count: recentCount, isOn: scope == .recent) { scope = .recent }
-                ForEach(allTags) { tag in
-                    FilterChip(theme: theme, label: tag.name, count: tag.notes?.count ?? 0, color: tag.color,
-                               isOn: scope == .tag(tag.persistentModelID)) {
-                        scope = .tag(tag.persistentModelID)
-                    }
-                }
+    private func navRow(_ label: String, _ icon: String, count: Int, target: Scope) -> some View {
+        let on = scope == target
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9)
+        return Button { scope = target } label: {
+            HStack(spacing: 11) {
+                Image(systemName: icon).foregroundStyle(on ? theme.accent : theme.inkFaint).frame(width: 18)
+                Text(label).font(theme.bodyFont(14)).foregroundStyle(on ? theme.accentInk : theme.ink)
+                Spacer()
+                Text("\(count)").font(theme.monoFont(11)).foregroundStyle(theme.inkFaint)
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, 11).padding(.vertical, 9)
+            .background(on ? theme.accentTint : Color.clear, in: shape)
         }
+        .buttonStyle(.plain)
     }
 
-    @ViewBuilder
-    private var emptyOverlay: some View {
-        if notes.isEmpty {
-            ThemedEmptyState(theme: theme, icon: "note.text", title: "No Notes",
-                             message: "Tap Record, or the compose button, to start your first note.")
-        } else if filteredNotes.isEmpty {
-            ThemedEmptyState(theme: theme, icon: "magnifyingglass", title: "No matches",
-                             message: "Nothing matches your search or filter.")
+    private func tagRow(_ tag: Tag) -> some View {
+        let on = scope == .tag(tag.persistentModelID)
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9)
+        return Button { scope = .tag(tag.persistentModelID) } label: {
+            HStack(spacing: 11) {
+                Circle().fill(tag.color).frame(width: 9, height: 9).frame(width: 18)
+                Text(tag.name).font(theme.bodyFont(14)).foregroundStyle(on ? theme.accentInk : theme.ink).lineLimit(1)
+                Spacer()
+                Text("\(tag.notes?.count ?? 0)").font(theme.monoFont(11)).foregroundStyle(theme.inkFaint)
+            }
+            .padding(.horizontal, 11).padding(.vertical, 8)
+            .background(on ? theme.accentTint : Color.clear, in: shape)
         }
+        .buttonStyle(.plain)
     }
 
     // MARK: Filtering
+
+    private var scopeTitle: String {
+        switch scope {
+        case .all: "All Notes"
+        case .recent: "Recent"
+        case .tag(let id): allTags.first { $0.persistentModelID == id }?.name ?? "Tag"
+        }
+    }
 
     private var recentCutoff: Date {
         Calendar.current.date(byAdding: .day, value: -7, to: .now) ?? .distantPast
@@ -251,14 +262,14 @@ struct NoteListView: View {
     private func addNote() {
         let note = Note()
         context.insert(note)
-        selection = note
+        path.append(note)
     }
 
     private func createAndRecord() {
         let note = Note(title: "New recording")
         context.insert(note)
-        selection = note
         recordIntentID = note.persistentModelID
+        path.append(note)
     }
 
     private func openToday() {
@@ -270,9 +281,9 @@ struct NoteListView: View {
         }
     }
 
-    private func createNote(from meeting: Meeting) {
+    private func openMeeting(_ meeting: Meeting) {
         if let existing = notes.first(where: { $0.calendarEventID == meeting.id }) {
-            selection = existing
+            path.append(existing)
             return
         }
         let note = Note(
@@ -282,7 +293,7 @@ struct NoteListView: View {
             calendarEventID: meeting.id
         )
         context.insert(note)
-        selection = note
+        path.append(note)
     }
 
     private func meetingHeader(_ meeting: Meeting) -> String {
@@ -295,98 +306,9 @@ struct NoteListView: View {
         return lines.joined(separator: "\n") + "\n\n"
     }
 
-    private func deleteNotes(at offsets: IndexSet) {
-        let shown = filteredNotes
-        for index in offsets {
-            let note = shown[index]
-            if note == selection { selection = nil }
-            context.delete(note)
-        }
-    }
-}
-
-/// A pill filter for the sidebar (All / Recent / a tag).
-private struct FilterChip: View {
-    let theme: Theme
-    let label: String
-    var count: Int? = nil
-    var color: Color? = nil
-    let isOn: Bool
-    let action: () -> Void
-
-    var body: some View {
-        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 99)
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let color { Circle().fill(color).frame(width: 7, height: 7) }
-                Text(label).font(theme.bodyFont(12.5))
-                if let count {
-                    Text("\(count)")
-                        .font(theme.monoFont(10.5, relativeTo: .caption2))
-                        .foregroundStyle(theme.inkFaint)
-                }
-            }
-            .foregroundStyle(isOn ? theme.accentInk : theme.inkSoft)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(isOn ? theme.accentTint : theme.paperRaised, in: shape)
-            .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
-        }
-        .buttonStyle(.plain)
-        .lineLimit(1)
-    }
-}
-
-/// A single note card in the sidebar — title, snippet, tags, and a date.
-private struct NoteRow: View {
-    let note: Note
-    let theme: Theme
-    let selected: Bool
-
-    private var snippet: String {
-        note.body
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .first
-            .map(String.init) ?? ""
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(note.title.isEmpty ? "New Note" : note.title)
-                .font(theme.titleFont(16, relativeTo: .headline))
-                .tracking(theme.titleTracking)
-                .textCase(theme.titleUppercase ? .uppercase : nil)
-                .foregroundStyle(theme.ink)
-                .lineLimit(1)
-
-            if !snippet.isEmpty {
-                Text(snippet)
-                    .font(theme.bodyFont(12.5))
-                    .foregroundStyle(theme.inkSoft)
-                    .lineLimit(2)
-            }
-
-            if let tags = note.tags, !tags.isEmpty {
-                HStack(spacing: 5) {
-                    ForEach(Array(tags.prefix(3))) { tag in
-                        HStack(spacing: 4) {
-                            Circle().fill(tag.color).frame(width: 6, height: 6)
-                            Text(tag.name).font(theme.monoFont(9.5, relativeTo: .caption2))
-                        }
-                        .foregroundStyle(theme.inkSoft)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(theme.paperSunk, in: Capsule())
-                    }
-                }
-            }
-
-            Text(note.createdAt, format: .dateTime.month().day().hour().minute())
-                .font(theme.monoFont(10.5, relativeTo: .caption2))
-                .foregroundStyle(theme.inkFaint)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .moodCard(theme, fill: selected ? theme.accentTint : theme.paperRaised, selected: selected)
+    private func deleteNote(_ note: Note) {
+        if path.last == note { path.removeLast() }
+        context.delete(note)
     }
 }
 
@@ -430,33 +352,6 @@ private struct SyncStatusChip: View {
         case .synced:    "Synced"
         case .error:     "Sync issue"
         }
-    }
-}
-
-/// A mood-styled empty state, shown when there are no notes / no matches.
-private struct ThemedEmptyState: View {
-    let theme: Theme
-    let icon: String
-    let title: String
-    let message: String
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 42))
-                .foregroundStyle(theme.accent)
-            Text(title)
-                .font(theme.titleFont(22, relativeTo: .title2))
-                .tracking(theme.titleTracking)
-                .textCase(theme.titleUppercase ? .uppercase : nil)
-                .foregroundStyle(theme.ink)
-            Text(message)
-                .font(theme.bodyFont(14))
-                .foregroundStyle(theme.inkSoft)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 280)
-        }
-        .padding(24)
     }
 }
 

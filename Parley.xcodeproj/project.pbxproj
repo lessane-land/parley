@@ -20,6 +20,7 @@
 		00000000000000000000002B /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000002A /* ThemeManager.swift */; };
 		00000000000000000000002D /* ThemeShadowModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000002C /* ThemeShadowModifier.swift */; };
 		00000000000000000000002F /* NoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000002E /* NoteDetailView.swift */; };
+		0000000000000000000000F4 /* NotesGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F3 /* NotesGridView.swift */; };
 		000000000000000000000031 /* NoteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000030 /* NoteListView.swift */; };
 		000000000000000000000033 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000032 /* SettingsView.swift */; };
 		000000000000000000000035 /* Archivo-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000034 /* Archivo-Bold.ttf */; };
@@ -62,6 +63,7 @@
 		00000000000000000000002A /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		00000000000000000000002C /* ThemeShadowModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeShadowModifier.swift; sourceTree = "<group>"; };
 		00000000000000000000002E /* NoteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDetailView.swift; sourceTree = "<group>"; };
+		0000000000000000000000F3 /* NotesGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesGridView.swift; sourceTree = "<group>"; };
 		000000000000000000000030 /* NoteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteListView.swift; sourceTree = "<group>"; };
 		000000000000000000000032 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		000000000000000000000034 /* Archivo-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Archivo-Bold.ttf"; sourceTree = "<group>"; };
@@ -142,6 +144,7 @@
 			isa = PBXGroup;
 			children = (
 				00000000000000000000002E /* NoteDetailView.swift */,
+				0000000000000000000000F3 /* NotesGridView.swift */,
 				000000000000000000000030 /* NoteListView.swift */,
 				000000000000000000000032 /* SettingsView.swift */,
 				0000000000000000000000A1 /* DrawingCanvas.swift */,
@@ -298,6 +301,7 @@
 				00000000000000000000002B /* ThemeManager.swift in Sources */,
 				00000000000000000000002D /* ThemeShadowModifier.swift in Sources */,
 				00000000000000000000002F /* NoteDetailView.swift in Sources */,
+				0000000000000000000000F4 /* NotesGridView.swift in Sources */,
 				000000000000000000000031 /* NoteListView.swift in Sources */,
 				000000000000000000000033 /* SettingsView.swift in Sources */,
 				0000000000000000000000A2 /* DrawingCanvas.swift in Sources */,

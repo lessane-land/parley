@@ -85,17 +85,8 @@ struct NoteDetailView: View {
         #endif
         .toolbar {
             ToolbarItem { recordControl }
-            ToolbarItem {
-                Button { activeSheet = .summary } label: {
-                    Label("Summarize", systemImage: "sparkles")
-                }
-            }
-            ToolbarItem {
-                Button { activeSheet = .actionItems } label: {
-                    Label("Action Items", systemImage: "checklist")
-                }
-            }
         }
+        .safeAreaInset(edge: .bottom) { bottomBar }
         .sheet(item: $activeSheet) { which in
             switch which {
             case .actionItems:
@@ -228,6 +219,38 @@ struct NoteDetailView: View {
         let tag = Tag(name: name, colorHex: color)
         context.insert(tag)
         toggle(tag)
+    }
+
+    /// The design's bottom action bar: a quiet hint on the left, the Action
+    /// items + Summarize CTAs on the right.
+    private var bottomBar: some View {
+        HStack(spacing: 12) {
+            Label("Your notes + the transcript merge into a summary", systemImage: "wand.and.stars")
+                .font(theme.bodyFont(12))
+                .foregroundStyle(theme.inkFaint)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 8)
+
+            Button { activeSheet = .actionItems } label: {
+                Label("Action items", systemImage: "checklist")
+                    .font(.subheadline.weight(.medium))
+            }
+            .buttonStyle(.bordered)
+            .tint(theme.accent)
+
+            Button { activeSheet = .summary } label: {
+                Label("Summarize", systemImage: "sparkles")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(theme.accent)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(theme.paperRaised)
+        .overlay(alignment: .top) { Rectangle().fill(theme.line).frame(height: theme.borderWidth) }
     }
 
     @ViewBuilder

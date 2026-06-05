@@ -85,39 +85,25 @@ struct TranscriptPanel: View {
             if text.isEmpty && volatile.isEmpty {
                 message("No transcript yet", detail: "Tap Record to capture the conversation, live and on-device.", icon: "waveform")
             } else {
-                transcriptText
+                transcriptTimeline
             }
         }
     }
 
-    private var transcriptText: some View {
-        ScrollViewReader { proxy in
+    /// The design's variant-C transcript: a vertical timeline spine with a node
+    /// per sentence; the live line is the active (accent) node at the bottom.
+    private var transcriptTimeline: some View {
+        let confirmed = sentences(text)
+        return ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    if !text.isEmpty {
-                        Text(text)
-                            .font(theme.bodyFont(density.bodySize, relativeTo: .body))
-                            .foregroundStyle(theme.ink2)
-                            .lineSpacing(density.lineSpacing)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(confirmed.enumerated()), id: \.offset) { index, sentence in
+                        timelineRow(text: sentence, active: false,
+                                    isLast: index == confirmed.count - 1 && volatile.isEmpty)
                     }
-
-                    // The live "current line" — the design's highlighted block
-                    // with a left accent bar.
                     if !volatile.isEmpty {
-                        Text(volatile)
-                            .font(theme.bodyFont(density.bodySize, relativeTo: .body))
-                            .foregroundStyle(theme.ink)
-                            .lineSpacing(density.lineSpacing)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 12)
-                            .background(theme.accentTint, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 7))
-                            .overlay(alignment: .leading) {
-                                Rectangle().fill(theme.accent).frame(width: 2.5)
-                            }
+                        timelineRow(text: volatile, active: true, isLast: true)
                     }
-
                     Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(16)
@@ -125,6 +111,43 @@ struct TranscriptPanel: View {
             .onChange(of: text) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
             .onChange(of: volatile) { _, _ in proxy.scrollTo("bottom", anchor: .bottom) }
         }
+    }
+
+    private func timelineRow(text: String, active: Bool, isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack(alignment: .top) {
+                // Spine — full row height for connecting rows, a short stub on the last.
+                Rectangle()
+                    .fill(theme.line)
+                    .frame(width: 1.5)
+                    .frame(maxHeight: isLast ? 9 : .infinity, alignment: .top)
+                Circle()
+                    .fill(active ? theme.accent : theme.paperSunk)
+                    .overlay(Circle().strokeBorder(active ? theme.accent : theme.inkGhost, lineWidth: 2))
+                    .frame(width: 11, height: 11)
+                    .padding(.top, 2)
+            }
+            .frame(width: 11)
+
+            Text(text)
+                .font(theme.bodyFont(density.bodySize, relativeTo: .body))
+                .foregroundStyle(active ? theme.ink : theme.ink2)
+                .lineSpacing(density.lineSpacing)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 14)
+        }
+    }
+
+    /// Locale-aware sentence segmentation for the timeline nodes.
+    private func sentences(_ string: String) -> [String] {
+        guard !string.isEmpty else { return [] }
+        var result: [String] = []
+        string.enumerateSubstrings(in: string.startIndex..., options: .bySentences) { sub, _, _, _ in
+            if let s = sub?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
+                result.append(s)
+            }
+        }
+        return result.isEmpty ? [string] : result
     }
 
     private func message(_ title: String, detail: String, icon: String) -> some View {

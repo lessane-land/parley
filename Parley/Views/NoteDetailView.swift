@@ -53,11 +53,9 @@ struct NoteDetailView: View {
     @State private var penMode: PenMode = .type
     private enum PenMode: Hashable { case type, draw }
 
-    /// Notes ⟷ transcript layout: which panel comes first, and how the space is
-    /// divided. `splitFraction` is the size of the first panel (0.2…0.8); the
-    /// divider drags it, a double-tap resets to an even split.
-    @State private var swapped = false
-    @State private var splitFraction: CGFloat = 0.5
+    /// Notes ⟷ transcript layout (order + split ratio) is a persisted preference
+    /// on `ThemeManager`, so the arrangement sticks across notes and launches.
+    /// `dragBase` is just the fraction captured at the start of a divider drag.
     @State private var dragBase: CGFloat?
 
     private var theme: Theme { themeManager.theme }
@@ -301,12 +299,12 @@ struct NoteDetailView: View {
         .overlay(alignment: .top) { Rectangle().fill(theme.line).frame(height: theme.borderWidth) }
     }
 
-    /// Notes and transcript with a draggable divider between them; `swapped`
-    /// flips which one leads. Side-by-side when wide, stacked otherwise.
+    /// Notes and transcript with a draggable divider between them;
+    /// `layoutSwapped` flips which one leads. Side-by-side when wide, stacked otherwise.
     @ViewBuilder
     private func splitContent(wide: Bool) -> some View {
-        let first = swapped ? AnyView(transcriptPanel) : AnyView(notesColumn)
-        let second = swapped ? AnyView(notesColumn) : AnyView(transcriptPanel)
+        let first = themeManager.layoutSwapped ? AnyView(transcriptPanel) : AnyView(notesColumn)
+        let second = themeManager.layoutSwapped ? AnyView(notesColumn) : AnyView(transcriptPanel)
 
         GeometryReader { geo in
             let total = wide ? geo.size.width : geo.size.height
@@ -329,7 +327,7 @@ struct NoteDetailView: View {
         }
     }
 
-    private var clampedFraction: CGFloat { min(max(splitFraction, 0.2), 0.8) }
+    private var clampedFraction: CGFloat { CGFloat(min(max(themeManager.splitFraction, 0.2), 0.8)) }
 
     /// The drag affordance between the two panels: drag to resize, double-tap to
     /// even it out. A horizontal bar when stacked, a vertical bar when side-by-side.
@@ -349,11 +347,11 @@ struct NoteDetailView: View {
                     let base = dragBase ?? clampedFraction
                     dragBase = base
                     let delta = (wide ? value.translation.width : value.translation.height) / max(total, 1)
-                    splitFraction = min(max(base + delta, 0.2), 0.8)
+                    themeManager.splitFraction = Double(min(max(base + delta, 0.2), 0.8))
                 }
                 .onEnded { _ in dragBase = nil }
         )
-        .onTapGesture(count: 2) { withAnimation(.snappy) { splitFraction = 0.5 } }
+        .onTapGesture(count: 2) { withAnimation(.snappy) { themeManager.splitFraction = 0.5 } }
         .accessibilityLabel("Resize notes and transcript")
         #if os(macOS)
         .onHover { inside in
@@ -367,8 +365,8 @@ struct NoteDetailView: View {
             // Flip the order *and* invert the fraction so each panel keeps its
             // current size after moving to the other side.
             withAnimation(.snappy) {
-                swapped.toggle()
-                splitFraction = 1 - splitFraction
+                themeManager.layoutSwapped.toggle()
+                themeManager.splitFraction = 1 - themeManager.splitFraction
             }
         } label: {
             Label("Swap notes and transcript", systemImage: "arrow.left.arrow.right")

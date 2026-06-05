@@ -44,6 +44,12 @@ final class ThemeManager {
     /// setting, but this is the app's single persisted-preferences store.
     var transcriptionLanguage: String? { didSet { persist(transcriptionLanguage, Self.languageKey) } }
 
+    /// Note-detail layout, persisted so the arrangement sticks across notes and
+    /// launches: whether the transcript leads (panels swapped) and how the space
+    /// is divided (size of the leading panel, 0.2…0.8).
+    var layoutSwapped: Bool { didSet { UserDefaults.standard.set(layoutSwapped, forKey: Self.layoutSwappedKey) } }
+    var splitFraction: Double { didSet { UserDefaults.standard.set(splitFraction, forKey: Self.splitFractionKey) } }
+
     /// The fully resolved tokens for the current mood + overrides. Views read
     /// `themeManager.theme`.
     var theme: Theme {
@@ -102,6 +108,8 @@ final class ThemeManager {
     private static let handwritingKey = "parley.handwriting"
     private static let densityKey = "parley.density"
     private static let languageKey = "parley.transcriptionLanguage"
+    private static let layoutSwappedKey = "parley.layoutSwapped"
+    private static let splitFractionKey = "parley.splitFraction"
 
     private func persist(_ value: String?, _ key: String) {
         let d = UserDefaults.standard
@@ -120,5 +128,7 @@ final class ThemeManager {
         handwriting = d.object(forKey: Self.handwritingKey) as? Bool ?? true
         density = Density(rawValue: d.string(forKey: Self.densityKey) ?? "") ?? .regular
         transcriptionLanguage = d.string(forKey: Self.languageKey)
+        layoutSwapped = d.object(forKey: Self.layoutSwappedKey) as? Bool ?? false
+        splitFraction = d.object(forKey: Self.splitFractionKey) as? Double ?? 0.5
     }
 }

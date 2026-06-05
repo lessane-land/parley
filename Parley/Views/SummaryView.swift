@@ -1,45 +1,41 @@
 import SwiftUI
 
 /// The "Granola magic" surface: generate (and re-generate) an on-device summary
-/// of a note's typed notes + transcript. Action items are checkable, carry an
-/// owner, and can be pushed to Reminders individually or all at once.
+/// of a note's typed notes + transcript. A first-class *pushed* screen in the
+/// note's navigation stack (it relies on the host's back button). Action items
+/// are checkable, carry an owner, and can be pushed to Reminders individually or
+/// all at once.
 struct SummaryView: View {
     let theme: Theme
     @Bindable var note: Note
     let service: SummaryService
     let onAddReminders: ([String]) async -> Int
 
-    @Environment(\.dismiss) private var dismiss
     @State private var summary: MeetingSummary?
     @State private var remindedTitles: Set<String> = []
 
     var body: some View {
-        NavigationStack {
-            content
-                .background(theme.paperSunk)
-                .navigationTitle("Summary")
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done") { dismiss() }
-                    }
-                    if summary != nil {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button { Task { await generate() } } label: {
-                                Label("Regenerate", systemImage: "arrow.clockwise")
-                            }
-                            .disabled(service.state == .working)
+        content
+            .background(theme.paperSunk)
+            .navigationTitle("Summary")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                if summary != nil {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { Task { await generate() } } label: {
+                            Label("Regenerate", systemImage: "arrow.clockwise")
                         }
+                        .disabled(service.state == .working)
                     }
                 }
-                .onAppear {
-                    if let data = note.summaryData {
-                        summary = try? JSONDecoder().decode(MeetingSummary.self, from: data)
-                    }
+            }
+            .onAppear {
+                if let data = note.summaryData {
+                    summary = try? JSONDecoder().decode(MeetingSummary.self, from: data)
                 }
-        }
+            }
     }
 
     @ViewBuilder

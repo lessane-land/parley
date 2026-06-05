@@ -37,8 +37,12 @@ struct NoteDetailView: View {
     /// One enum-driven sheet so multiple `.sheet`s don't fight.
     @State private var activeSheet: DetailSheet?
 
+    /// The summary is a first-class *pushed* screen (not a sheet), so it gets a
+    /// real back button and sits in the note's navigation stack.
+    @State private var showingSummary = false
+
     private enum DetailSheet: Int, Identifiable {
-        case actionItems, summary
+        case actionItems
         var id: Int { rawValue }
     }
 
@@ -96,14 +100,15 @@ struct NoteDetailView: View {
                     access: eventKit.remindersAccess,
                     onAdd: { await eventKit.addReminders($0) }
                 )
-            case .summary:
-                SummaryView(
-                    theme: theme,
-                    note: note,
-                    service: summaryService,
-                    onAddReminders: { await eventKit.addReminders($0) }
-                )
             }
+        }
+        .navigationDestination(isPresented: $showingSummary) {
+            SummaryView(
+                theme: theme,
+                note: note,
+                service: summaryService,
+                onAddReminders: { await eventKit.addReminders($0) }
+            )
         }
         // Persist confirmed transcript text as it streams in.
         .onChange(of: transcription.finalizedText) { _, newValue in
@@ -272,7 +277,7 @@ struct NoteDetailView: View {
             .buttonStyle(.bordered)
             .tint(theme.accent)
 
-            Button { activeSheet = .summary } label: {
+            Button { showingSummary = true } label: {
                 Label("Summarize", systemImage: "sparkles")
                     .font(.subheadline.weight(.semibold))
             }

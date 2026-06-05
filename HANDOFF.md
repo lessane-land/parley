@@ -103,7 +103,8 @@ suspects:
    `Note` fields (rendered as a meta line in the detail header; attendees feed the
    summary prompt). `Decision` is now a structured type (text + optional
    rationale, with legacy `[String]` decoding) alongside `ActionItem`.
-3. **Summary as a pushed screen** (currently a sheet from the bottom bar).
+3. **Summary screen done** — promoted from a bottom-bar sheet to a first-class
+   *pushed* screen (`navigationDestination(isPresented:)`) with a real back button.
 4. **Transcript speakers** — store transcript as segments (with optional speaker
    + timestamp) to show speaker initials on the timeline nodes. (On-device
    diarization isn't offered; would need a heuristic or manual labeling.)

@@ -66,7 +66,9 @@ Bring the recording experience up to the prototype.
 
 ## E3 — The summary screen (full Granola magic)
 
-Promote the summary from a sheet to a first-class, editable screen.
+Promote the summary from a sheet to a first-class, editable screen. ✅ Now a
+pushed screen (`navigationDestination(isPresented:)`) with a back button, not a
+sheet.
 
 - **Structured action items** — replace `[String]` with an `ActionItem` type
   (text, owner, due date, done, linked reminder id) so we can show checkboxes +

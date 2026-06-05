@@ -10,7 +10,7 @@ struct SummaryView: View {
     let theme: Theme
     @Bindable var note: Note
     let service: SummaryService
-    let onAddReminders: ([String]) async -> Int
+    let onAddReminders: ([ReminderDraft]) async -> Int
     var onOpenNotes: () -> Void = {}        // jump back to the note's typed/handwritten notes
     var onOpenTranscript: () -> Void = {}   // jump back to the transcript
 
@@ -20,6 +20,8 @@ struct SummaryView: View {
     #endif
     @State private var summary: MeetingSummary?
     @State private var remindedTitles: Set<String> = []
+    /// Which action item's date picker popover is open (by id), if any.
+    @State private var editingDueID: ActionItem.ID?
 
     /// Two columns (doc + sources) when wide; stacked otherwise.
     private var isWide: Bool {
@@ -195,7 +197,7 @@ struct SummaryView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("Action items", count: summary.actionItems.count)
             ForEach(summary.actionItems) { item in actionRow(item) }
-            Button { Task { await remind(summary.actionItems.map(\.title)) } } label: {
+            Button { Task { await remind(summary.actionItems) } } label: {
                 Label("Send all to Reminders", systemImage: "plus.circle")
                     .font(.subheadline.weight(.semibold))
             }
@@ -206,7 +208,7 @@ struct SummaryView: View {
     }
 
     private func actionRow(_ item: ActionItem) -> some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 10) {
             Button { toggleDone(item) } label: { checkbox(item.done) }.buttonStyle(.plain)
             Text(item.title)
                 .font(theme.bodyFont(14))
@@ -214,19 +216,71 @@ struct SummaryView: View {
                 .strikethrough(item.done)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if !item.owner.isEmpty { avatar(item.owner, size: 22) }
-            if let due = item.due, !due.isEmpty {
-                Text(due).font(theme.monoFont(10, relativeTo: .caption2)).foregroundStyle(theme.inkSoft)
-            }
-            Button { Task { await remind([item.title]) } } label: {
-                Image(systemName: remindedTitles.contains(item.title) ? "checkmark.circle" : "bell.badge.plus")
-                    .foregroundStyle(theme.accent)
-            }
-            .buttonStyle(.plain)
-            .disabled(remindedTitles.contains(item.title))
-            .accessibilityLabel("Add to Reminders")
+            dueChip(item)
+            remindButton(item)
         }
         .padding(12)
         .moodCard(theme)
+    }
+
+    /// A tappable due chip: shows the user-set date if any, else the model's text
+    /// hint, else a "Due" affordance. Tapping opens a date picker to set/clear it.
+    private func dueChip(_ item: ActionItem) -> some View {
+        let hasDate = item.dueDate != nil
+        let label = item.dueDate.map { $0.formatted(.dateTime.month(.abbreviated).day()) }
+            ?? (item.due.flatMap { $0.isEmpty ? nil : $0 } ?? "Due")
+        return Button { editingDueID = item.id } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "calendar")
+                Text(label)
+            }
+            .font(theme.monoFont(10, relativeTo: .caption2))
+            .foregroundStyle(hasDate ? theme.accentInk : theme.inkSoft)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(hasDate ? theme.accentTint : theme.paperSunk, in: Capsule())
+            .overlay(Capsule().strokeBorder(hasDate ? theme.accentLine : theme.edge, lineWidth: theme.borderWidth))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(hasDate ? "Change due date" : "Set due date")
+        .popover(isPresented: Binding(
+            get: { editingDueID == item.id },
+            set: { if !$0 && editingDueID == item.id { editingDueID = nil } }
+        )) { duePicker(item) }
+    }
+
+    private func duePicker(_ item: ActionItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("DUE DATE").font(theme.monoFont(11)).tracking(1.4).foregroundStyle(theme.inkSoft)
+            DatePicker("Due", selection: Binding(
+                get: { item.dueDate ?? Calendar.current.startOfDay(for: Date()) },
+                set: { setDue(item, $0) }
+            ), displayedComponents: [.date])
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .tint(theme.accent)
+            HStack {
+                if item.dueDate != nil {
+                    Button(role: .destructive) { setDue(item, nil); editingDueID = nil } label: { Text("Clear") }
+                }
+                Spacer()
+                Button { editingDueID = nil } label: { Text("Done").font(.subheadline.weight(.semibold)) }
+            }
+        }
+        .padding(16)
+        .frame(width: 300)
+        .background(theme.paperRaised)
+    }
+
+    private func remindButton(_ item: ActionItem) -> some View {
+        let added = remindedTitles.contains(item.title)
+        return Button { Task { await remind([item]) } } label: {
+            Image(systemName: added ? "checkmark.circle.fill" : "bell.badge.plus")
+                .font(.system(size: 16))
+                .foregroundStyle(added ? theme.accent : theme.inkSoft)
+        }
+        .buttonStyle(.plain)
+        .disabled(added)
+        .accessibilityLabel(added ? "Added to Reminders" : "Add to Reminders")
     }
 
     private func openQuestionsSection(_ items: [String]) -> some View {
@@ -369,9 +423,11 @@ struct SummaryView: View {
         if !summary.actionItems.isEmpty {
             lines.append("ACTION ITEMS")
             lines.append(contentsOf: summary.actionItems.map { item in
-                "□ \(item.title)"
+                let dueText = item.dueDate.map { $0.formatted(date: .abbreviated, time: .omitted) }
+                    ?? item.due.flatMap { $0.isEmpty ? nil : $0 }
+                return "□ \(item.title)"
                     + (item.owner.isEmpty ? "" : " — \(item.owner)")
-                    + ((item.due?.isEmpty ?? true) ? "" : " (\(item.due!))")
+                    + (dueText.map { " (\($0))" } ?? "")
             })
             lines.append("")
         }
@@ -434,9 +490,18 @@ struct SummaryView: View {
         persist()
     }
 
-    private func remind(_ titles: [String]) async {
-        let count = await onAddReminders(titles)
-        if count > 0 { remindedTitles.formUnion(titles) }
+    private func setDue(_ item: ActionItem, _ date: Date?) {
+        guard var current = summary,
+              let index = current.actionItems.firstIndex(where: { $0.id == item.id }) else { return }
+        current.actionItems[index].dueDate = date
+        summary = current
+        persist()
+    }
+
+    private func remind(_ items: [ActionItem]) async {
+        let drafts = items.map { ReminderDraft(title: $0.title, due: $0.dueDate) }
+        let count = await onAddReminders(drafts)
+        if count > 0 { remindedTitles.formUnion(items.map(\.title)) }
     }
 
     private func persist() {

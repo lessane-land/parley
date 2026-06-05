@@ -32,11 +32,16 @@ struct MeetingSummary: Codable, Equatable {
 }
 
 /// One action item: the generated task + owner + due, plus the user's checkbox.
+/// `due` is the model's free-text hint ("Thu"); `dueDate` is a real date the user
+/// sets by hand, which is what gets written to Reminders. Both optional, so old
+/// cached summaries (which lacked `dueDate`) still decode — the synthesized
+/// decoder back-fills nil.
 struct ActionItem: Codable, Equatable, Identifiable {
     var id: UUID = UUID()
     var title: String
     var owner: String = ""     // empty == no owner mentioned
     var due: String?           // short due like "Thu" / "This wk", or nil
+    var dueDate: Date?         // a real, user-set due date (→ Reminders), or nil
     var done: Bool = false
 }
 

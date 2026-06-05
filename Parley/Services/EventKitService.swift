@@ -77,17 +77,29 @@ final class EventKitService {
     }
 
     /// Saves each title as a reminder in the default list. Returns how many were
-    /// written.
+    /// written. (Convenience for the bulk/no-date path.)
     @discardableResult
     func addReminders(_ titles: [String]) async -> Int {
+        await addReminders(titles.map { ReminderDraft(title: $0, due: nil) })
+    }
+
+    /// Saves each draft as a reminder, carrying its due date through to the
+    /// Reminders app when one was set. Returns how many were written.
+    @discardableResult
+    func addReminders(_ drafts: [ReminderDraft]) async -> Int {
         guard await ensureRemindersAccess() else { return 0 }
         guard let list = store.defaultCalendarForNewReminders() else { return 0 }
 
         var saved = 0
-        for title in titles {
+        for draft in drafts {
             let reminder = EKReminder(eventStore: store)
-            reminder.title = title
+            reminder.title = draft.title
             reminder.calendar = list
+            if let due = draft.due {
+                // Day-granularity due date; an alarm makes it actually notify.
+                reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: due)
+                reminder.addAlarm(EKAlarm(absoluteDate: due))
+            }
             if (try? store.save(reminder, commit: false)) != nil { saved += 1 }
         }
         try? store.commit()
@@ -157,6 +169,13 @@ struct ReminderItem: Identifiable {
         completed = reminder.isCompleted
         due = reminder.dueDateComponents?.date
     }
+}
+
+/// A reminder to be written: a title plus an optional real due date. Lets the
+/// summary pass a user-set date straight through to the Reminders app.
+struct ReminderDraft {
+    let title: String
+    let due: Date?
 }
 
 /// Heuristic action-item detection. This is a deliberate **placeholder** for

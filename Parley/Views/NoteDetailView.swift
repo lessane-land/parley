@@ -1,29 +1,44 @@
 import SwiftUI
 import SwiftData
 
-/// The editor pane: title + typed notes everywhere, plus a handwriting canvas
-/// on iPad. iPhone and Mac gracefully stay typed-only.
+/// The note detail: the user's own notes (typed everywhere, handwritten on iPad)
+/// alongside the live transcript. On a wide layout (iPad/Mac) they sit side by
+/// side — the design's notes-|-transcript split; on iPhone they stack.
 struct NoteDetailView: View {
-    /// `@Bindable` lets us make two-way bindings (`$note.title`) to the
-    /// properties of a reference type — our `@Model` `Note`. Because the note is
-    /// a tracked SwiftData object, typing/drawing mutates the stored object
-    /// directly and SwiftData autosaves it. No "Save" button needed.
+    /// `@Bindable` makes two-way bindings (`$note.title`) to our `@Model` `Note`.
+    /// Typing/drawing mutates the tracked object directly; SwiftData autosaves.
     @Bindable var note: Note
 
     @Environment(ThemeManager.self) private var themeManager
 
-    private var theme: Theme { themeManager.theme }
-    private var density: Density { themeManager.density }
+    /// One transcription engine per open note. `@State` keeps it alive for the
+    /// view's lifetime; the detail is rebuilt per note (via `.id`), so each note
+    /// gets its own clean session.
+    @State private var transcription = TranscriptionService()
 
-    /// Recreating the canvas (via `.id`) is how we force it to reload — used by
-    /// "Clear" to wipe the strokes.
+    /// Recreating the canvas (via `.id`) forces a reload — used by "Clear".
     @State private var canvasID = UUID()
     @State private var showClearDrawing = false
 
-    /// Handwriting is an iPad feature. PencilKit also runs on iPhone, but per the
-    /// product plan the phone stays typed-only for now.
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSize
+    #endif
+
+    private var theme: Theme { themeManager.theme }
+    private var density: Density { themeManager.density }
+
+    /// Side-by-side on iPad/Mac; stacked on iPhone.
+    private var isWide: Bool {
+        #if os(macOS)
+        true
+        #else
+        hSize == .regular
+        #endif
+    }
+
+    /// Handwriting is an iPad feature (and respects the Settings toggle).
     private var showsHandwriting: Bool {
-        guard themeManager.handwriting else { return false }   // Settings toggle
+        guard themeManager.handwriting else { return false }
         #if os(iOS)
         return UIDevice.current.userInterfaceIdiom == .pad
         #else
@@ -33,38 +48,23 @@ struct NoteDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                TextField("Title", text: $note.title)
-                    .font(theme.titleFont(26, relativeTo: .title))
-                    .tracking(theme.titleTracking)
-                    .foregroundStyle(theme.ink)
-                    .textFieldStyle(.plain)
+            header
 
-                Text(note.createdAt, format: .dateTime.weekday().month().day().hour().minute())
-                    .font(theme.monoFont(11))
-                    .foregroundStyle(theme.inkFaint)
-            }
-
-            // A hairline that takes the mood's line color and thickness.
             Rectangle()
                 .fill(theme.line)
                 .frame(height: theme.borderWidth)
 
-            typedNotes
-                .padding(.leading, 16)
-                .overlay(alignment: .leading) {
-                    // Notebook margin rule (the design's .pk-notes::before).
-                    Rectangle().fill(theme.accentLine).frame(width: 1)
+            if isWide {
+                HStack(alignment: .top, spacing: 16) {
+                    notesColumn.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    transcriptPanel.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                // On iPad the typed notes share the screen with the canvas, so
-                // cap their height; elsewhere they fill the pane.
-                .frame(maxHeight: showsHandwriting ? 220 : .infinity)
-
-            #if os(iOS)
-            if showsHandwriting {
-                handwriting
+            } else {
+                VStack(spacing: 16) {
+                    notesColumn.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    transcriptPanel.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
-            #endif
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -73,15 +73,74 @@ struct NoteDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        // Persist confirmed transcript text as it streams in.
+        .onChange(of: transcription.finalizedText) { _, newValue in
+            note.transcript = newValue
+        }
+        // Don't leave a session running when switching away from this note.
+        .onDisappear {
+            if transcription.isRecording {
+                Task {
+                    await transcription.stop()
+                    note.transcript = transcription.finalizedText
+                }
+            }
+        }
         .confirmationDialog("Clear handwriting?", isPresented: $showClearDrawing, titleVisibility: .visible) {
             Button("Clear", role: .destructive) {
                 note.drawing = nil
-                canvasID = UUID()   // rebuild the canvas empty
+                canvasID = UUID()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes the Pencil strokes on this note. Your typed text is kept.")
         }
+    }
+
+    // MARK: Pieces
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            TextField("Title", text: $note.title)
+                .font(theme.titleFont(26, relativeTo: .title))
+                .tracking(theme.titleTracking)
+                .foregroundStyle(theme.ink)
+                .textFieldStyle(.plain)
+
+            Text(note.createdAt, format: .dateTime.weekday().month().day().hour().minute())
+                .font(theme.monoFont(11))
+                .foregroundStyle(theme.inkFaint)
+        }
+    }
+
+    private var notesColumn: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            typedNotes
+                .padding(.leading, 16)
+                .overlay(alignment: .leading) {
+                    // Notebook margin rule (the design's .pk-notes::before).
+                    Rectangle().fill(theme.accentLine).frame(width: 1)
+                }
+                .frame(maxHeight: showsHandwriting ? 220 : .infinity)
+
+            #if os(iOS)
+            if showsHandwriting {
+                handwriting
+            }
+            #endif
+        }
+    }
+
+    private var transcriptPanel: some View {
+        TranscriptPanel(
+            theme: theme,
+            density: density,
+            text: note.transcript,
+            volatile: transcription.volatileText,
+            state: transcription.state,
+            startedAt: transcription.startedAt,
+            onToggleRecord: toggleRecord
+        )
     }
 
     private var typedNotes: some View {
@@ -91,7 +150,6 @@ struct NoteDetailView: View {
             .lineSpacing(density.lineSpacing)
             .scrollContentBackground(.hidden)
             .overlay(alignment: .topLeading) {
-                // SwiftUI's TextEditor has no placeholder, so we fake one.
                 if note.body.isEmpty {
                     Text("Start typing your notes…")
                         .font(theme.bodyFont(density.bodySize))
@@ -134,10 +192,20 @@ struct NoteDetailView: View {
         }
     }
     #endif
+
+    private func toggleRecord() {
+        Task {
+            if transcription.isRecording {
+                await transcription.stop()
+                note.transcript = transcription.finalizedText
+            } else {
+                await transcription.start(seed: note.transcript)
+            }
+        }
+    }
 }
 
 #Preview {
-    // Build a throwaway in-memory note to preview the editor in isolation.
     let container = try! ModelContainer(
         for: Note.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)

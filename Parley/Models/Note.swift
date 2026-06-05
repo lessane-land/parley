@@ -20,6 +20,11 @@ final class Note {
     var body: String
     var createdAt: Date
 
+    /// The live, on-device transcript captured while recording. Kept separate
+    /// from `body` (the user's own notes) so we can merge them into a summary
+    /// later (Phase 4). Has a default, so adding it is a lightweight migration.
+    var transcript: String = ""
+
     /// Handwriting layer (iPad). A `PKDrawing` serialized via its
     /// `dataRepresentation()`. Optional because most notes have no drawing, and
     /// because adding an *optional* property is a SwiftData **lightweight
@@ -32,11 +37,12 @@ final class Note {
     /// convenience: when we add CloudKit sync in a later phase, CloudKit requires
     /// every SwiftData property to be optional or have a default, so starting this
     /// way avoids a migration headache down the road.
-    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil) {
+    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "") {
         self.id = id
         self.title = title
         self.body = body
         self.createdAt = createdAt
         self.drawing = drawing
+        self.transcript = transcript
     }
 }

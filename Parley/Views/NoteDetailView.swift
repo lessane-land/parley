@@ -211,7 +211,7 @@ struct NoteDetailView: View {
                 await transcription.stop()
                 note.transcript = transcription.finalizedText
             } else {
-                await transcription.start(seed: note.transcript)
+                await transcription.start(seed: note.transcript, preferredLanguage: themeManager.transcriptionLanguage)
             }
         }
     }

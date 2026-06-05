@@ -83,6 +83,23 @@ struct SettingsView: View {
                 Text("Shows the Apple Pencil canvas on iPad notes.")
             }
 
+            Section {
+                Picker("Language", selection: Binding(
+                    get: { manager.transcriptionLanguage ?? "auto" },
+                    set: { manager.transcriptionLanguage = ($0 == "auto") ? nil : $0 }
+                )) {
+                    Text("Automatic").tag("auto")
+                    ForEach(TranscriptionLanguages.options, id: \.code) { option in
+                        Text(option.name).tag(option.code)
+                    }
+                }
+                .pickerStyle(.menu)
+            } header: {
+                Text("Transcription")
+            } footer: {
+                Text("Automatic follows your device's preferred languages. Each recording is transcribed in a single language.")
+            }
+
             Section("Preview") {
                 ThemePreviewCard(theme: manager.theme, density: manager.density)
                     .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))

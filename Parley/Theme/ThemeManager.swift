@@ -39,6 +39,11 @@ final class ThemeManager {
 
     var density: Density { didSet { UserDefaults.standard.set(density.rawValue, forKey: Self.densityKey) } }
 
+    /// Preferred transcription language as a language code ("es"), or `nil` for
+    /// Automatic (follow the device's preferred languages). Not an appearance
+    /// setting, but this is the app's single persisted-preferences store.
+    var transcriptionLanguage: String? { didSet { persist(transcriptionLanguage, Self.languageKey) } }
+
     /// The fully resolved tokens for the current mood + overrides. Views read
     /// `themeManager.theme`.
     var theme: Theme {
@@ -96,6 +101,7 @@ final class ThemeManager {
     private static let warmthKey = "parley.warmth"
     private static let handwritingKey = "parley.handwriting"
     private static let densityKey = "parley.density"
+    private static let languageKey = "parley.transcriptionLanguage"
 
     private func persist(_ value: String?, _ key: String) {
         let d = UserDefaults.standard
@@ -113,5 +119,6 @@ final class ThemeManager {
         warmth = d.object(forKey: Self.warmthKey) as? Double ?? 38
         handwriting = d.object(forKey: Self.handwritingKey) as? Bool ?? true
         density = Density(rawValue: d.string(forKey: Self.densityKey) ?? "") ?? .regular
+        transcriptionLanguage = d.string(forKey: Self.languageKey)
     }
 }

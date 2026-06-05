@@ -51,8 +51,9 @@ final class TranscriptionService {
     // MARK: Start / stop
 
     /// Begin a session, seeding with any transcript already on the note so we
-    /// append rather than overwrite.
-    func start(seed: String) async {
+    /// append rather than overwrite. `preferredLanguage` is a language code
+    /// ("es") to force, or `nil` for Automatic.
+    func start(seed: String, preferredLanguage: String? = nil) async {
         guard state == .idle || isError else { return }
         finalizedText = seed
         volatileText = ""
@@ -66,7 +67,7 @@ final class TranscriptionService {
             // English in Spain), so resolve to a supported locale that matches the
             // language rather than demanding an exact region match.
             let supported = await SpeechTranscriber.supportedLocales
-            guard let locale = Self.resolveLocale(from: supported) else {
+            guard let locale = Self.resolveLocale(from: supported, preferred: preferredLanguage) else {
                 state = .unavailable("Speech transcription isn't available on this device.")
                 return
             }
@@ -203,22 +204,47 @@ final class TranscriptionService {
         resultsTask = nil
     }
 
-    /// Pick a supported locale: exact match first, then same language (so an
-    /// `en-ES` device still gets English), then `en-US`, then anything supported.
-    static func resolveLocale(from supported: [Locale]) -> Locale? {
-        let current = Locale.current
-        if let exact = supported.first(where: { $0.identifier(.bcp47) == current.identifier(.bcp47) }) {
-            return exact
+    /// Pick a supported locale for transcription.
+    ///
+    /// - An explicit `preferred` language code wins (matched by language).
+    /// - Otherwise "Automatic": walk the device's preferred languages *in order*
+    ///   and take the first that has a model — exact region match, else same
+    ///   language. (So `es` in your language list beats an `en-ES` region quirk.)
+    /// - Then fall back to `en-US`, then anything supported.
+    static func resolveLocale(from supported: [Locale], preferred: String?) -> Locale? {
+        func match(language code: String) -> Locale? {
+            supported.first { $0.language.languageCode?.identifier == code }
         }
-        if let language = current.language.languageCode?.identifier,
-           let sameLanguage = supported.first(where: { $0.language.languageCode?.identifier == language }) {
-            return sameLanguage
+
+        if let preferred, !preferred.isEmpty, let forced = match(language: preferred) {
+            return forced
         }
-        if let english = supported.first(where: { $0.identifier(.bcp47) == "en-US" }) {
-            return english
+
+        for identifier in Locale.preferredLanguages {
+            let locale = Locale(identifier: identifier)
+            if let exact = supported.first(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) {
+                return exact
+            }
+            if let code = locale.language.languageCode?.identifier, let sameLanguage = match(language: code) {
+                return sameLanguage
+            }
         }
-        return supported.first
+
+        return supported.first(where: { $0.identifier(.bcp47) == "en-US" }) ?? supported.first
     }
+}
+
+/// The languages offered in the Settings transcription picker (subset of common
+/// ones; resolution still checks them against what the device actually supports).
+enum TranscriptionLanguages {
+    static let options: [(code: String, name: String)] = [
+        ("en", "English"), ("es", "Spanish"), ("fr", "French"), ("de", "German"),
+        ("it", "Italian"), ("pt", "Portuguese"), ("nl", "Dutch"),
+        ("zh", "Chinese"), ("ja", "Japanese"), ("ko", "Korean")
+    ]
+}
+
+private extension TranscriptionService {
 
     private func isModelInstalled(_ locale: Locale) async -> Bool {
         let installed = await SpeechTranscriber.installedLocales

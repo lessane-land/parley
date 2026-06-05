@@ -1,23 +1,25 @@
 import SwiftUI
 
-/// Appearance settings: pick a mood and a text density. Used as a sheet on
-/// iOS/iPadOS and inside the macOS `Settings` window (Cmd-,).
+/// Appearance settings — mirrors the design's Tweaks panel: a base mood plus
+/// accent, highlight, paper warmth, type face, density, and a handwriting
+/// toggle. Used as a sheet on iOS/iPadOS and the macOS `Settings` window (Cmd-,).
 struct SettingsView: View {
     @Environment(ThemeManager.self) private var themeManager
 
+    private var cfg: MoodConfig { themeManager.mood.config }
+
     var body: some View {
-        // SwiftUI gotcha: to get two-way `$bindings` ($themeManager.density) out
-        // of an `@Observable` object that arrived via `@Environment`, you re-wrap
-        // it locally with `@Bindable`. This line is the documented idiom.
-        @Bindable var themeManager = themeManager
+        // SwiftUI gotcha: to get two-way `$bindings` out of an `@Observable`
+        // object that arrived via `@Environment`, re-wrap it with `@Bindable`.
+        @Bindable var manager = themeManager
 
         Form {
             Section {
                 ForEach(Mood.allCases) { mood in
                     Button {
-                        withAnimation(.snappy) { themeManager.mood = mood }
+                        withAnimation(.snappy) { manager.mood = mood }
                     } label: {
-                        MoodRow(mood: mood, isSelected: mood == themeManager.mood)
+                        MoodRow(mood: mood, isSelected: mood == manager.mood)
                     }
                     .buttonStyle(.plain)
                 }
@@ -27,23 +29,108 @@ struct SettingsView: View {
                 Text("Moods restyle the whole app — color, type, and shape.")
             }
 
-            Section("Text size") {
-                Picker("Text size", selection: $themeManager.density) {
-                    ForEach(Density.allCases) { density in
-                        Text(density.name).tag(density)
+            Section("Accent") {
+                SwatchRow(
+                    options: cfg.accents,
+                    selected: manager.accentHex ?? cfg.accentDefault
+                ) { manager.accentHex = $0 }
+            }
+
+            if let highlights = cfg.highlights {
+                Section("Highlight") {
+                    SwatchRow(
+                        options: highlights,
+                        selected: manager.highlightHex ?? (cfg.highlightDefault ?? "")
+                    ) { manager.highlightHex = $0 }
+                }
+            }
+
+            if cfg.hasWarmth {
+                Section("Paper warmth") {
+                    Slider(value: $manager.warmth, in: 0...100) {
+                        Text("Warmth")
+                    } minimumValueLabel: {
+                        Image(systemName: "snowflake").foregroundStyle(.secondary)
+                    } maximumValueLabel: {
+                        Image(systemName: "sun.max").foregroundStyle(.secondary)
                     }
+                }
+            }
+
+            if cfg.faceOptions.count > 1 {
+                Section(cfg.faceLabel) {
+                    Picker(cfg.faceLabel, selection: Binding(
+                        get: { manager.faceName ?? cfg.faceDefault },
+                        set: { manager.faceName = $0 }
+                    )) {
+                        ForEach(cfg.faceOptions, id: \.self) { Text($0).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+
+            Section("Text size") {
+                Picker("Text size", selection: $manager.density) {
+                    ForEach(Density.allCases) { Text($0.name).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
             }
 
+            Section {
+                Toggle("Handwriting strokes", isOn: $manager.handwriting)
+            } footer: {
+                Text("Shows the Apple Pencil canvas on iPad notes.")
+            }
+
             Section("Preview") {
-                ThemePreviewCard(theme: themeManager.theme, density: themeManager.density)
+                ThemePreviewCard(theme: manager.theme, density: manager.density)
                     .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
                     .listRowBackground(Color.clear)
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// A horizontal row of selectable color swatches (accent / highlight).
+private struct SwatchRow: View {
+    let options: [String]
+    let selected: String
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ForEach(options, id: \.self) { hex in
+                let isOn = hex.caseInsensitiveCompare(selected) == .orderedSame
+                Button {
+                    onSelect(hex)
+                } label: {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(hex: hex))
+                        .frame(height: 40)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(.black.opacity(0.12), lineWidth: 0.5)
+                        )
+                        .overlay {
+                            if isOn {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(PK.isLight(hex) ? .black : .white)
+                            }
+                        }
+                        .overlay {
+                            if isOn {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(.primary, lineWidth: 2)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 

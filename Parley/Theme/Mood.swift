@@ -154,4 +154,70 @@ enum Mood: String, CaseIterable, Identifiable {
             )
         }
     }
+
+    /// The customization options each mood offers — straight from the design's
+    /// per-mood config (`PK_MOODS`). These drive the Settings controls.
+    var config: MoodConfig {
+        switch self {
+        case .paper:
+            MoodConfig(
+                accents: ["#3E5C50", "#8B3A2F", "#C75B39", "#27406B"], accentDefault: "#3E5C50",
+                highlights: nil, highlightDefault: nil,
+                hasWarmth: true,
+                faceLabel: "Note serif",
+                faceOptions: ["Newsreader"], faceDefault: "Newsreader", faceAffectsBody: true
+            )
+        case .terminal:
+            MoodConfig(
+                accents: ["#FF9F1C", "#36E08B", "#54C7FF", "#FF5C4D"], accentDefault: "#FF9F1C",
+                highlights: nil, highlightDefault: nil,
+                hasWarmth: false,
+                faceLabel: "Interface face",
+                faceOptions: ["Space Grotesk", "IBM Plex Mono"], faceDefault: "Space Grotesk", faceAffectsBody: true
+            )
+        case .swiss:
+            MoodConfig(
+                accents: ["#E2231A", "#0A5FFF", "#111111", "#FF6A00"], accentDefault: "#E2231A",
+                highlights: nil, highlightDefault: nil,
+                hasWarmth: false,
+                faceLabel: "Grotesque",
+                faceOptions: ["Archivo"], faceDefault: "Archivo", faceAffectsBody: true
+            )
+        case .neubrutalist:
+            MoodConfig(
+                accents: ["#2B4BF2", "#FF4FA3", "#FF6A1A", "#16A34A"], accentDefault: "#2B4BF2",
+                highlights: ["#D8F000", "#FFE600", "#00E5FF", "#FF4FA3"], highlightDefault: "#D8F000",
+                hasWarmth: false,
+                faceLabel: "Display face",
+                // Only the bundled faces are offered; the display face changes the
+                // title only (the neubrutalist body stays Space Grotesk).
+                faceOptions: ["Archivo Black", "Space Grotesk", "Archivo"], faceDefault: "Archivo Black", faceAffectsBody: false
+            )
+        }
+    }
+}
+
+/// The set of customization options a mood exposes in Settings.
+struct MoodConfig {
+    let accents: [String]
+    let accentDefault: String
+    let highlights: [String]?       // only some moods (neubrutalist)
+    let highlightDefault: String?
+    let hasWarmth: Bool             // paper offers a warmth slider
+    let faceLabel: String
+    let faceOptions: [String]
+    let faceDefault: String
+    let faceAffectsBody: Bool       // does the face change body text too, or title only?
+}
+
+/// Maps a design face name to the bundled PostScript names for title + body.
+func faceFonts(_ face: String) -> (title: String, body: String) {
+    switch face {
+    case "Newsreader":     return ("Newsreader-SemiBold", "Newsreader-Regular")
+    case "Space Grotesk":  return ("SpaceGrotesk-Medium", "SpaceGrotesk-Regular")
+    case "IBM Plex Mono":  return ("IBMPlexMono-Medium", "IBMPlexMono-Regular")
+    case "Archivo":        return ("Archivo-Bold", "Archivo-Regular")
+    case "Archivo Black":  return ("Archivo-ExtraBold", "Archivo-Regular")
+    default:               return ("Newsreader-SemiBold", "Newsreader-Regular")
+    }
 }

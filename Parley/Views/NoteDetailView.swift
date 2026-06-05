@@ -23,10 +23,11 @@ struct NoteDetailView: View {
     /// Handwriting is an iPad feature. PencilKit also runs on iPhone, but per the
     /// product plan the phone stays typed-only for now.
     private var showsHandwriting: Bool {
+        guard themeManager.handwriting else { return false }   // Settings toggle
         #if os(iOS)
-        UIDevice.current.userInterfaceIdiom == .pad
+        return UIDevice.current.userInterfaceIdiom == .pad
         #else
-        false
+        return false
         #endif
     }
 

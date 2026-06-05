@@ -54,10 +54,11 @@ struct NoteListView: View {
             }
             .overlay {
                 if notes.isEmpty {
-                    ContentUnavailableView(
-                        "No Notes",
-                        systemImage: "note.text",
-                        description: Text("Tap the compose button to create your first note.")
+                    ThemedEmptyState(
+                        theme: theme,
+                        icon: "note.text",
+                        title: "No Notes",
+                        message: "Tap the compose button to create your first note."
                     )
                 }
             }
@@ -69,15 +70,20 @@ struct NoteListView: View {
                 NoteDetailView(note: selection)
                     .id(selection.id)
             } else {
-                ContentUnavailableView(
-                    "No Note Selected",
-                    systemImage: "sidebar.left",
-                    description: Text("Select a note from the list, or create a new one.")
+                ThemedEmptyState(
+                    theme: theme,
+                    icon: "sidebar.left",
+                    title: "No Note Selected",
+                    message: "Select a note from the list, or create a new one."
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(theme.paper)
             }
         }
+        // Accent (selection, toolbar buttons) follows the mood, in addition to
+        // the app-level tint — belt and suspenders so the navigation chrome
+        // picks it up reliably.
+        .tint(theme.accent)
         #if !os(macOS)
         .sheet(isPresented: $showingSettings) {
             NavigationStack {
@@ -130,6 +136,35 @@ private struct NoteRow: View {
                 .foregroundStyle(theme.inkFaint)
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// A mood-styled empty state. We render our own (instead of
+/// `ContentUnavailableView`) so the mood's fonts and colors are visible even
+/// when there are no notes — otherwise an empty screen looks unthemed.
+private struct ThemedEmptyState: View {
+    let theme: Theme
+    let icon: String
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 42))
+                .foregroundStyle(theme.accent)
+            Text(title)
+                .font(theme.titleFont(22, relativeTo: .title2))
+                .tracking(theme.titleTracking)
+                .textCase(theme.titleUppercase ? .uppercase : nil)
+                .foregroundStyle(theme.ink)
+            Text(message)
+                .font(theme.bodyFont(14))
+                .foregroundStyle(theme.inkSoft)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 280)
+        }
+        .padding(24)
     }
 }
 

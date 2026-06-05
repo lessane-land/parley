@@ -99,9 +99,10 @@ suspects:
 ## Pending work (roughly prioritized)
 
 1. **Compile + device-test pass** (above). Most important.
-2. **E4 remainder** — meeting metadata (start/end date, attendees) is now promoted
-   to real `Note` fields (rendered as a meta line in the detail header; attendees
-   feed the summary prompt). Still optional: a structured `Decision` type.
+2. **E4 done** — meeting metadata (start/end date, attendees) promoted to real
+   `Note` fields (rendered as a meta line in the detail header; attendees feed the
+   summary prompt). `Decision` is now a structured type (text + optional
+   rationale, with legacy `[String]` decoding) alongside `ActionItem`.
 3. **Summary as a pushed screen** (currently a sheet from the bottom bar).
 4. **Transcript speakers** — store transcript as segments (with optional speaker
    + timestamp) to show speaker initials on the timeline nodes. (On-device

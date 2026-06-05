@@ -101,7 +101,7 @@ struct SummaryView: View {
                 }
 
                 if !summary.decisions.isEmpty {
-                    section("Decisions", icon: "checkmark.seal") { bullets(summary.decisions) }
+                    section("Decisions", icon: "checkmark.seal") { decisionsView(summary.decisions) }
                 }
 
                 if !summary.actionItems.isEmpty {
@@ -159,6 +159,30 @@ struct SummaryView: View {
             }
             .buttonStyle(.bordered)
             .tint(theme.accent)
+        }
+    }
+
+    private func decisionsView(_ decisions: [Decision]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(decisions) { decision in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(theme.accent)
+                        .padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(decision.text)
+                            .font(theme.bodyFont(15))
+                            .foregroundStyle(theme.ink2)
+                        if !decision.rationale.isEmpty {
+                            Text(decision.rationale)
+                                .font(theme.bodyFont(13))
+                                .foregroundStyle(theme.inkSoft)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
         }
     }
 

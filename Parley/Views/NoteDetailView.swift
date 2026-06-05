@@ -1,42 +1,54 @@
 import SwiftUI
 import SwiftData
 
-/// The editor pane: edit a note's title and body in place.
+/// The editor pane: edit a note's title and body in place, styled by the mood.
 struct NoteDetailView: View {
     /// `@Bindable` lets us make two-way bindings (`$note.title`) to the
-    /// properties of a reference type — here our `@Model` `Note`. Because the
-    /// note is a tracked SwiftData object, typing into these fields mutates the
-    /// stored object directly and SwiftData autosaves it. No "Save" button needed.
+    /// properties of a reference type — our `@Model` `Note`. Because the note is
+    /// a tracked SwiftData object, typing into these fields mutates the stored
+    /// object directly and SwiftData autosaves it. No "Save" button needed.
     @Bindable var note: Note
+
+    @Environment(ThemeManager.self) private var themeManager
+
+    private var theme: Theme { themeManager.theme }
+    private var density: Density { themeManager.density }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Title", text: $note.title)
-                .font(.title.bold())
+                .font(.system(.title, design: theme.titleDesign).weight(theme.titleWeight))
+                .foregroundStyle(theme.ink)
                 .textFieldStyle(.plain)
 
-            Divider()
+            // A hairline that takes the mood's line color and thickness.
+            Rectangle()
+                .fill(theme.line)
+                .frame(height: theme.borderWidth)
 
             TextEditor(text: $note.body)
-                .font(.body)
+                .font(.system(size: density.bodySize, design: theme.noteDesign))
+                .foregroundStyle(theme.ink2)
+                .lineSpacing(density.lineSpacing)
                 .scrollContentBackground(.hidden)
                 .overlay(alignment: .topLeading) {
                     // SwiftUI's TextEditor has no placeholder, so we fake one.
                     if note.body.isEmpty {
                         Text("Start typing your notes…")
-                            .font(.body)
-                            .foregroundStyle(.tertiary)
+                            .font(.system(size: density.bodySize, design: theme.noteDesign))
+                            .foregroundStyle(theme.inkFaint)
                             .padding(.top, 8)
                             .padding(.leading, 5)
                             .allowsHitTesting(false)
                     }
                 }
         }
-        .padding()
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(theme.paper)
         .navigationTitle(note.title.isEmpty ? "New Note" : note.title)
-        // Title display mode is an iOS/iPadOS-only modifier; PencilKit aside,
-        // this `#if` is the canonical way to handle the few genuinely
-        // platform-specific bits in a multiplatform SwiftUI codebase.
+        // Title display mode is iOS/iPadOS-only; the `#if` is the canonical way
+        // to handle the few genuinely platform-specific bits in shared SwiftUI.
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -55,4 +67,5 @@ struct NoteDetailView: View {
         NoteDetailView(note: note)
     }
     .modelContainer(container)
+    .environment(ThemeManager())
 }

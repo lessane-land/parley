@@ -7,29 +7,36 @@ struct NoteListView: View {
     /// handle we use to insert and delete notes; saves are automatic.
     @Environment(\.modelContext) private var context
 
+    /// The shared appearance state (injected in `ParleyApp`).
+    @Environment(ThemeManager.self) private var themeManager
+
     /// `@Query` is SwiftData's live-fetch property wrapper. It runs the fetch,
-    /// hands us the results, and — crucially — re-runs and re-renders the view
-    /// automatically whenever matching data changes. No manual reload needed.
-    /// We sort newest-first.
+    /// hands us the results, and re-renders automatically when matching data
+    /// changes. We sort newest-first.
     @Query(sort: \Note.createdAt, order: .reverse) private var notes: [Note]
 
     /// Which note the detail pane is showing. `Note?` because nothing may be
     /// selected. The sidebar `List` binds its selection to this.
     @State private var selection: Note?
 
+    /// iOS/iPadOS: whether the settings sheet is showing. (macOS uses Cmd-,.)
+    @State private var showingSettings = false
+
+    private var theme: Theme { themeManager.theme }
+
     var body: some View {
         NavigationSplitView {
             // SIDEBAR
             List(selection: $selection) {
                 ForEach(notes) { note in
-                    // `.tag(note)` is what couples a row to the selection binding:
-                    // selecting this row sets `selection` to this `Note`. It works
-                    // because `@Model` types are `Hashable`/`Identifiable`.
-                    NoteRow(note: note)
+                    NoteRow(note: note, theme: theme)
                         .tag(note)
+                        .listRowBackground(Color.clear)
                 }
                 .onDelete(perform: deleteNotes)
             }
+            .scrollContentBackground(.hidden)   // let the mood's paper show through
+            .background(theme.paperSunk)
             .navigationTitle("Notes")
             .toolbar {
                 ToolbarItem {
@@ -37,6 +44,13 @@ struct NoteListView: View {
                         Label("New Note", systemImage: "square.and.pencil")
                     }
                 }
+                #if !os(macOS)
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showingSettings = true } label: {
+                        Label("Settings", systemImage: "slider.horizontal.3")
+                    }
+                }
+                #endif
             }
             .overlay {
                 if notes.isEmpty {
@@ -60,8 +74,24 @@ struct NoteListView: View {
                     systemImage: "sidebar.left",
                     description: Text("Select a note from the list, or create a new one.")
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.paper)
             }
         }
+        #if !os(macOS)
+        .sheet(isPresented: $showingSettings) {
+            NavigationStack {
+                SettingsView()
+                    .navigationTitle("Settings")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showingSettings = false }
+                        }
+                    }
+            }
+        }
+        #endif
     }
 
     /// Insert a new empty note and immediately select it so the user can type.
@@ -82,18 +112,20 @@ struct NoteListView: View {
     }
 }
 
-/// A single sidebar row. Pulled out into its own small view for readability.
+/// A single sidebar row, styled with the current mood's tokens.
 private struct NoteRow: View {
     let note: Note
+    let theme: Theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(note.title.isEmpty ? "New Note" : note.title)
-                .font(.headline)
+                .font(.system(.headline, design: theme.titleDesign).weight(theme.titleWeight))
+                .foregroundStyle(theme.ink)
                 .lineLimit(1)
             Text(note.createdAt, format: .dateTime.month().day().hour().minute())
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(theme.inkFaint)
         }
         .padding(.vertical, 2)
     }
@@ -101,7 +133,7 @@ private struct NoteRow: View {
 
 #Preview {
     NoteListView()
-        // Previews need their own container. `inMemory: true` keeps the sample
-        // data out of the real on-disk store.
+        // Previews need their own container and theme manager.
         .modelContainer(for: Note.self, inMemory: true)
+        .environment(ThemeManager())
 }

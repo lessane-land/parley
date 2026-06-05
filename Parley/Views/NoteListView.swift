@@ -371,30 +371,42 @@ struct NoteListView: View {
     private func tagRow(_ tag: Tag) -> some View {
         let on = scope == .tag(tag.persistentModelID)
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9)
-        return Button { scope = .tag(tag.persistentModelID) } label: {
-            HStack(spacing: 11) {
-                Circle().fill(tag.color).frame(width: 9, height: 9).frame(width: 18)
-                Text(tag.name).font(theme.bodyFont(14)).foregroundStyle(on ? theme.accentInk : theme.ink).lineLimit(1)
-                Spacer()
-                Text("\(tag.notes?.count ?? 0)").font(theme.monoFont(11)).foregroundStyle(theme.inkFaint)
+        return HStack(spacing: 11) {
+            Circle().fill(tag.color).frame(width: 9, height: 9).frame(width: 18)
+            Text(tag.name).font(theme.bodyFont(14)).foregroundStyle(on ? theme.accentInk : theme.ink).lineLimit(1)
+            Spacer()
+            Text("\(tag.notes?.count ?? 0)").font(theme.monoFont(11)).foregroundStyle(theme.inkFaint)
+            MoodMenu(theme: theme) {
+                MoodMenuRow(theme: theme, title: "Rename", icon: "pencil") { startRenameTag(tag) }
+                tagColorRow(tag)
+                MoodMenuDivider(theme: theme)
+                MoodMenuRow(theme: theme, title: "Delete Tag", icon: "trash", destructive: true) { deleteTag(tag) }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(theme.monoFont(12))
+                    .foregroundStyle(theme.inkFaint)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
-            .padding(.horizontal, 11).padding(.vertical, 8)
-            .background(on ? theme.accentTint : Color.clear, in: shape)
         }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button { startRenameTag(tag) } label: { Label("Rename", systemImage: "pencil") }
-            Menu {
-                ForEach(Array(Tag.palette.enumerated()), id: \.offset) { index, hex in
-                    Button { tag.colorHex = hex } label: {
-                        if hex == tag.colorHex { Label("Color \(index + 1)", systemImage: "checkmark") }
-                        else { Text("Color \(index + 1)") }
-                    }
+        .padding(.horizontal, 11).padding(.vertical, 8)
+        .background(on ? theme.accentTint : Color.clear, in: shape)
+        .contentShape(Rectangle())
+        .onTapGesture { scope = .tag(tag.persistentModelID) }
+    }
+
+    /// Palette swatches inside a tag's menu — tap to recolor.
+    private func tagColorRow(_ tag: Tag) -> some View {
+        HStack(spacing: 7) {
+            ForEach(Tag.palette, id: \.self) { hex in
+                Button { tag.colorHex = hex } label: {
+                    Circle().fill(Color(hex: hex)).frame(width: 18, height: 18)
+                        .overlay(Circle().strokeBorder(hex == tag.colorHex ? theme.ink : Color.clear, lineWidth: 2))
                 }
-            } label: { Label("Color", systemImage: "paintpalette") }
-            Divider()
-            Button(role: .destructive) { deleteTag(tag) } label: { Label("Delete Tag", systemImage: "trash") }
+                .buttonStyle(.plain)
+            }
         }
+        .padding(.horizontal, 10).padding(.vertical, 5)
     }
 
     // MARK: Filtering
@@ -492,6 +504,89 @@ struct NoteListView: View {
         // If we're currently filtered by this tag, fall back to All Notes.
         if scope == .tag(tag.persistentModelID) { scope = .all }
         context.delete(tag)
+    }
+}
+
+// MARK: - Mood-styled action menu (replaces the gray system context menu)
+
+private struct MoodMenuDismissKey: EnvironmentKey {
+    static let defaultValue: () -> Void = {}
+}
+extension EnvironmentValues {
+    var moodMenuDismiss: () -> Void {
+        get { self[MoodMenuDismissKey.self] }
+        set { self[MoodMenuDismissKey.self] = newValue }
+    }
+}
+
+/// A button that opens a popover styled with the mood tokens — so context actions
+/// match the app instead of the system's gray menu.
+struct MoodMenu<Label: View, Content: View>: View {
+    let theme: Theme
+    let content: () -> Content
+    let label: () -> Label
+    @State private var open = false
+
+    init(theme: Theme,
+         @ViewBuilder content: @escaping () -> Content,
+         @ViewBuilder label: @escaping () -> Label) {
+        self.theme = theme
+        self.content = content
+        self.label = label
+    }
+
+    var body: some View {
+        Button { open.toggle() } label: { label() }
+            .buttonStyle(.plain)
+            .popover(isPresented: $open) {
+                VStack(alignment: .leading, spacing: 1) { content() }
+                    .padding(5)
+                    .frame(minWidth: 196)
+                    .environment(\.moodMenuDismiss, { open = false })
+                    #if os(iOS)
+                    .presentationCompactAdaptation(.popover)
+                    #endif
+                    .presentationBackground(theme.paperRaised)
+            }
+    }
+}
+
+/// One row in a `MoodMenu` — icon + title, hover highlight, dismisses on tap.
+struct MoodMenuRow: View {
+    let theme: Theme
+    let title: String
+    var icon: String? = nil
+    var destructive: Bool = false
+    let action: () -> Void
+
+    @Environment(\.moodMenuDismiss) private var dismiss
+    @State private var hover = false
+
+    var body: some View {
+        Button { action(); dismiss() } label: {
+            HStack(spacing: 10) {
+                if let icon { Image(systemName: icon).frame(width: 16) }
+                Text(title)
+                Spacer(minLength: 12)
+            }
+            .font(theme.bodyFont(13))
+            .foregroundStyle(destructive ? theme.rec : theme.ink)
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(hover ? theme.accentTint : Color.clear,
+                        in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 7))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+    }
+}
+
+/// A hairline separator inside a `MoodMenu`.
+struct MoodMenuDivider: View {
+    let theme: Theme
+    var body: some View {
+        Rectangle().fill(theme.line).frame(height: theme.borderWidth).padding(.vertical, 4)
     }
 }
 

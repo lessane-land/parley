@@ -233,7 +233,13 @@ final class AskService {
             messages.append(ChatMessage(role: .assistant, text: reply.answer, sources: reply.sources))
             state = .idle
         } catch {
-            messages.append(ChatMessage(role: .assistant, text: "Sorry — I couldn't answer that. (\(error.localizedDescription))"))
+            // The on-device safety guardrail can false-positive on short/ambiguous
+            // prompts — soften that instead of showing the raw "unsafe" text.
+            let desc = error.localizedDescription.lowercased()
+            let friendly = (desc.contains("unsafe") || desc.contains("guardrail") || desc.contains("safety"))
+                ? "I couldn't answer that one — try rephrasing, or ask with a bit more detail."
+                : "Sorry — I couldn't answer that right now."
+            messages.append(ChatMessage(role: .assistant, text: friendly))
             state = .idle
         }
     }

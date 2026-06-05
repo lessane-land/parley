@@ -60,7 +60,9 @@ struct NoteListView: View {
                         onPick: openMeeting
                     )
                 }
-                .sheet(isPresented: $showingAsk) {
+                // Compact (iPhone): Ask is a sheet. On regular width it's the inline
+                // column in `home` instead (the binding suppresses the sheet there).
+                .sheet(isPresented: compactAsk) {
                     NavigationStack {
                         ChatView(theme: theme)
                             .navigationTitle("Ask Parley")
@@ -77,7 +79,8 @@ struct NoteListView: View {
         }
         .tint(theme.accent)
         #if !os(macOS)
-        .sheet(isPresented: $showingSettings) {
+        // Compact: Settings is a sheet; on regular width it's the slide-over.
+        .sheet(isPresented: compactSettings) {
             NavigationStack {
                 SettingsView()
                     .navigationTitle("Settings")
@@ -101,20 +104,95 @@ struct NoteListView: View {
         #endif
     }
 
+    // On regular width the panels are shown aside (column / slide-over), so these
+    // suppress the sheets there and only present them on compact (iPhone).
+    private var compactAsk: Binding<Bool> {
+        Binding(get: { showingAsk && !isRegular }, set: { showingAsk = $0 })
+    }
+    private var compactSettings: Binding<Bool> {
+        Binding(get: { showingSettings && !isRegular }, set: { showingSettings = $0 })
+    }
+
     /// The dashboard: rail + grid side by side on iPad/Mac; just the grid on
     /// iPhone (filters move to the toolbar). Opening a note pushes it full-screen.
     @ViewBuilder
     private var home: some View {
         if isRegular {
+            // iPad/Mac: rail + grid, with Ask as an inline right column and Settings
+            // as a right slide-over — both "aside", not modal sheets.
             HStack(spacing: 0) {
                 rail.frame(width: 268)
-                Rectangle().fill(theme.line).frame(width: theme.borderWidth)
+                verticalDivider
                 grid
+                if showingAsk {
+                    verticalDivider
+                    chatColumn.transition(.move(edge: .trailing))
+                }
             }
+            .overlay { settingsSlideOver }
         } else {
             grid
                 .searchable(text: $searchText)
         }
+    }
+
+    private var verticalDivider: some View {
+        Rectangle().fill(theme.line).frame(width: theme.borderWidth)
+    }
+
+    /// Ask Parley as an inline right column (iPad/Mac).
+    private var chatColumn: some View {
+        VStack(spacing: 0) {
+            panelHeader("Ask Parley") { withAnimation(.snappy) { showingAsk = false } }
+            ChatView(theme: theme)
+        }
+        .frame(width: 380)
+        .background(theme.paperSunk)
+    }
+
+    /// Settings as a right slide-over with a dimming scrim (iPad/Mac).
+    @ViewBuilder
+    private var settingsSlideOver: some View {
+        if showingSettings {
+            ZStack(alignment: .trailing) {
+                Color.black.opacity(0.34)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation(.snappy) { showingSettings = false } }
+                    .transition(.opacity)
+
+                VStack(spacing: 0) {
+                    panelHeader("Settings") { withAnimation(.snappy) { showingSettings = false } }
+                    SettingsView()
+                }
+                .frame(width: 392)
+                .background(theme.paperRaised)
+                .overlay(alignment: .leading) { verticalDivider }
+                .transition(.move(edge: .trailing))
+            }
+        }
+    }
+
+    /// A panel header (title + close) for the side panels.
+    private func panelHeader(_ title: String, close: @escaping () -> Void) -> some View {
+        HStack {
+            Text(title)
+                .font(theme.titleFont(20, relativeTo: .title3))
+                .tracking(theme.titleTracking)
+                .textCase(theme.titleUppercase ? .uppercase : nil)
+                .foregroundStyle(theme.ink)
+            Spacer()
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.inkSoft)
+                    .frame(width: 30, height: 30)
+                    .background(theme.paperSunk, in: Circle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(theme.paperRaised)
+        .overlay(alignment: .bottom) { Rectangle().fill(theme.line).frame(height: theme.borderWidth) }
     }
 
     private var grid: some View {
@@ -130,11 +208,11 @@ struct NoteListView: View {
     @ToolbarContentBuilder
     private var homeToolbar: some ToolbarContent {
         ToolbarItem { Button(action: addNote) { Label("New Note", systemImage: "square.and.pencil") } }
-        ToolbarItem { Button { showingAsk = true } label: { Label("Ask Parley", systemImage: "sparkles") } }
+        ToolbarItem { Button { withAnimation(.snappy) { showingAsk.toggle() } } label: { Label("Ask Parley", systemImage: "sparkles") } }
         ToolbarItem { Button { openToday() } label: { Label("Today's Meetings", systemImage: "calendar") } }
         #if !os(macOS)
         ToolbarItem(placement: .topBarLeading) {
-            Button { showingSettings = true } label: { Label("Settings", systemImage: "slider.horizontal.3") }
+            Button { withAnimation(.snappy) { showingSettings = true } } label: { Label("Settings", systemImage: "slider.horizontal.3") }
         }
         if !isRegular {
             // On iPhone the rail is hidden, so Record + filters live in the bar.

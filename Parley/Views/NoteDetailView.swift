@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
+import PencilKit
 import UniformTypeIdentifiers
 #if canImport(UIKit)
 import UIKit
@@ -593,6 +594,15 @@ struct NoteDetailView: View {
                 DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw)
                     .id(canvasID)
                     .allowsHitTesting(penMode == .draw)
+            } else if let data = note.drawing {
+                // iPhone (no live canvas): show the handwriting read-only.
+                DrawingImageView(data: data).allowsHitTesting(false)
+            }
+            #else
+            // macOS has no PencilKit input, but it can still *render* the synced
+            // strokes — so handwriting drawn on iPad is visible on the Mac.
+            if let data = note.drawing {
+                DrawingImageView(data: data).allowsHitTesting(false)
             }
             #endif
         }
@@ -835,6 +845,39 @@ struct NoteDetailView: View {
             segments[i].speaker = newName
         }
         note.transcriptSegments = segments
+    }
+}
+
+// MARK: - Read-only handwriting
+
+/// Renders a note's saved handwriting (`PKDrawing`) as a static image, for the
+/// places the live `DrawingCanvas` isn't shown: **macOS** (no Pencil input) and
+/// iPhone. This is what makes ink drawn on iPad visible once it syncs to the Mac.
+/// `PKDrawing` rendering is available on both UIKit and AppKit, so one view serves
+/// every platform.
+struct DrawingImageView: View {
+    let data: Data
+
+    var body: some View {
+        if let drawing = try? PKDrawing(data: data), !drawing.bounds.isNull,
+           let image = render(drawing) {
+            image
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private func render(_ drawing: PKDrawing) -> Image? {
+        // Render from the page origin (not the stroke's own bounding box) so the
+        // ink keeps its position on the page instead of jumping to the corner.
+        let bounds = drawing.bounds
+        let rect = CGRect(x: 0, y: 0, width: max(bounds.maxX, 1), height: max(bounds.maxY, 1))
+        #if canImport(UIKit)
+        return Image(uiImage: drawing.image(from: rect, scale: 2))
+        #elseif canImport(AppKit)
+        return Image(nsImage: drawing.image(from: rect, scale: 2))
+        #endif
     }
 }
 

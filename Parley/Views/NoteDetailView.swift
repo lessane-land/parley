@@ -161,10 +161,7 @@ struct NoteDetailView: View {
             set: { if !$0 { editingSpeakerID = nil } }
         )) {
             TextField("Name", text: $speakerDraft)
-            Button("Save") {
-                if let id = editingSpeakerID { assignSpeaker(id, speakerDraft) }
-                editingSpeakerID = nil
-            }
+            Button("Save") { saveSpeakerName() }
             Button("Cancel", role: .cancel) { editingSpeakerID = nil }
         }
         // Auto-start recording when opened via the Record CTA.
@@ -524,7 +521,8 @@ struct NoteDetailView: View {
             }
             .disabled(transcription.state == .preparing
                       || transcription.state == .downloadingModel
-                      || transcription.state == .finishing)
+                      || transcription.state == .finishing
+                      || transcription.state == .identifyingSpeakers)
         }
     }
 
@@ -533,6 +531,7 @@ struct NoteDetailView: View {
         case .preparing: "Starting…"
         case .downloadingModel: "Downloading…"
         case .finishing: "Stopping…"
+        case .identifyingSpeakers: "Speakers…"
         default: "Record"
         }
     }
@@ -547,6 +546,10 @@ struct NoteDetailView: View {
             if transcription.isRecording {
                 await transcription.stop()
                 note.transcript = transcription.finalizedText
+                note.transcriptSegments = transcription.finalizedSegments
+                // Identify speakers from the recorded audio (no-op without
+                // FluidAudio); persist the labeled segments when it finishes.
+                await transcription.identifySpeakers()
                 note.transcriptSegments = transcription.finalizedSegments
             } else {
                 // Seed the session with the existing transcript. Older notes have
@@ -589,6 +592,28 @@ struct NoteDetailView: View {
     private func promptNewSpeaker(_ id: UUID) {
         speakerDraft = note.transcriptSegments.first { $0.id == id }?.speaker ?? ""
         editingSpeakerID = id
+    }
+
+    /// Commit a typed speaker name. If the line already has a label (e.g. an
+    /// auto-assigned "Speaker 1"), rename *every* line that shares it — so naming
+    /// a diarized speaker once applies everywhere. An unlabeled line names just
+    /// itself.
+    private func saveSpeakerName() {
+        defer { editingSpeakerID = nil }
+        guard let id = editingSpeakerID else { return }
+        let trimmed = speakerDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newName: String? = trimmed.isEmpty ? nil : trimmed
+
+        var segments = note.transcriptSegments
+        guard let target = segments.first(where: { $0.id == id }) else { return }
+        if let current = target.speaker {
+            for i in segments.indices where segments[i].speaker == current {
+                segments[i].speaker = newName
+            }
+        } else if let i = segments.firstIndex(where: { $0.id == id }) {
+            segments[i].speaker = newName
+        }
+        note.transcriptSegments = segments
     }
 }
 

@@ -114,6 +114,10 @@ registered at launch via CoreText.
 
 - The new Speech / Foundation Models APIs are isolated in their services; a call
   signature may need adjusting against the shipping SDK.
+- **Speaker diarization is opt-in**: Apple has no on-device diarization API, so
+  auto speaker labels require the FluidAudio Swift package (on-device Core ML, no
+  cloud). It's compiled only when present (`#if canImport(FluidAudio)`); without
+  it, speakers are labeled by hand. See `HANDOFF.md` ▸ "Enabling speaker diarization".
 - Action-item detection without a summary is a simple heuristic
   (`ActionItemDetector`); the summary path uses the model.
 - Paper/Swiss face pickers await bundling Fraunces / Source Serif 4 / Spectral /

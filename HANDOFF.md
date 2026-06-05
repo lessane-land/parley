@@ -17,6 +17,27 @@ device surfaces** — especially the brand-new WWDC-2025 APIs.
 - 23 Swift files, 19 bundled fonts. Bundle id `com.lessane.Parley`,
   CloudKit container `iCloud.com.lessane.Parley`.
 
+## Enabling speaker diarization (FluidAudio)
+
+Auto speaker detection is **opt-in via a Swift package** and compiled only when
+present (`#if canImport(FluidAudio)` in `TranscriptionService.swift`). Apple ships
+no on-device diarization API; FluidAudio runs Core ML diarization models on the
+ANE — fully on-device, so the privacy rule holds. To turn it on:
+
+1. Xcode ▸ File ▸ **Add Package Dependencies…** → `https://github.com/FluidInference/FluidAudio` → add to the Parley target.
+2. Rebuild. With the package present, each recording is captured to a temp `.caf`,
+   diarized on stop, and lines are auto-labeled "Speaker 1/2/…" (rename any once to
+   relabel the whole speaker). Without the package the app builds and runs exactly
+   as before (manual labeling only).
+3. **Verify these API touchpoints** against the shipping package (isolated in
+   `TranscriptionService.swift`, all under `canImport`): `LSEENDDiarizer(variant: .dihard3)`,
+   `processComplete(audioFileURL:)`, `result.timeline.speakers` (`[Int: DiarizerSpeaker]`),
+   and `DiarizerSegment.startTime/endTime` (assumed `TimeInterval`). Needs a real
+   Apple-Silicon device; models download on first use.
+
+Mapping is timestamp-based (each line's [prev-finalize, finalize] window vs. the
+diarization turns), so labels can be a touch off at boundaries — fine for v1.
+
 ## Working agreement / environment notes
 
 - **Develop on `claude/optimistic-brown-fSPcZ`.** Commit + push there.
@@ -111,12 +132,13 @@ suspects:
    rationale, with legacy `[String]` decoding) alongside `ActionItem`.
 3. **Summary screen done** — promoted from a bottom-bar sheet to a first-class
    *pushed* screen (`navigationDestination(isPresented:)`) with a real back button.
-4. **Transcript speakers done** — transcript is now stored as `TranscriptSegment`s
-   (`Note.transcriptData`, mirrored from the flat `transcript`) carrying a
-   wall-clock timestamp per line; the timeline shows the time + speaker, and a
-   node menu assigns a **free-text** speaker name (quick-pick of names already used
-   in the note, "New name…", or Clear). On-device diarization isn't offered, so
-   speakers stay manual.
+4. **Transcript speakers done** — transcript is stored as `TranscriptSegment`s
+   (`Note.transcriptData`, mirrored from the flat `transcript`) with a wall-clock
+   timestamp per line; the timeline shows time + speaker and a node menu assigns a
+   **free-text** speaker name (quick-pick of names used in the note, "New name…",
+   or Clear). Naming an auto "Speaker N" renames every line of that speaker.
+   **Auto-diarization** (optional, on-device) is wired behind
+   `#if canImport(FluidAudio)`: see "Enabling speaker diarization" below.
 5. **iPhone compact** layout fine-tuning (rail hidden; filters in toolbar — works,
    but could be nicer).
 6. **Tests** — add a unit-test target (do this in Xcode) for: locale resolution

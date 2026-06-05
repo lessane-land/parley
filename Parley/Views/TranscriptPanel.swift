@@ -91,6 +91,7 @@ struct TranscriptPanel: View {
         case .preparing: "Starting…"
         case .downloadingModel: "Downloading model…"
         case .finishing: "Stopping…"
+        case .identifyingSpeakers: "Identifying speakers…"
         default: nil
         }
     }

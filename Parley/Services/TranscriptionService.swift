@@ -1,6 +1,9 @@
 import Foundation
 import AVFoundation
 import Speech
+#if canImport(FluidAudio)
+import FluidAudio   // on-device speaker diarization (Core ML / ANE). Add via SPM.
+#endif
 
 /// On-device live transcription, kept behind one small service (per the project's
 /// "each capability behind its own manager" convention).
@@ -27,6 +30,7 @@ final class TranscriptionService {
         case downloadingModel
         case recording
         case finishing
+        case identifyingSpeakers   // running diarization after a recording
         case denied
         case unavailable(String)
     }
@@ -62,6 +66,15 @@ final class TranscriptionService {
     private var analyzer: SpeechAnalyzer?
     private var continuation: AsyncStream<AnalyzerInput>.Continuation?
     private var resultsTask: Task<Void, Never>?
+
+    // Diarization: the session audio is recorded to a temp file and, on stop,
+    // diarized offline to assign speakers. Kept around `stop()` so the post-stop
+    // `identifySpeakers()` can use it. Harmless when FluidAudio isn't linked.
+    private var diarAudioURL: URL?
+    private var diarSessionStart: Date?
+    #if canImport(FluidAudio)
+    private var diarizer: LSEENDDiarizer?   // cached so models load once
+    #endif
 
     // MARK: Start / stop
 
@@ -138,6 +151,7 @@ final class TranscriptionService {
             try startEngine(convertingTo: analyzerFormat)
 
             startedAt = Date()
+            diarSessionStart = startedAt
             state = .recording
         } catch {
             state = .unavailable(error.localizedDescription)
@@ -204,7 +218,16 @@ final class TranscriptionService {
         let continuation = self.continuation
         let converter = BufferConverter()
 
+        // Record the session audio to a temp file for offline diarization. Only
+        // when FluidAudio is linked (otherwise there's nothing to diarize).
+        #if canImport(FluidAudio)
+        let diarFile = makeDiarFile(format: inputFormat)
+        #endif
+
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in
+            #if canImport(FluidAudio)
+            try? diarFile?.write(from: buffer)
+            #endif
             guard let continuation else { return }
             if let analyzerFormat {
                 if let converted = try? converter.convert(buffer, to: analyzerFormat) {
@@ -242,6 +265,104 @@ final class TranscriptionService {
         transcriber = nil
         resultsTask = nil
     }
+
+    // MARK: Speaker diarization (FluidAudio, on-device)
+
+    /// Run after `stop()`. Diarizes the recorded session audio and labels each
+    /// transcript segment with "Speaker N" by time overlap. Best-effort: on any
+    /// failure (or when FluidAudio isn't linked) it simply leaves segments as-is,
+    /// so manual labeling still works. Never overwrites a custom (renamed) speaker.
+    func identifySpeakers() async {
+        #if canImport(FluidAudio)
+        guard let url = diarAudioURL, let sessionStart = diarSessionStart else { return }
+        defer { cleanupDiarAudio() }
+        guard !finalizedSegments.isEmpty else { return }
+
+        state = .identifyingSpeakers
+        do {
+            let engine: LSEENDDiarizer
+            if let cached = diarizer {
+                engine = cached
+            } else {
+                engine = try await LSEENDDiarizer(variant: .dihard3)
+                diarizer = engine
+            }
+            let result = try await engine.processComplete(audioFileURL: url)
+            applySpeakers(turns: Self.turns(from: result), sessionStart: sessionStart)
+        } catch {
+            // Diarization is a bonus; keep the transcript even if it fails.
+        }
+        state = .idle
+        #endif
+    }
+
+    #if canImport(FluidAudio)
+    private struct Turn { let slot: Int; let start: Double; let end: Double }
+
+    private func makeDiarFile(format: AVAudioFormat) -> AVAudioFile? {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("parley-diar-\(UUID().uuidString).caf")
+        guard let file = try? AVAudioFile(forWriting: url, settings: format.settings) else { return nil }
+        diarAudioURL = url
+        return file
+    }
+
+    private func cleanupDiarAudio() {
+        if let url = diarAudioURL { try? FileManager.default.removeItem(at: url) }
+        diarAudioURL = nil
+        diarSessionStart = nil
+    }
+
+    /// Flatten the diarization result into time-ordered speaker turns.
+    private static func turns(from result: DiarizationResult) -> [Turn] {
+        var turns: [Turn] = []
+        for (slot, speaker) in result.timeline.speakers {
+            for seg in speaker.finalizedSegments {
+                turns.append(Turn(slot: slot, start: seg.startTime, end: seg.endTime))
+            }
+        }
+        return turns.sorted { $0.start < $1.start }
+    }
+
+    /// Assign "Speaker N" to each segment by which speaker dominates the audio
+    /// window in which that line was spoken. Each finalized line's window is
+    /// approximated as [previous finalize, this finalize] relative to the session
+    /// start — no dependency on the WWDC audio-time API.
+    private func applySpeakers(turns: [Turn], sessionStart: Date) {
+        guard !turns.isEmpty else { return }
+        // Stable display numbers: sort distinct slots, number them 1…k.
+        let numberForSlot = Dictionary(
+            uniqueKeysWithValues: Set(turns.map(\.slot)).sorted().enumerated().map { ($1, $0 + 1) }
+        )
+
+        var previousOffset = 0.0
+        for index in finalizedSegments.indices {
+            guard let at = finalizedSegments[index].at else { continue }
+            let offset = max(previousOffset, at.timeIntervalSince(sessionStart))
+            defer { previousOffset = offset }
+
+            var overlapBySlot: [Int: Double] = [:]
+            for turn in turns {
+                let overlap = min(offset, turn.end) - max(previousOffset, turn.start)
+                if overlap > 0 { overlapBySlot[turn.slot, default: 0] += overlap }
+            }
+            guard let slot = overlapBySlot.max(by: { $0.value < $1.value })?.key,
+                  let number = numberForSlot[slot] else { continue }
+
+            // Don't clobber a name the user typed; only (re)set the auto labels.
+            let current = finalizedSegments[index].speaker
+            if current == nil || Self.isAutoSpeakerLabel(current!) {
+                finalizedSegments[index].speaker = "Speaker \(number)"
+            }
+        }
+    }
+
+    /// True for the auto-generated "Speaker 3" form (so we never overwrite a name
+    /// the user typed).
+    static func isAutoSpeakerLabel(_ name: String) -> Bool {
+        name.range(of: #"^Speaker \d+$"#, options: .regularExpression) != nil
+    }
+    #endif
 
     /// Pick a supported locale for transcription.
     ///

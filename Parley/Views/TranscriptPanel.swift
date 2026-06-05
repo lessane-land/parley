@@ -17,7 +17,9 @@ struct TranscriptPanel: View {
     let startedAt: Date?
     var languageLabel: String? = nil   // active transcription locale, e.g. "EN-US"
     var canLabelSpeakers: Bool = false      // tap a node to set a speaker
-    var onCycleSpeaker: ((UUID) -> Void)? = nil
+    var knownSpeakers: [String] = []        // names already used in this note (quick-pick)
+    var onAssignSpeaker: ((UUID, String?) -> Void)? = nil   // pick an existing name, or clear (nil)
+    var onNewSpeaker: ((UUID) -> Void)? = nil               // ask the owner to prompt for a new name
 
     private var isRecording: Bool { state == .recording }
 
@@ -152,10 +154,18 @@ struct TranscriptPanel: View {
             nodeColumn(active: active, speaker: speaker, isLast: isLast, id: id)
 
             VStack(alignment: .leading, spacing: 3) {
-                if let time {
-                    Text(time, format: .dateTime.hour().minute())
-                        .font(theme.monoFont(9.5, relativeTo: .caption2))
-                        .foregroundStyle(theme.inkFaint)
+                if time != nil || speaker != nil {
+                    HStack(spacing: 5) {
+                        if let time {
+                            Text(time, format: .dateTime.hour().minute())
+                                .foregroundStyle(theme.inkFaint)
+                        }
+                        if let speaker {
+                            if time != nil { Text("·").foregroundStyle(theme.inkFaint) }
+                            Text(speaker).foregroundStyle(theme.accentInk)
+                        }
+                    }
+                    .font(theme.monoFont(9.5, relativeTo: .caption2))
                 }
                 Text(text)
                     .font(theme.bodyFont(density.bodySize, relativeTo: .body))
@@ -167,8 +177,9 @@ struct TranscriptPanel: View {
         }
     }
 
-    /// The spine + node. When a segment has a speaker the node shows its initial;
-    /// tapping the node cycles the speaker (only when `canLabelSpeakers`).
+    /// The spine + node. A segment with a speaker shows its initials; when
+    /// `canLabelSpeakers`, the node is a menu to pick an existing name, add a new
+    /// one, or clear it.
     private func nodeColumn(active: Bool, speaker: String?, isLast: Bool, id: UUID?) -> some View {
         let labelable = canLabelSpeakers && id != nil && !active
         return ZStack(alignment: .top) {
@@ -177,12 +188,44 @@ struct TranscriptPanel: View {
                 .frame(width: 1.5)
                 .frame(maxHeight: isLast ? 9 : .infinity, alignment: .top)
 
+            if labelable, let id {
+                Menu {
+                    speakerMenu(id: id, current: speaker)
+                } label: {
+                    nodeBadge(active: active, speaker: speaker)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Set speaker")
+            } else {
+                nodeBadge(active: active, speaker: speaker)
+            }
+        }
+        .frame(width: 18)
+    }
+
+    @ViewBuilder
+    private func speakerMenu(id: UUID, current: String?) -> some View {
+        ForEach(knownSpeakers, id: \.self) { name in
+            Button { onAssignSpeaker?(id, name) } label: {
+                if name == current { Label(name, systemImage: "checkmark") } else { Text(name) }
+            }
+        }
+        if !knownSpeakers.isEmpty { Divider() }
+        Button { onNewSpeaker?(id) } label: { Label("New name…", systemImage: "person.badge.plus") }
+        if current != nil {
+            Button(role: .destructive) { onAssignSpeaker?(id, nil) } label: { Label("Clear", systemImage: "xmark") }
+        }
+    }
+
+    private func nodeBadge(active: Bool, speaker: String?) -> some View {
+        Group {
             if let speaker, !active {
                 Circle()
                     .fill(theme.accentTint)
                     .overlay(Circle().strokeBorder(theme.accent, lineWidth: 1.5))
-                    .overlay(Text(speaker).font(theme.monoFont(8, relativeTo: .caption2)).foregroundStyle(theme.accentInk))
-                    .frame(width: 16, height: 16)
+                    .overlay(Text(Self.initials(speaker)).font(theme.monoFont(8, relativeTo: .caption2)).foregroundStyle(theme.accentInk))
+                    .frame(width: 18, height: 18)
             } else {
                 Circle()
                     .fill(active ? theme.accent : theme.paperSunk)
@@ -191,11 +234,12 @@ struct TranscriptPanel: View {
                     .padding(.top, 2)
             }
         }
-        .frame(width: 16)
-        .contentShape(Rectangle())
-        .onTapGesture { if labelable, let id { onCycleSpeaker?(id) } }
-        .accessibilityAddTraits(labelable ? .isButton : [])
-        .accessibilityLabel(labelable ? "Set speaker" : "")
+    }
+
+    /// Up to two initials from a speaker name ("Vanesa Lessane" → "VL").
+    static func initials(_ name: String) -> String {
+        let letters = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+        return (letters.isEmpty ? String(name.prefix(1)) : letters).uppercased()
     }
 
     /// Locale-aware sentence segmentation for the timeline nodes.

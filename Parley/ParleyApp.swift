@@ -28,9 +28,9 @@ struct ParleyApp: App {
         AppFonts.registerAll()
         _themeManager = State(initialValue: ThemeManager())
 
-        let (container, cloudEnabled) = Self.makeModelContainer()
+        let (container, cloudEnabled, reason) = Self.makeModelContainer()
         modelContainer = container
-        _syncMonitor = State(initialValue: SyncMonitor(cloudEnabled: cloudEnabled))
+        _syncMonitor = State(initialValue: SyncMonitor(cloudEnabled: cloudEnabled, fallbackReason: reason))
     }
 
     /// Builds the SwiftData container with CloudKit sync (private database), and
@@ -42,16 +42,22 @@ struct ParleyApp: App {
     /// properties optional or defaulted, no unique constraints — which `Note`
     /// satisfies) and the iCloud + CloudKit entitlements are present. `.automatic`
     /// uses the container declared in the entitlements.
-    private static func makeModelContainer() -> (ModelContainer, Bool) {
+    private static func makeModelContainer() -> (ModelContainer, Bool, String?) {
         let schema = Schema([Note.self, Tag.self])
         let cloudConfig = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
-        if let container = try? ModelContainer(for: schema, configurations: cloudConfig) {
-            return (container, true)
+        do {
+            let container = try ModelContainer(for: schema, configurations: cloudConfig)
+            return (container, true, nil)
+        } catch {
+            // CloudKit unavailable (not signed in, no entitlement yet, Simulator,
+            // or a model that isn't CloudKit-compatible): keep working locally, but
+            // carry the reason so the sync chip can explain instead of going quiet.
+            let reason = error.localizedDescription
+            let localConfig = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
+            let container = (try? ModelContainer(for: schema, configurations: localConfig))
+                ?? (try! ModelContainer(for: schema))
+            return (container, false, reason)
         }
-        // CloudKit unavailable (not signed in, no entitlement yet, Simulator): keep working locally.
-        let localConfig = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
-        return ((try? ModelContainer(for: schema, configurations: localConfig))
-            ?? (try! ModelContainer(for: schema)), false)
     }
 
     var body: some Scene {

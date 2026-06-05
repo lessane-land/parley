@@ -37,6 +37,10 @@ struct NoteDetailView: View {
     @State private var showingNewTag = false
     @State private var newTagName = ""
 
+    /// Free-text speaker naming: the segment being named + the draft text.
+    @State private var editingSpeakerID: UUID?
+    @State private var speakerDraft = ""
+
     /// One enum-driven sheet so multiple `.sheet`s don't fight.
     @State private var activeSheet: DetailSheet?
 
@@ -50,7 +54,9 @@ struct NoteDetailView: View {
     }
 
     /// On iPad, the notes surface is either keyboard (Type) or Pencil (Draw).
-    @State private var penMode: PenMode = .type
+    /// Defaults to Draw — on iPad that's the Pencil-first experience; on Mac/iPhone
+    /// there's no canvas so `typedActive` keeps typing working regardless.
+    @State private var penMode: PenMode = .draw
     private enum PenMode: Hashable { case type, draw }
 
     /// Notes ⟷ transcript layout (order + split ratio) is a persisted preference
@@ -149,6 +155,17 @@ struct NoteDetailView: View {
             TextField("Name", text: $newTagName)
             Button("Add") { createTag() }
             Button("Cancel", role: .cancel) {}
+        }
+        .alert("Speaker name", isPresented: Binding(
+            get: { editingSpeakerID != nil },
+            set: { if !$0 { editingSpeakerID = nil } }
+        )) {
+            TextField("Name", text: $speakerDraft)
+            Button("Save") {
+                if let id = editingSpeakerID { assignSpeaker(id, speakerDraft) }
+                editingSpeakerID = nil
+            }
+            Button("Cancel", role: .cancel) { editingSpeakerID = nil }
         }
         // Auto-start recording when opened via the Record CTA.
         .onAppear {
@@ -451,7 +468,9 @@ struct NoteDetailView: View {
             startedAt: transcription.startedAt,
             languageLabel: transcription.activeLanguageLabel,
             canLabelSpeakers: !transcription.isRecording,
-            onCycleSpeaker: cycleSpeaker
+            knownSpeakers: knownSpeakers,
+            onAssignSpeaker: assignSpeaker,
+            onNewSpeaker: promptNewSpeaker
         )
     }
 
@@ -546,18 +565,30 @@ struct NoteDetailView: View {
         }
     }
 
-    /// Cycle a segment's speaker label by hand (A → B → C → D → none). On-device
-    /// diarization isn't offered, so labeling is manual. Only allowed when not
-    /// recording, so it never races the live segment stream.
-    private func cycleSpeaker(_ id: UUID) {
+    /// Speaker names already used in this note (for the quick-pick menu), distinct
+    /// and alphabetized.
+    private var knownSpeakers: [String] {
+        let names = note.transcriptSegments.compactMap(\.speaker).filter { !$0.isEmpty }
+        return Array(Set(names)).sorted()
+    }
+
+    /// Assign (or clear, with `nil`) a segment's speaker by hand. On-device
+    /// diarization isn't offered, so labeling is manual; gated to not-recording so
+    /// it never races the live segment stream.
+    private func assignSpeaker(_ id: UUID, _ name: String?) {
         guard !transcription.isRecording else { return }
-        let order: [String?] = ["A", "B", "C", "D", nil]
         var segments = note.transcriptSegments
         guard let index = segments.firstIndex(where: { $0.id == id }) else { return }
-        let current = segments[index].speaker
-        let next = order[((order.firstIndex(of: current) ?? order.count - 1) + 1) % order.count]
-        segments[index].speaker = next
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        segments[index].speaker = (trimmed?.isEmpty ?? true) ? nil : trimmed
         note.transcriptSegments = segments
+    }
+
+    /// Open the free-text prompt to name the speaker for a segment, seeded with
+    /// its current name.
+    private func promptNewSpeaker(_ id: UUID) {
+        speakerDraft = note.transcriptSegments.first { $0.id == id }?.speaker ?? ""
+        editingSpeakerID = id
     }
 }
 

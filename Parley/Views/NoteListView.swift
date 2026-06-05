@@ -355,6 +355,8 @@ private struct SyncStatusChip: View {
             Image(systemName: icon)
                 .symbolEffect(.rotate, options: .repeating, isActive: isSyncing)
             Text(label)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(theme.monoFont(10.5, relativeTo: .caption2))
         .foregroundStyle(isError ? theme.rec : theme.inkFaint)
@@ -383,7 +385,7 @@ private struct SyncStatusChip: View {
         case .idle:      "iCloud"
         case .syncing:   "Syncing…"
         case .synced:    "Synced"
-        case .error:     "Sync issue"
+        case .error(let message): message
         }
     }
 }

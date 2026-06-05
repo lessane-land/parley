@@ -14,11 +14,16 @@ final class Note {
     /// Our own stable identifier (required by the Phase 0 spec). This is separate
     /// from SwiftData's internal `persistentModelID`; having an explicit `UUID`
     /// is handy later for syncing and for referencing a note across devices.
-    var id: UUID
+    ///
+    /// NOTE: these declaration-level defaults are **required for CloudKit**.
+    /// `NSPersistentCloudKitContainer` insists every attribute be optional or have
+    /// a default *on the property itself* — an `init` default doesn't count. Without
+    /// them the CloudKit store fails to open and silently runs local-only (no sync).
+    var id: UUID = UUID()
 
-    var title: String
-    var body: String
-    var createdAt: Date
+    var title: String = ""
+    var body: String = ""
+    var createdAt: Date = .now
 
     /// The live, on-device transcript captured while recording. Kept separate
     /// from `body` (the user's own notes) so we can merge them into a summary

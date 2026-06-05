@@ -79,7 +79,12 @@ suspects:
 4. **CloudKit** — needs the iCloud/CloudKit capability + container provisioned on
    your paid team (see README "Setup"); test sync across two devices on the same
    Apple ID. Foundation Models + Speech also need a real, Apple-Intelligence-
-   capable device.
+   capable device. **Fixed:** `Note`'s `id/title/body/createdAt` lacked
+   declaration-level defaults, so the CloudKit store failed to open and silently
+   ran local-only — they now default on the property (CloudKit requires every
+   attribute optional-or-defaulted). `SyncMonitor` now also reports the iCloud
+   account status + the container-open failure reason on the sync chip, so a
+   misconfig reads as a concrete message instead of a quiet "On this device".
 
 ## Device test checklist
 
@@ -108,9 +113,10 @@ suspects:
    *pushed* screen (`navigationDestination(isPresented:)`) with a real back button.
 4. **Transcript speakers done** — transcript is now stored as `TranscriptSegment`s
    (`Note.transcriptData`, mirrored from the flat `transcript`) carrying a
-   wall-clock timestamp per line; the timeline shows the time and lets you tap a
-   node to cycle a manual speaker label (A/B/C/D). On-device diarization isn't
-   offered, so speakers stay manual. Possible follow-up: free-text speaker names.
+   wall-clock timestamp per line; the timeline shows the time + speaker, and a
+   node menu assigns a **free-text** speaker name (quick-pick of names already used
+   in the note, "New name…", or Clear). On-device diarization isn't offered, so
+   speakers stay manual.
 5. **iPhone compact** layout fine-tuning (rail hidden; filters in toolbar — works,
    but could be nicer).
 6. **Tests** — add a unit-test target (do this in Xcode) for: locale resolution

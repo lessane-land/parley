@@ -287,8 +287,9 @@ final class TranscriptionService {
                 engine = try await LSEENDDiarizer(variant: .dihard3)
                 diarizer = engine
             }
-            let result = try await engine.processComplete(audioFileURL: url)
-            applySpeakers(turns: Self.turns(from: result), sessionStart: sessionStart)
+            // processComplete is throwing-but-synchronous and returns the timeline.
+            let timeline = try engine.processComplete(audioFileURL: url)
+            applySpeakers(turns: Self.turns(from: timeline), sessionStart: sessionStart)
         } catch {
             // Diarization is a bonus; keep the transcript even if it fails.
         }
@@ -313,12 +314,13 @@ final class TranscriptionService {
         diarSessionStart = nil
     }
 
-    /// Flatten the diarization result into time-ordered speaker turns.
-    private static func turns(from result: DiarizationResult) -> [Turn] {
+    /// Flatten the diarization timeline into time-ordered speaker turns.
+    /// (`DiarizerSegment.startTime/endTime` are `Float` seconds.)
+    private static func turns(from timeline: DiarizerTimeline) -> [Turn] {
         var turns: [Turn] = []
-        for (slot, speaker) in result.timeline.speakers {
+        for (slot, speaker) in timeline.speakers {
             for seg in speaker.finalizedSegments {
-                turns.append(Turn(slot: slot, start: seg.startTime, end: seg.endTime))
+                turns.append(Turn(slot: slot, start: Double(seg.startTime), end: Double(seg.endTime)))
             }
         }
         return turns.sorted { $0.start < $1.start }

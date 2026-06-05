@@ -29,10 +29,11 @@ ANE — fully on-device, so the privacy rule holds. To turn it on:
    diarized on stop, and lines are auto-labeled "Speaker 1/2/…" (rename any once to
    relabel the whole speaker). Without the package the app builds and runs exactly
    as before (manual labeling only).
-3. **Verify these API touchpoints** against the shipping package (isolated in
-   `TranscriptionService.swift`, all under `canImport`): `LSEENDDiarizer(variant: .dihard3)`,
-   `processComplete(audioFileURL:)`, `result.timeline.speakers` (`[Int: DiarizerSpeaker]`),
-   and `DiarizerSegment.startTime/endTime` (assumed `TimeInterval`). Needs a real
+3. **API shape (verified against the package):** `try await LSEENDDiarizer(variant: .dihard3)`
+   (async init), `try diarizer.processComplete(audioFileURL:)` (throwing but
+   **synchronous**) → **`DiarizerTimeline`**; `timeline.speakers` is
+   `[Int: DiarizerSpeaker]`, each with `finalizedSegments: [DiarizerSegment]`, and
+   `DiarizerSegment.startTime/endTime` are **`Float`** seconds. Needs a real
    Apple-Silicon device; models download on first use.
 
 Mapping is timestamp-based (each line's [prev-finalize, finalize] window vs. the

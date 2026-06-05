@@ -66,6 +66,87 @@ struct TodayMeetingsSheet: View {
     }
 }
 
+/// The in-app Calendar: upcoming meetings grouped by day (not just today). Tapping
+/// one creates (or reopens) a note, like the Today sheet.
+struct CalendarSheet: View {
+    let theme: Theme
+    let meetings: [Meeting]
+    let access: EventKitService.Access
+    let isLoading: Bool
+    let onPick: (Meeting) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private struct DayGroup: Identifiable {
+        let id: Date
+        let items: [Meeting]
+    }
+
+    private var grouped: [DayGroup] {
+        let cal = Calendar.current
+        let dict = Dictionary(grouping: meetings) { cal.startOfDay(for: $0.start) }
+        return dict.keys.sorted().map { DayGroup(id: $0, items: (dict[$0] ?? []).sorted { $0.start < $1.start }) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            content
+                .background(theme.paperSunk)
+                .navigationTitle("Calendar")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isLoading {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if access == .denied {
+            calMessage("Calendar access is off", "Enable it in Settings to see your meetings.", "calendar.badge.exclamationmark")
+        } else if meetings.isEmpty {
+            calMessage("No upcoming meetings", "Nothing scheduled in the next couple of weeks.", "calendar")
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(grouped) { group in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(dayLabel(group.id))
+                                .font(theme.monoFont(11)).tracking(1.2).foregroundStyle(theme.inkSoft)
+                            ForEach(group.items) { meeting in
+                                Button { onPick(meeting); dismiss() } label: { MeetingRow(theme: theme, meeting: meeting) }
+                                    .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+            }
+        }
+    }
+
+    private func dayLabel(_ date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return "TODAY" }
+        if cal.isDateInTomorrow(date) { return "TOMORROW" }
+        return date.formatted(.dateTime.weekday(.wide).month().day()).uppercased()
+    }
+
+    private func calMessage(_ title: String, _ detail: String, _ icon: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: icon).font(.system(size: 32)).foregroundStyle(theme.inkFaint)
+            Text(title).font(theme.titleFont(18, relativeTo: .headline)).foregroundStyle(theme.ink)
+            Text(detail).font(theme.bodyFont(13)).foregroundStyle(theme.inkSoft)
+                .multilineTextAlignment(.center).frame(maxWidth: 260)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(24)
+    }
+}
+
 private struct MeetingRow: View {
     let theme: Theme
     let meeting: Meeting

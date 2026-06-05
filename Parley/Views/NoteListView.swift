@@ -33,6 +33,10 @@ struct NoteListView: View {
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
 
+    @State private var showingReminders = false
+    @State private var reminders: [ReminderItem] = []
+    @State private var loadingReminders = false
+
     private enum Scope: Hashable {
         case all, recent
         case tag(PersistentIdentifier)
@@ -56,12 +60,23 @@ struct NoteListView: View {
                     )
                 }
                 .sheet(isPresented: $showingToday) {
-                    TodayMeetingsSheet(
+                    CalendarSheet(
                         theme: theme,
                         meetings: meetings,
                         access: eventKit.calendarAccess,
                         isLoading: loadingMeetings,
                         onPick: openMeeting
+                    )
+                }
+                .sheet(isPresented: $showingReminders) {
+                    RemindersSheet(
+                        theme: theme,
+                        reminders: reminders,
+                        access: eventKit.remindersAccess,
+                        isLoading: loadingReminders,
+                        onToggle: { id, done in
+                            await eventKit.setReminderCompleted(id: id, completed: done)
+                        }
                     )
                 }
                 // iOS (iPad + iPhone): Ask is a sheet. On macOS it's the inline
@@ -235,7 +250,8 @@ struct NoteListView: View {
     private var homeToolbar: some ToolbarContent {
         ToolbarItem { Button(action: addNote) { Label("New Note", systemImage: "square.and.pencil") } }
         ToolbarItem { Button { withAnimation(.snappy) { showingAsk.toggle() } } label: { Label("Ask Parley", systemImage: "sparkles") } }
-        ToolbarItem { Button { openToday() } label: { Label("Today's Meetings", systemImage: "calendar") } }
+        ToolbarItem { Button { openCalendar() } label: { Label("Calendar", systemImage: "calendar") } }
+        ToolbarItem { Button { openReminders() } label: { Label("Reminders", systemImage: "checklist") } }
         #if os(macOS)
         // macOS: Settings opens as a slide-over aside (toggle).
         ToolbarItem {
@@ -453,12 +469,21 @@ struct NoteListView: View {
         path.append(note)
     }
 
-    private func openToday() {
+    private func openCalendar() {
         showingToday = true
         loadingMeetings = true
         Task {
-            meetings = await eventKit.todaysMeetings()
+            meetings = await eventKit.upcomingMeetings()
             loadingMeetings = false
+        }
+    }
+
+    private func openReminders() {
+        showingReminders = true
+        loadingReminders = true
+        Task {
+            reminders = await eventKit.fetchReminders()
+            loadingReminders = false
         }
     }
 

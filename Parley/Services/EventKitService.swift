@@ -35,7 +35,46 @@ final class EventKitService {
             .map(Meeting.init)
     }
 
+    /// Timed meetings from today through the next `days`, soonest first — for the
+    /// in-app Calendar (not just today).
+    func upcomingMeetings(days: Int = 14) async -> [Meeting] {
+        guard await ensureCalendarAccess() else { return [] }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: Date())
+        guard let end = calendar.date(byAdding: .day, value: days, to: start) else { return [] }
+
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        return store.events(matching: predicate)
+            .filter { !$0.isAllDay }
+            .sorted { $0.startDate < $1.startDate }
+            .map(Meeting.init)
+    }
+
     // MARK: Reminders
+
+    /// The user's reminders (incomplete by default), soonest due first — for the
+    /// in-app Reminders list.
+    func fetchReminders(includingCompleted: Bool = false) async -> [ReminderItem] {
+        guard await ensureRemindersAccess() else { return [] }
+        let predicate = includingCompleted
+            ? store.predicateForReminders(in: nil)
+            : store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil)
+        let reminders: [EKReminder] = await withCheckedContinuation { continuation in
+            _ = store.fetchReminders(matching: predicate) { continuation.resume(returning: $0 ?? []) }
+        }
+        return reminders
+            .sorted { ($0.dueDateComponents?.date ?? .distantFuture) < ($1.dueDateComponents?.date ?? .distantFuture) }
+            .map(ReminderItem.init)
+    }
+
+    /// Mark a reminder complete/incomplete by its identifier.
+    @discardableResult
+    func setReminderCompleted(id: String, completed: Bool) async -> Bool {
+        guard await ensureRemindersAccess() else { return false }
+        guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else { return false }
+        reminder.isCompleted = completed
+        return (try? store.save(reminder, commit: true)) != nil
+    }
 
     /// Saves each title as a reminder in the default list. Returns how many were
     /// written.
@@ -102,6 +141,21 @@ struct Meeting: Identifiable {
         start = event.startDate
         end = event.endDate
         attendees = (event.attendees ?? []).compactMap(\.name)
+    }
+}
+
+/// A plain, view-friendly snapshot of a reminder.
+struct ReminderItem: Identifiable {
+    let id: String
+    let title: String
+    let completed: Bool
+    let due: Date?
+
+    init(_ reminder: EKReminder) {
+        id = reminder.calendarItemIdentifier
+        title = reminder.title ?? "Untitled"
+        completed = reminder.isCompleted
+        due = reminder.dueDateComponents?.date
     }
 }
 

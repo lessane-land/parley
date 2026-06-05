@@ -29,12 +29,15 @@ struct NoteListView: View {
             // SIDEBAR
             List(selection: $selection) {
                 ForEach(notes) { note in
-                    NoteRow(note: note, theme: theme)
+                    NoteRow(note: note, theme: theme, selected: note == selection)
                         .tag(note)
                         .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12))
                 }
                 .onDelete(perform: deleteNotes)
             }
+            .listStyle(.plain)
             .scrollContentBackground(.hidden)   // let the mood's paper show through
             .background(theme.paperSunk)
             .navigationTitle("Notes")
@@ -118,24 +121,44 @@ struct NoteListView: View {
     }
 }
 
-/// A single sidebar row, styled with the current mood's tokens.
+/// A single note card in the sidebar — the design's `.pk-card`: title, a short
+/// snippet, and a date, wrapped in the mood's card shape.
 private struct NoteRow: View {
     let note: Note
     let theme: Theme
+    let selected: Bool
+
+    /// First non-empty line of the body, for the card snippet.
+    private var snippet: String {
+        note.body
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .first
+            .map(String.init) ?? ""
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(note.title.isEmpty ? "New Note" : note.title)
-                .font(theme.titleFont(17, relativeTo: .headline))
+                .font(theme.titleFont(16, relativeTo: .headline))
                 .tracking(theme.titleTracking)
                 .textCase(theme.titleUppercase ? .uppercase : nil)
                 .foregroundStyle(theme.ink)
                 .lineLimit(1)
+
+            if !snippet.isEmpty {
+                Text(snippet)
+                    .font(theme.bodyFont(12.5))
+                    .foregroundStyle(theme.inkSoft)
+                    .lineLimit(2)
+            }
+
             Text(note.createdAt, format: .dateTime.month().day().hour().minute())
-                .font(theme.monoFont(11, relativeTo: .caption))
+                .font(theme.monoFont(10.5, relativeTo: .caption2))
                 .foregroundStyle(theme.inkFaint)
         }
-        .padding(.vertical, 2)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .moodCard(theme, fill: selected ? theme.accentTint : theme.paperRaised, selected: selected)
     }
 }
 

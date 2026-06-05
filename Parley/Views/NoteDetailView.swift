@@ -33,11 +33,17 @@ struct NoteDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("Title", text: $note.title)
-                .font(theme.titleFont(26, relativeTo: .title))
-                .tracking(theme.titleTracking)
-                .foregroundStyle(theme.ink)
-                .textFieldStyle(.plain)
+            VStack(alignment: .leading, spacing: 3) {
+                TextField("Title", text: $note.title)
+                    .font(theme.titleFont(26, relativeTo: .title))
+                    .tracking(theme.titleTracking)
+                    .foregroundStyle(theme.ink)
+                    .textFieldStyle(.plain)
+
+                Text(note.createdAt, format: .dateTime.weekday().month().day().hour().minute())
+                    .font(theme.monoFont(11))
+                    .foregroundStyle(theme.inkFaint)
+            }
 
             // A hairline that takes the mood's line color and thickness.
             Rectangle()
@@ -45,6 +51,11 @@ struct NoteDetailView: View {
                 .frame(height: theme.borderWidth)
 
             typedNotes
+                .padding(.leading, 16)
+                .overlay(alignment: .leading) {
+                    // Notebook margin rule (the design's .pk-notes::before).
+                    Rectangle().fill(theme.accentLine).frame(width: 1)
+                }
                 // On iPad the typed notes share the screen with the canvas, so
                 // cap their height; elsewhere they fill the pane.
                 .frame(maxHeight: showsHandwriting ? 220 : .infinity)

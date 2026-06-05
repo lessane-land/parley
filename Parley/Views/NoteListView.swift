@@ -25,6 +25,7 @@ struct NoteListView: View {
 
     @State private var showingSettings = false
     @State private var showingToday = false
+    @State private var showingAsk = false
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
 
@@ -58,6 +59,20 @@ struct NoteListView: View {
                         isLoading: loadingMeetings,
                         onPick: openMeeting
                     )
+                }
+                .sheet(isPresented: $showingAsk) {
+                    NavigationStack {
+                        ChatView(theme: theme)
+                            .navigationTitle("Ask Parley")
+                            #if os(iOS)
+                            .navigationBarTitleDisplayMode(.inline)
+                            #endif
+                            .toolbar {
+                                ToolbarItem(placement: .confirmationAction) {
+                                    Button("Done") { showingAsk = false }
+                                }
+                            }
+                    }
                 }
         }
         .tint(theme.accent)
@@ -115,6 +130,7 @@ struct NoteListView: View {
     @ToolbarContentBuilder
     private var homeToolbar: some ToolbarContent {
         ToolbarItem { Button(action: addNote) { Label("New Note", systemImage: "square.and.pencil") } }
+        ToolbarItem { Button { showingAsk = true } label: { Label("Ask Parley", systemImage: "sparkles") } }
         ToolbarItem { Button { openToday() } label: { Label("Today's Meetings", systemImage: "calendar") } }
         #if !os(macOS)
         ToolbarItem(placement: .topBarLeading) {

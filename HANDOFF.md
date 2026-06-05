@@ -72,12 +72,16 @@ diarization turns), so labels can be a touch off at boundaries — fine for v1.
   - `SummaryService` — Foundation Models guided generation → `MeetingSummary`
     (overview/decisions/action items+owners/open questions).
   - `SyncMonitor` — CloudKit sync status for the sidebar chip.
+  - `AskService` — "Ask Parley" on-device chat (Foundation Models) grounded in a
+    capped corpus of the user's notes; multi-turn via one `LanguageModelSession`.
 - **Views** (`Views/`): home is a `NavigationStack` with a rail + notes grid
   (`NoteListView` + `NotesGridView`); tapping a note pushes `NoteDetailView`
   full-screen (top-bar record cluster, orientation-aware notes⟷transcript split,
   unified Pencil-over-text canvas, transcript timeline, bottom Summarize bar).
-  Plus `SettingsView`, `TodayMeetingsSheet`, `ActionItemsSheet`, `SummaryView`,
-  `DrawingCanvas`, `TranscriptPanel`.
+  Plus the redesigned `SettingsView` (mood grid w/ `AppIconView`, AI & Summarize),
+  `ChatView` (Ask Parley, opened from the home sparkles button), `TodayMeetingsSheet`,
+  `ActionItemsSheet`, `SummaryView`, `DrawingCanvas`, `TranscriptPanel`. The app
+  icon is the design's squircle "P" mark (Assets ▸ AppIcon).
 
 ## ⚠️ Highest-risk areas to verify on device (do these first)
 

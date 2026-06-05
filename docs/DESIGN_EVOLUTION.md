@@ -57,10 +57,11 @@ Bring the recording experience up to the prototype.
   `drawingPolicy = .pencilOnly` so you type with the keyboard and draw with the
   Pencil on the *same* surface (finger scrolls). Replaces the separate
   handwriting box. Needs careful hit-testing/layout. **L ⚠️**
-- **Transcript polish**: optional **timeline variant** (variant C) with speaker
-  initials; keep the live-line highlight + autoscroll we have. **M**
-- **Speaker labels** ⚠️ — only if the Speech API exposes diarization on-device;
-  otherwise defer. **L ⚠️**
+- ✅ **Transcript polish / speakers** — transcript is stored as timestamped
+  `TranscriptSegment`s; the timeline shows the time per line and a tappable node
+  to cycle a **manual** speaker label (A/B/C/D). Live-line highlight + autoscroll
+  kept. On-device diarization isn't offered, so speakers are manual (a flat-text
+  fallback covers pre-segment notes).
 - **Texture & motion**: paper-grain background, and the design's `rise` / `pulse`
   / `breathe` animations. **S–M**
 

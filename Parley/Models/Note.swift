@@ -44,6 +44,13 @@ final class Note {
     /// Optional → lightweight migration.
     var summaryData: Data?
 
+    /// Structured transcript — `[TranscriptSegment]` encoded as JSON — carrying a
+    /// per-line timestamp and an optional (manually-assigned) speaker. This is an
+    /// *additive* mirror of `transcript` (the flat text stays the source of truth
+    /// for search + the summary); the timeline UI prefers these when present.
+    /// Optional Data → lightweight migration and CloudKit-safe.
+    var transcriptData: Data?
+
     /// Tags attached to this note. Optional to-many (CloudKit requirement); the
     /// inverse is declared on `Tag.notes`.
     var tags: [Tag]?
@@ -60,7 +67,7 @@ final class Note {
     /// convenience: when we add CloudKit sync in a later phase, CloudKit requires
     /// every SwiftData property to be optional or have a default, so starting this
     /// way avoids a migration headache down the road.
-    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "", calendarEventID: String? = nil, startDate: Date? = nil, endDate: Date? = nil, attendees: [String] = [], summaryData: Data? = nil) {
+    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "", calendarEventID: String? = nil, startDate: Date? = nil, endDate: Date? = nil, attendees: [String] = [], summaryData: Data? = nil, transcriptData: Data? = nil) {
         self.id = id
         self.title = title
         self.body = body
@@ -72,5 +79,36 @@ final class Note {
         self.endDate = endDate
         self.attendees = attendees
         self.summaryData = summaryData
+        self.transcriptData = transcriptData
+    }
+
+    /// Decoded transcript segments (empty if none stored). Convenience around the
+    /// JSON in `transcriptData`.
+    var transcriptSegments: [TranscriptSegment] {
+        get {
+            guard let transcriptData else { return [] }
+            return (try? JSONDecoder().decode([TranscriptSegment].self, from: transcriptData)) ?? []
+        }
+        set {
+            transcriptData = newValue.isEmpty ? nil : (try? JSONEncoder().encode(newValue))
+        }
+    }
+}
+
+/// One finalized line of transcript: the text, the wall-clock moment it was
+/// confirmed, and an optional speaker label the user assigns by hand (on-device
+/// diarization isn't offered, so speakers are manual). `Codable` so it persists
+/// inside `Note.transcriptData`; `Identifiable`/`Equatable` for SwiftUI lists.
+struct TranscriptSegment: Codable, Equatable, Identifiable {
+    var id: UUID = UUID()
+    var text: String
+    var at: Date?
+    var speaker: String?
+
+    init(id: UUID = UUID(), text: String, at: Date? = nil, speaker: String? = nil) {
+        self.id = id
+        self.text = text
+        self.at = at
+        self.speaker = speaker
     }
 }

@@ -10,11 +10,14 @@ import SwiftUI
 struct TranscriptPanel: View {
     let theme: Theme
     let density: Density
-    let text: String              // persisted / finalized transcript
+    let text: String              // persisted / finalized transcript (flat fallback)
+    var segments: [TranscriptSegment] = []  // structured transcript (preferred)
     let volatile: String          // in-flight partial (only while recording)
     let state: TranscriptionService.State
     let startedAt: Date?
     var languageLabel: String? = nil   // active transcription locale, e.g. "EN-US"
+    var canLabelSpeakers: Bool = false      // tap a node to set a speaker
+    var onCycleSpeaker: ((UUID) -> Void)? = nil
 
     private var isRecording: Bool { state == .recording }
 
@@ -100,7 +103,7 @@ struct TranscriptPanel: View {
         case .unavailable(let reason):
             message("Transcription unavailable", detail: reason, icon: "exclamationmark.triangle")
         default:
-            if text.isEmpty && volatile.isEmpty {
+            if text.isEmpty && segments.isEmpty && volatile.isEmpty {
                 message("No transcript yet", detail: "Tap Record to capture the conversation, live and on-device.", icon: "waveform")
             } else {
                 transcriptTimeline
@@ -109,18 +112,16 @@ struct TranscriptPanel: View {
     }
 
     /// The design's variant-C transcript: a vertical timeline spine with a node
-    /// per sentence; the live line is the active (accent) node at the bottom.
+    /// per line. Prefers structured `segments` (timestamps + speaker nodes) and
+    /// falls back to sentence-splitting flat `text` (older notes). The live line
+    /// is the active (accent) node at the bottom.
     private var transcriptTimeline: some View {
-        let confirmed = sentences(text)
-        return ScrollViewReader { proxy in
+        ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(confirmed.enumerated()), id: \.offset) { index, sentence in
-                        timelineRow(text: sentence, active: false,
-                                    isLast: index == confirmed.count - 1 && volatile.isEmpty)
-                    }
+                    if segments.isEmpty { fallbackRows } else { segmentRows }
                     if !volatile.isEmpty {
-                        timelineRow(text: volatile, active: true, isLast: true)
+                        timelineRow(text: volatile, time: nil, speaker: nil, active: true, isLast: true, id: nil)
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
@@ -131,29 +132,70 @@ struct TranscriptPanel: View {
         }
     }
 
-    private func timelineRow(text: String, active: Bool, isLast: Bool) -> some View {
+    @ViewBuilder private var segmentRows: some View {
+        ForEach(Array(segments.enumerated()), id: \.element.id) { index, seg in
+            timelineRow(text: seg.text, time: seg.at, speaker: seg.speaker, active: false,
+                        isLast: index == segments.count - 1 && volatile.isEmpty, id: seg.id)
+        }
+    }
+
+    @ViewBuilder private var fallbackRows: some View {
+        let confirmed = sentences(text)
+        ForEach(Array(confirmed.enumerated()), id: \.offset) { index, sentence in
+            timelineRow(text: sentence, time: nil, speaker: nil, active: false,
+                        isLast: index == confirmed.count - 1 && volatile.isEmpty, id: nil)
+        }
+    }
+
+    private func timelineRow(text: String, time: Date?, speaker: String?, active: Bool, isLast: Bool, id: UUID?) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            ZStack(alignment: .top) {
-                // Spine — full row height for connecting rows, a short stub on the last.
-                Rectangle()
-                    .fill(theme.line)
-                    .frame(width: 1.5)
-                    .frame(maxHeight: isLast ? 9 : .infinity, alignment: .top)
+            nodeColumn(active: active, speaker: speaker, isLast: isLast, id: id)
+
+            VStack(alignment: .leading, spacing: 3) {
+                if let time {
+                    Text(time, format: .dateTime.hour().minute())
+                        .font(theme.monoFont(9.5, relativeTo: .caption2))
+                        .foregroundStyle(theme.inkFaint)
+                }
+                Text(text)
+                    .font(theme.bodyFont(density.bodySize, relativeTo: .body))
+                    .foregroundStyle(active ? theme.ink : theme.ink2)
+                    .lineSpacing(density.lineSpacing)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.bottom, 14)
+        }
+    }
+
+    /// The spine + node. When a segment has a speaker the node shows its initial;
+    /// tapping the node cycles the speaker (only when `canLabelSpeakers`).
+    private func nodeColumn(active: Bool, speaker: String?, isLast: Bool, id: UUID?) -> some View {
+        let labelable = canLabelSpeakers && id != nil && !active
+        return ZStack(alignment: .top) {
+            Rectangle()
+                .fill(theme.line)
+                .frame(width: 1.5)
+                .frame(maxHeight: isLast ? 9 : .infinity, alignment: .top)
+
+            if let speaker, !active {
+                Circle()
+                    .fill(theme.accentTint)
+                    .overlay(Circle().strokeBorder(theme.accent, lineWidth: 1.5))
+                    .overlay(Text(speaker).font(theme.monoFont(8, relativeTo: .caption2)).foregroundStyle(theme.accentInk))
+                    .frame(width: 16, height: 16)
+            } else {
                 Circle()
                     .fill(active ? theme.accent : theme.paperSunk)
                     .overlay(Circle().strokeBorder(active ? theme.accent : theme.inkGhost, lineWidth: 2))
                     .frame(width: 11, height: 11)
                     .padding(.top, 2)
             }
-            .frame(width: 11)
-
-            Text(text)
-                .font(theme.bodyFont(density.bodySize, relativeTo: .body))
-                .foregroundStyle(active ? theme.ink : theme.ink2)
-                .lineSpacing(density.lineSpacing)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 14)
         }
+        .frame(width: 16)
+        .contentShape(Rectangle())
+        .onTapGesture { if labelable, let id { onCycleSpeaker?(id) } }
+        .accessibilityAddTraits(labelable ? .isButton : [])
+        .accessibilityLabel(labelable ? "Set speaker" : "")
     }
 
     /// Locale-aware sentence segmentation for the timeline nodes.

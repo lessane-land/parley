@@ -34,9 +34,10 @@ device surfaces** — especially the brand-new WWDC-2025 APIs.
 ## What's built (by area)
 
 - **Models** (`Models/`): `Note` (id, title, body, createdAt, drawing,
-  transcript, calendarEventID, startDate, endDate, attendees, summaryData, tags)
-  and `Tag` (name, colorHex, notes). All CloudKit-safe: every property
-  optional/defaulted, no unique constraints, relationships optional.
+  transcript, transcriptData, calendarEventID, startDate, endDate, attendees,
+  summaryData, tags), `TranscriptSegment` (text/at/speaker, JSON in
+  `transcriptData`), and `Tag` (name, colorHex, notes). All CloudKit-safe: every
+  property optional/defaulted, no unique constraints, relationships optional.
 - **Theme system** (`Theme/`): four moods (Paper/Terminal/Swiss/Neubrutalist)
   resolved into design tokens; per-mood accent/highlight/warmth/face overrides;
   density; mood grids + paper grain; bundled OFL fonts. Driven by
@@ -105,9 +106,11 @@ suspects:
    rationale, with legacy `[String]` decoding) alongside `ActionItem`.
 3. **Summary screen done** — promoted from a bottom-bar sheet to a first-class
    *pushed* screen (`navigationDestination(isPresented:)`) with a real back button.
-4. **Transcript speakers** — store transcript as segments (with optional speaker
-   + timestamp) to show speaker initials on the timeline nodes. (On-device
-   diarization isn't offered; would need a heuristic or manual labeling.)
+4. **Transcript speakers done** — transcript is now stored as `TranscriptSegment`s
+   (`Note.transcriptData`, mirrored from the flat `transcript`) carrying a
+   wall-clock timestamp per line; the timeline shows the time and lets you tap a
+   node to cycle a manual speaker label (A/B/C/D). On-device diarization isn't
+   offered, so speakers stay manual. Possible follow-up: free-text speaker names.
 5. **iPhone compact** layout fine-tuning (rail hidden; filters in toolbar — works,
    but could be nicer).
 6. **Tests** — add a unit-test target (do this in Xcode) for: locale resolution

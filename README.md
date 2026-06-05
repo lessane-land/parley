@@ -43,9 +43,9 @@ Parley/
 │                             registers fonts, injects the shared services.
 ├─ Models/
 │  └─ Note.swift              @Model: id, title, body, createdAt, drawing,
-│                             transcript, calendarEventID, startDate, endDate,
-│                             attendees, summaryData. CloudKit-ready (all
-│                             optional/defaulted, no unique).
+│                             transcript, transcriptData (timestamped segments),
+│                             calendarEventID, startDate, endDate, attendees,
+│                             summaryData. CloudKit-ready (all optional/defaulted).
 ├─ Services/
 │  ├─ TranscriptionService    AVAudioEngine → SpeechAnalyzer/Transcriber.
 │  ├─ EventKitService         Today's meetings (read) + Reminders (write).

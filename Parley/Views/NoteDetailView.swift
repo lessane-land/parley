@@ -119,9 +119,12 @@ struct NoteDetailView: View {
                 onAddReminders: { await eventKit.addReminders($0) }
             )
         }
-        // Persist confirmed transcript text as it streams in.
+        // Persist confirmed transcript text + segments as they stream in.
         .onChange(of: transcription.finalizedText) { _, newValue in
             note.transcript = newValue
+        }
+        .onChange(of: transcription.finalizedSegments) { _, newValue in
+            note.transcriptSegments = newValue
         }
         // Don't leave a session running when switching away from this note.
         .onDisappear {
@@ -129,6 +132,7 @@ struct NoteDetailView: View {
                 Task {
                     await transcription.stop()
                     note.transcript = transcription.finalizedText
+                    note.transcriptSegments = transcription.finalizedSegments
                 }
             }
         }
@@ -441,10 +445,13 @@ struct NoteDetailView: View {
             theme: theme,
             density: density,
             text: note.transcript,
+            segments: note.transcriptSegments,
             volatile: transcription.volatileText,
             state: transcription.state,
             startedAt: transcription.startedAt,
-            languageLabel: transcription.activeLanguageLabel
+            languageLabel: transcription.activeLanguageLabel,
+            canLabelSpeakers: !transcription.isRecording,
+            onCycleSpeaker: cycleSpeaker
         )
     }
 
@@ -521,10 +528,36 @@ struct NoteDetailView: View {
             if transcription.isRecording {
                 await transcription.stop()
                 note.transcript = transcription.finalizedText
+                note.transcriptSegments = transcription.finalizedSegments
             } else {
-                await transcription.start(seed: note.transcript, preferredLanguage: themeManager.transcriptionLanguage)
+                // Seed the session with the existing transcript. Older notes have
+                // flat text but no segments — wrap that as one block so resuming
+                // keeps the prior content visible on the timeline.
+                var seedSegments = note.transcriptSegments
+                if seedSegments.isEmpty, !note.transcript.isEmpty {
+                    seedSegments = [TranscriptSegment(text: note.transcript)]
+                }
+                await transcription.start(
+                    seed: note.transcript,
+                    seedSegments: seedSegments,
+                    preferredLanguage: themeManager.transcriptionLanguage
+                )
             }
         }
+    }
+
+    /// Cycle a segment's speaker label by hand (A → B → C → D → none). On-device
+    /// diarization isn't offered, so labeling is manual. Only allowed when not
+    /// recording, so it never races the live segment stream.
+    private func cycleSpeaker(_ id: UUID) {
+        guard !transcription.isRecording else { return }
+        let order: [String?] = ["A", "B", "C", "D", nil]
+        var segments = note.transcriptSegments
+        guard let index = segments.firstIndex(where: { $0.id == id }) else { return }
+        let current = segments[index].speaker
+        let next = order[((order.firstIndex(of: current) ?? order.count - 1) + 1) % order.count]
+        segments[index].speaker = next
+        note.transcriptSegments = segments
     }
 }
 

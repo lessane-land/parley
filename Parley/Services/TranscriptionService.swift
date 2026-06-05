@@ -34,6 +34,10 @@ final class TranscriptionService {
     private(set) var state: State = .idle
     /// Confirmed text (won't change).
     private(set) var finalizedText: String = ""
+    /// The same confirmed text as timestamped segments (one per finalized line),
+    /// mirrored by the owner into `note.transcriptData`. Additive — `finalizedText`
+    /// stays the flat source of truth.
+    private(set) var finalizedSegments: [TranscriptSegment] = []
     /// The in-flight guess for what's being said right now (updates rapidly).
     private(set) var volatileText: String = ""
     /// When the current session began (for the timer).
@@ -64,9 +68,10 @@ final class TranscriptionService {
     /// Begin a session, seeding with any transcript already on the note so we
     /// append rather than overwrite. `preferredLanguage` is a language code
     /// ("es") to force, or `nil` for Automatic.
-    func start(seed: String, preferredLanguage: String? = nil) async {
+    func start(seed: String, seedSegments: [TranscriptSegment] = [], preferredLanguage: String? = nil) async {
         guard state == .idle || isError else { return }
         finalizedText = seed
+        finalizedSegments = seedSegments
         volatileText = ""
         state = .preparing
 
@@ -225,6 +230,10 @@ final class TranscriptionService {
         let trimmed = piece.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         finalizedText += finalizedText.isEmpty ? trimmed : " " + trimmed
+        // Mirror as a timestamped segment. The time is when the line *finalized*
+        // (a second or two after it was spoken) — robust and dependency-free,
+        // versus the WWDC audio-time API.
+        finalizedSegments.append(TranscriptSegment(text: trimmed, at: Date()))
     }
 
     private func teardown() async {

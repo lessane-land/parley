@@ -227,7 +227,7 @@ struct NoteListView: View {
             notes: filteredNotes,
             onOpen: { path.append($0) },
             onDelete: deleteNote,
-            onTogglePin: { withAnimation(.snappy) { $0.pinned.toggle() } }
+            onTogglePin: { note in withAnimation(.snappy) { note.pinned.toggle() } }
         )
     }
 
@@ -242,7 +242,8 @@ struct NoteListView: View {
             Button { withAnimation(.snappy) { showingSettings.toggle() } } label: { Label("Settings", systemImage: "slider.horizontal.3") }
         }
         #else
-        ToolbarItem(placement: .topBarLeading) {
+        // iPad: Settings on the right with the other actions; iPhone: leading.
+        ToolbarItem(placement: isRegular ? .automatic : .topBarLeading) {
             Button { withAnimation(.snappy) { showingSettings = true } } label: { Label("Settings", systemImage: "slider.horizontal.3") }
         }
         if !isRegular {

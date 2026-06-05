@@ -9,6 +9,10 @@ struct NoteListView: View {
     @Environment(EventKitService.self) private var eventKit
     @Environment(SyncMonitor.self) private var syncMonitor
 
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSize
+    #endif
+
     @Query(sort: \Note.createdAt, order: .reverse) private var notes: [Note]
     @Query(sort: \Tag.name) private var allTags: [Tag]
 
@@ -24,7 +28,7 @@ struct NoteListView: View {
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
 
-    private enum Scope: Equatable {
+    private enum Scope: Hashable {
         case all, recent
         case tag(PersistentIdentifier)
     }
@@ -32,34 +36,13 @@ struct NoteListView: View {
     private var theme: Theme { themeManager.theme }
 
     var body: some View {
-        NavigationSplitView {
-            rail
-        } detail: {
-            NavigationStack(path: $path) {
-                NotesGridView(
-                    theme: theme,
-                    title: scopeTitle,
-                    notes: filteredNotes,
-                    onOpen: { path.append($0) },
-                    onDelete: deleteNote
-                )
+        NavigationStack(path: $path) {
+            home
                 .navigationTitle("")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
-                .toolbar {
-                    ToolbarItem {
-                        Button(action: addNote) { Label("New Note", systemImage: "square.and.pencil") }
-                    }
-                    ToolbarItem {
-                        Button { openToday() } label: { Label("Today's Meetings", systemImage: "calendar") }
-                    }
-                    #if !os(macOS)
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button { showingSettings = true } label: { Label("Settings", systemImage: "slider.horizontal.3") }
-                    }
-                    #endif
-                }
+                .toolbar { homeToolbar }
                 .navigationDestination(for: Note.self) { note in
                     NoteDetailView(
                         note: note,
@@ -76,7 +59,6 @@ struct NoteListView: View {
                         onPick: openMeeting
                     )
                 }
-            }
         }
         .tint(theme.accent)
         #if !os(macOS)
@@ -90,6 +72,67 @@ struct NoteListView: View {
                             Button("Done") { showingSettings = false }
                         }
                     }
+            }
+        }
+        #endif
+    }
+
+    /// Whether to show the side rail (iPad/Mac) or a compact grid (iPhone).
+    private var isRegular: Bool {
+        #if os(macOS)
+        true
+        #else
+        hSize == .regular
+        #endif
+    }
+
+    /// The dashboard: rail + grid side by side on iPad/Mac; just the grid on
+    /// iPhone (filters move to the toolbar). Opening a note pushes it full-screen.
+    @ViewBuilder
+    private var home: some View {
+        if isRegular {
+            HStack(spacing: 0) {
+                rail.frame(width: 268)
+                Rectangle().fill(theme.line).frame(width: theme.borderWidth)
+                grid
+            }
+        } else {
+            grid
+                .searchable(text: $searchText)
+        }
+    }
+
+    private var grid: some View {
+        NotesGridView(
+            theme: theme,
+            title: scopeTitle,
+            notes: filteredNotes,
+            onOpen: { path.append($0) },
+            onDelete: deleteNote
+        )
+    }
+
+    @ToolbarContentBuilder
+    private var homeToolbar: some ToolbarContent {
+        ToolbarItem { Button(action: addNote) { Label("New Note", systemImage: "square.and.pencil") } }
+        ToolbarItem { Button { openToday() } label: { Label("Today's Meetings", systemImage: "calendar") } }
+        #if !os(macOS)
+        ToolbarItem(placement: .topBarLeading) {
+            Button { showingSettings = true } label: { Label("Settings", systemImage: "slider.horizontal.3") }
+        }
+        if !isRegular {
+            // On iPhone the rail is hidden, so Record + filters live in the bar.
+            ToolbarItem { Button(action: createAndRecord) { Label("Record", systemImage: "mic.fill") } }
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    Picker("Filter", selection: $scope) {
+                        Label("All Notes", systemImage: "tray.full").tag(Scope.all)
+                        Label("Recent", systemImage: "clock").tag(Scope.recent)
+                        ForEach(allTags) { tag in Text(tag.name).tag(Scope.tag(tag.persistentModelID)) }
+                    }
+                } label: {
+                    Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                }
             }
         }
         #endif
@@ -140,10 +183,6 @@ struct NoteListView: View {
             SyncStatusChip(theme: theme, status: syncMonitor.status)
         }
         .background(theme.paperSunk)
-        .navigationTitle("")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
     }
 
     private var brandMark: some View {

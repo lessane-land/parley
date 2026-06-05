@@ -10,6 +10,7 @@ struct NoteDetailView: View {
     @Bindable var note: Note
 
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(EventKitService.self) private var eventKit
 
     /// One transcription engine per open note. `@State` keeps it alive for the
     /// view's lifetime; the detail is rebuilt per note (via `.id`), so each note
@@ -19,6 +20,7 @@ struct NoteDetailView: View {
     /// Recreating the canvas (via `.id`) forces a reload — used by "Clear".
     @State private var canvasID = UUID()
     @State private var showClearDrawing = false
+    @State private var showingActionItems = false
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var hSize
@@ -73,6 +75,21 @@ struct NoteDetailView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem {
+                Button { showingActionItems = true } label: {
+                    Label("Action Items", systemImage: "checklist")
+                }
+            }
+        }
+        .sheet(isPresented: $showingActionItems) {
+            ActionItemsSheet(
+                theme: theme,
+                detected: ActionItemDetector.detect(in: note.body + "\n" + note.transcript),
+                access: eventKit.remindersAccess,
+                onAdd: { await eventKit.addReminders($0) }
+            )
+        }
         // Persist confirmed transcript text as it streams in.
         .onChange(of: transcription.finalizedText) { _, newValue in
             note.transcript = newValue

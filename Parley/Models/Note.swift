@@ -25,6 +25,11 @@ final class Note {
     /// later (Phase 4). Has a default, so adding it is a lightweight migration.
     var transcript: String = ""
 
+    /// If this note was created from a calendar event, its identifier — so we
+    /// reuse the same note instead of duplicating it when the meeting is tapped
+    /// again. Optional → lightweight migration.
+    var calendarEventID: String?
+
     /// Handwriting layer (iPad). A `PKDrawing` serialized via its
     /// `dataRepresentation()`. Optional because most notes have no drawing, and
     /// because adding an *optional* property is a SwiftData **lightweight
@@ -37,12 +42,13 @@ final class Note {
     /// convenience: when we add CloudKit sync in a later phase, CloudKit requires
     /// every SwiftData property to be optional or have a default, so starting this
     /// way avoids a migration headache down the road.
-    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "") {
+    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "", calendarEventID: String? = nil) {
         self.id = id
         self.title = title
         self.body = body
         self.createdAt = createdAt
         self.drawing = drawing
         self.transcript = transcript
+        self.calendarEventID = calendarEventID
     }
 }

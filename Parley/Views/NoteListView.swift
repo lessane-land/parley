@@ -10,6 +10,9 @@ struct NoteListView: View {
     /// The shared appearance state (injected in `ParleyApp`).
     @Environment(ThemeManager.self) private var themeManager
 
+    /// Calendar + Reminders (injected in `ParleyApp`).
+    @Environment(EventKitService.self) private var eventKit
+
     /// `@Query` is SwiftData's live-fetch property wrapper. It runs the fetch,
     /// hands us the results, and re-renders automatically when matching data
     /// changes. We sort newest-first.
@@ -21,6 +24,11 @@ struct NoteListView: View {
 
     /// iOS/iPadOS: whether the settings sheet is showing. (macOS uses Cmd-,.)
     @State private var showingSettings = false
+
+    /// Today's-meetings sheet state.
+    @State private var showingToday = false
+    @State private var meetings: [Meeting] = []
+    @State private var loadingMeetings = false
 
     private var theme: Theme { themeManager.theme }
 
@@ -47,6 +55,11 @@ struct NoteListView: View {
                         Label("New Note", systemImage: "square.and.pencil")
                     }
                 }
+                ToolbarItem {
+                    Button { openToday() } label: {
+                        Label("Today's Meetings", systemImage: "calendar")
+                    }
+                }
                 #if !os(macOS)
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showingSettings = true } label: {
@@ -64,6 +77,17 @@ struct NoteListView: View {
                         message: "Tap the compose button to create your first note."
                     )
                 }
+            }
+            // Attached to the sidebar (a different view than the Settings sheet)
+            // so the two sheets don't fight.
+            .sheet(isPresented: $showingToday) {
+                TodayMeetingsSheet(
+                    theme: theme,
+                    meetings: meetings,
+                    access: eventKit.calendarAccess,
+                    isLoading: loadingMeetings,
+                    onPick: createNote(from:)
+                )
             }
         } detail: {
             // DETAIL
@@ -108,6 +132,43 @@ struct NoteListView: View {
         let note = Note()
         context.insert(note)
         selection = note
+    }
+
+    /// Show the meetings sheet and (re)load today's events.
+    private func openToday() {
+        showingToday = true
+        loadingMeetings = true
+        Task {
+            meetings = await eventKit.todaysMeetings()
+            loadingMeetings = false
+        }
+    }
+
+    /// Create a note pre-filled from a meeting — or reopen the existing one.
+    private func createNote(from meeting: Meeting) {
+        if let existing = notes.first(where: { $0.calendarEventID == meeting.id }) {
+            selection = existing
+            return
+        }
+        let note = Note(
+            title: meeting.title,
+            body: meetingHeader(meeting),
+            createdAt: meeting.start,
+            calendarEventID: meeting.id
+        )
+        context.insert(note)
+        selection = note
+    }
+
+    /// The pre-filled header: time range + attendees.
+    private func meetingHeader(_ meeting: Meeting) -> String {
+        let time = meeting.start.formatted(date: .omitted, time: .shortened)
+            + "–" + meeting.end.formatted(date: .omitted, time: .shortened)
+        var lines = [time]
+        if !meeting.attendees.isEmpty {
+            lines.append("With: " + meeting.attendees.joined(separator: ", "))
+        }
+        return lines.joined(separator: "\n") + "\n\n"
     }
 
     /// `onDelete` hands us the offsets of the swiped/edited rows; map them back

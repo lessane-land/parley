@@ -12,6 +12,10 @@ struct ParleyApp: App {
     /// instance for the app's lifetime; we inject it into every scene below.
     @State private var themeManager: ThemeManager
 
+    /// Calendar + Reminders, shared so the list (meetings) and the detail
+    /// (action items → reminders) use one access grant.
+    @State private var eventKit = EventKitService()
+
     init() {
         // Register the bundled fonts before any view renders, so custom faces
         // are available on first paint. Then build the shared theme state.
@@ -22,8 +26,9 @@ struct ParleyApp: App {
     var body: some Scene {
         WindowGroup {
             NoteListView()
-                // Make the manager available to every view via the environment.
+                // Make the managers available to every view via the environment.
                 .environment(themeManager)
+                .environment(eventKit)
                 // Tint (selection, controls) follows the mood's accent…
                 .tint(themeManager.theme.accent)
                 // …and the whole window goes light/dark to match the mood.

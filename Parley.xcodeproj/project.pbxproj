@@ -22,6 +22,9 @@
 		0000000000000000000000A2 /* DrawingCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A1 /* DrawingCanvas.swift */; };
 		0000000000000000000000B2 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000B1 /* TranscriptionService.swift */; };
 		0000000000000000000000B4 /* TranscriptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000B3 /* TranscriptPanel.swift */; };
+		0000000000000000000000C2 /* EventKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C1 /* EventKitService.swift */; };
+		0000000000000000000000C4 /* TodayMeetingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C3 /* TodayMeetingsSheet.swift */; };
+		0000000000000000000000C6 /* ActionItemsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C5 /* ActionItemsSheet.swift */; };
 		000000000000000000000017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000016 /* Assets.xcassets */; };
 		000000000000000000000019 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000018 /* Preview Assets.xcassets */; };
 		000000000000000000000035 /* Archivo-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000034 /* Archivo-Bold.ttf */; };
@@ -54,6 +57,9 @@
 		0000000000000000000000A1 /* DrawingCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DrawingCanvas.swift"; sourceTree = "<group>"; };
 		0000000000000000000000B1 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TranscriptionService.swift"; sourceTree = "<group>"; };
 		0000000000000000000000B3 /* TranscriptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TranscriptPanel.swift"; sourceTree = "<group>"; };
+		0000000000000000000000C1 /* EventKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EventKitService.swift"; sourceTree = "<group>"; };
+		0000000000000000000000C3 /* TodayMeetingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TodayMeetingsSheet.swift"; sourceTree = "<group>"; };
+		0000000000000000000000C5 /* ActionItemsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ActionItemsSheet.swift"; sourceTree = "<group>"; };
 		000000000000000000000015 /* Parley.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Parley.entitlements; sourceTree = "<group>"; };
 		000000000000000000000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		000000000000000000000018 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -119,6 +125,7 @@
 			isa = PBXGroup;
 			children = (
 				0000000000000000000000B1 /* TranscriptionService.swift */,
+				0000000000000000000000C1 /* EventKitService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -131,6 +138,8 @@
 				000000000000000000000032 /* SettingsView.swift */,
 				0000000000000000000000A1 /* DrawingCanvas.swift */,
 				0000000000000000000000B3 /* TranscriptPanel.swift */,
+				0000000000000000000000C3 /* TodayMeetingsSheet.swift */,
+				0000000000000000000000C5 /* ActionItemsSheet.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -281,6 +290,9 @@
 				0000000000000000000000A2 /* DrawingCanvas.swift in Sources */,
 				0000000000000000000000B2 /* TranscriptionService.swift in Sources */,
 				0000000000000000000000B4 /* TranscriptPanel.swift in Sources */,
+				0000000000000000000000C2 /* EventKitService.swift in Sources */,
+				0000000000000000000000C4 /* TodayMeetingsSheet.swift in Sources */,
+				0000000000000000000000C6 /* ActionItemsSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -425,6 +437,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Parley uses the microphone to transcribe your meetings on your device.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Parley adds your action items to Reminders.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Parley adds your action items to Reminders.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Parley transcribes speech to text entirely on your device.";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
@@ -464,6 +480,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Parley uses the microphone to transcribe your meetings on your device.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Parley adds your action items to Reminders.";
+				INFOPLIST_KEY_NSRemindersUsageDescription = "Parley adds your action items to Reminders.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Parley transcribes speech to text entirely on your device.";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";

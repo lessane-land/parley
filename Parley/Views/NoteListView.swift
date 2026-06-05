@@ -326,24 +326,17 @@ struct NoteListView: View {
             path.append(existing)
             return
         }
+        // Meeting metadata lives in real fields now (E4), not prefilled body text,
+        // so the note opens with a clean, empty notes area.
         let note = Note(
             title: meeting.title,
-            body: meetingHeader(meeting),
-            createdAt: meeting.start,
-            calendarEventID: meeting.id
+            calendarEventID: meeting.id,
+            startDate: meeting.start,
+            endDate: meeting.end,
+            attendees: meeting.attendees
         )
         context.insert(note)
         path.append(note)
-    }
-
-    private func meetingHeader(_ meeting: Meeting) -> String {
-        let time = meeting.start.formatted(date: .omitted, time: .shortened)
-            + "–" + meeting.end.formatted(date: .omitted, time: .shortened)
-        var lines = [time]
-        if !meeting.attendees.isEmpty {
-            lines.append("With: " + meeting.attendees.joined(separator: ", "))
-        }
-        return lines.joined(separator: "\n") + "\n\n"
     }
 
     private func deleteNote(_ note: Note) {

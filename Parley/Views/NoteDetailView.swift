@@ -156,7 +156,39 @@ struct NoteDetailView: View {
                 .font(theme.monoFont(11))
                 .foregroundStyle(theme.inkFaint)
 
+            meetingMeta
+
             tagsRow
+        }
+    }
+
+    /// Meeting metadata, read from the note's real fields (E4) rather than parsed
+    /// out of the body. Shown only for notes that came from a calendar event.
+    @ViewBuilder
+    private var meetingMeta: some View {
+        if let start = note.startDate {
+            HStack(spacing: 8) {
+                Label {
+                    if let end = note.endDate {
+                        Text("\(start, format: .dateTime.hour().minute()) – \(end, format: .dateTime.hour().minute())")
+                    } else {
+                        Text(start, format: .dateTime.hour().minute())
+                    }
+                } icon: {
+                    Image(systemName: "clock")
+                }
+
+                if !note.attendees.isEmpty {
+                    Text("·").foregroundStyle(theme.inkFaint)
+                    Label(note.attendees.joined(separator: ", "), systemImage: "person.2")
+                        .lineLimit(1)
+                }
+
+                Text("·").foregroundStyle(theme.inkFaint)
+                Label("Calendar", systemImage: "calendar")
+            }
+            .font(theme.monoFont(11))
+            .foregroundStyle(theme.inkSoft)
         }
     }
 

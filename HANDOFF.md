@@ -34,9 +34,9 @@ device surfaces** — especially the brand-new WWDC-2025 APIs.
 ## What's built (by area)
 
 - **Models** (`Models/`): `Note` (id, title, body, createdAt, drawing,
-  transcript, calendarEventID, summaryData, tags) and `Tag` (name, colorHex,
-  notes). All CloudKit-safe: every property optional/defaulted, no unique
-  constraints, relationships optional.
+  transcript, calendarEventID, startDate, endDate, attendees, summaryData, tags)
+  and `Tag` (name, colorHex, notes). All CloudKit-safe: every property
+  optional/defaulted, no unique constraints, relationships optional.
 - **Theme system** (`Theme/`): four moods (Paper/Terminal/Swiss/Neubrutalist)
   resolved into design tokens; per-mood accent/highlight/warmth/face overrides;
   density; mood grids + paper grain; bundled OFL fonts. Driven by
@@ -99,8 +99,9 @@ suspects:
 ## Pending work (roughly prioritized)
 
 1. **Compile + device-test pass** (above). Most important.
-2. **E4 remainder** — promote meeting metadata (start date, attendees) from
-   prefilled body text to real `Note` fields; consider `Decision` as a type.
+2. **E4 remainder** — meeting metadata (start/end date, attendees) is now promoted
+   to real `Note` fields (rendered as a meta line in the detail header; attendees
+   feed the summary prompt). Still optional: a structured `Decision` type.
 3. **Summary as a pushed screen** (currently a sheet from the bottom bar).
 4. **Transcript speakers** — store transcript as segments (with optional speaker
    + timestamp) to show speaker initials on the timeline nodes. (On-device

@@ -70,7 +70,7 @@ final class SummaryService {
         }
     }
 
-    func summarize(notes: String, transcript: String) async -> MeetingSummary? {
+    func summarize(notes: String, transcript: String, attendees: [String] = []) async -> MeetingSummary? {
         if let message = availabilityMessage() {
             state = .unavailable(message)
             return nil
@@ -85,7 +85,7 @@ final class SummaryService {
         """)
         do {
             let draft = try await session.respond(
-                to: Self.prompt(notes: notes, transcript: transcript),
+                to: Self.prompt(notes: notes, transcript: transcript, attendees: attendees),
                 generating: SummaryDraft.self
             ).content
             state = .idle
@@ -101,15 +101,19 @@ final class SummaryService {
         }
     }
 
-    private static func prompt(notes: String, transcript: String) -> String {
+    private static func prompt(notes: String, transcript: String, attendees: [String]) -> String {
         """
+        ATTENDEES:
+        \(attendees.isEmpty ? "(unknown)" : attendees.joined(separator: ", "))
+
         USER NOTES:
         \(notes.isEmpty ? "(none)" : notes)
 
         TRANSCRIPT:
         \(transcript.isEmpty ? "(none)" : transcript)
 
-        Summarize this meeting.
+        Summarize this meeting. When assigning action-item owners, prefer names \
+        from the attendee list.
         """
     }
 }

@@ -207,7 +207,7 @@ struct SummaryView: View {
 
     private func generate() async {
         remindedTitles = []
-        let result = await service.summarize(notes: note.body, transcript: note.transcript)
+        let result = await service.summarize(notes: note.body, transcript: note.transcript, attendees: note.attendees)
         if let result {
             summary = result
             persist()

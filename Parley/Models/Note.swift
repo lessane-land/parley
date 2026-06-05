@@ -30,6 +30,16 @@ final class Note {
     /// again. Optional → lightweight migration.
     var calendarEventID: String?
 
+    /// Meeting metadata, promoted out of the note `body` into real fields (E4).
+    /// `createdAt` records when the *note* was made; these record when the
+    /// *meeting* runs and who's in it. All optional/defaulted → CloudKit-safe and
+    /// a lightweight migration. `attendees` is a `[String]` of display names;
+    /// SwiftData archives it as an attribute (not a relationship), so an empty
+    /// default is fine.
+    var startDate: Date?
+    var endDate: Date?
+    var attendees: [String] = []
+
     /// The last on-device AI summary (a `MeetingSummary` encoded as JSON).
     /// Optional → lightweight migration.
     var summaryData: Data?
@@ -50,7 +60,7 @@ final class Note {
     /// convenience: when we add CloudKit sync in a later phase, CloudKit requires
     /// every SwiftData property to be optional or have a default, so starting this
     /// way avoids a migration headache down the road.
-    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "", calendarEventID: String? = nil, summaryData: Data? = nil) {
+    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "", calendarEventID: String? = nil, startDate: Date? = nil, endDate: Date? = nil, attendees: [String] = [], summaryData: Data? = nil) {
         self.id = id
         self.title = title
         self.body = body
@@ -58,6 +68,9 @@ final class Note {
         self.drawing = drawing
         self.transcript = transcript
         self.calendarEventID = calendarEventID
+        self.startDate = startDate
+        self.endDate = endDate
+        self.attendees = attendees
         self.summaryData = summaryData
     }
 }

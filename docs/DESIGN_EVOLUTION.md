@@ -9,8 +9,9 @@ Legend: **S** ≈ ½–1 day · **M** ≈ 1–3 days · **L** ≈ 3+ days. ⚠�
 
 **Status:** E1 (home rail + grid; notes open full-screen) ✅ · E2 (top-bar
 record + unified Pencil canvas + bottom Summarize bar + transcript timeline) ✅ ·
-E3 (structured summary) ✅ · E4 (Tag + ActionItem done; meeting metadata as fields
-pending) · E5 (fonts + face pickers + mood grids + paper grain + a11y labels done;
+E3 (structured summary) ✅ · E4 (Tag + ActionItem done; meeting metadata as real
+fields done — `Decision` type still optional) · E5 (fonts + face pickers + mood
+grids + paper grain + a11y labels done;
 iPhone compact, tests, prod CloudKit pending). **Not yet compiled/device-tested —
 see `HANDOFF.md`.**
 
@@ -84,8 +85,9 @@ Underpins E1–E3.
 - `Tag` model + relationship. **S**
 - `ActionItem` (and maybe `Decision`) as structured types persisted on the note.
   **M**
-- Meeting metadata as real fields (`startDate`, `attendees: [String]`) instead of
-  prefilled body text. **S**
+- ✅ Meeting metadata as real fields (`startDate`, `endDate`, `attendees: [String]`)
+  instead of prefilled body text. The detail header renders a meta line (time ·
+  attendees · source) from the fields, and attendees feed the summary prompt.
 - Migration: all additive/optional → SwiftData lightweight migration (and
   CloudKit-safe). **S**
 

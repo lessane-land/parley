@@ -17,10 +17,20 @@ struct NoteDetailView: View {
     /// gets its own clean session.
     @State private var transcription = TranscriptionService()
 
+    /// On-device summarizer (the Granola magic).
+    @State private var summaryService = SummaryService()
+
     /// Recreating the canvas (via `.id`) forces a reload — used by "Clear".
     @State private var canvasID = UUID()
     @State private var showClearDrawing = false
-    @State private var showingActionItems = false
+
+    /// One enum-driven sheet so multiple `.sheet`s don't fight.
+    @State private var activeSheet: DetailSheet?
+
+    private enum DetailSheet: Int, Identifiable {
+        case actionItems, summary
+        var id: Int { rawValue }
+    }
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var hSize
@@ -77,18 +87,33 @@ struct NoteDetailView: View {
         #endif
         .toolbar {
             ToolbarItem {
-                Button { showingActionItems = true } label: {
+                Button { activeSheet = .summary } label: {
+                    Label("Summarize", systemImage: "sparkles")
+                }
+            }
+            ToolbarItem {
+                Button { activeSheet = .actionItems } label: {
                     Label("Action Items", systemImage: "checklist")
                 }
             }
         }
-        .sheet(isPresented: $showingActionItems) {
-            ActionItemsSheet(
-                theme: theme,
-                detected: ActionItemDetector.detect(in: note.body + "\n" + note.transcript),
-                access: eventKit.remindersAccess,
-                onAdd: { await eventKit.addReminders($0) }
-            )
+        .sheet(item: $activeSheet) { which in
+            switch which {
+            case .actionItems:
+                ActionItemsSheet(
+                    theme: theme,
+                    detected: ActionItemDetector.detect(in: note.body + "\n" + note.transcript),
+                    access: eventKit.remindersAccess,
+                    onAdd: { await eventKit.addReminders($0) }
+                )
+            case .summary:
+                SummaryView(
+                    theme: theme,
+                    note: note,
+                    service: summaryService,
+                    onAddReminders: { await eventKit.addReminders($0) }
+                )
+            }
         }
         // Persist confirmed transcript text as it streams in.
         .onChange(of: transcription.finalizedText) { _, newValue in

@@ -30,6 +30,10 @@ final class Note {
     /// again. Optional → lightweight migration.
     var calendarEventID: String?
 
+    /// The last on-device AI summary (a `MeetingSummary` encoded as JSON).
+    /// Optional → lightweight migration.
+    var summaryData: Data?
+
     /// Handwriting layer (iPad). A `PKDrawing` serialized via its
     /// `dataRepresentation()`. Optional because most notes have no drawing, and
     /// because adding an *optional* property is a SwiftData **lightweight
@@ -42,7 +46,7 @@ final class Note {
     /// convenience: when we add CloudKit sync in a later phase, CloudKit requires
     /// every SwiftData property to be optional or have a default, so starting this
     /// way avoids a migration headache down the road.
-    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "", calendarEventID: String? = nil) {
+    init(id: UUID = UUID(), title: String = "", body: String = "", createdAt: Date = .now, drawing: Data? = nil, transcript: String = "", calendarEventID: String? = nil, summaryData: Data? = nil) {
         self.id = id
         self.title = title
         self.body = body
@@ -50,5 +54,6 @@ final class Note {
         self.drawing = drawing
         self.transcript = transcript
         self.calendarEventID = calendarEventID
+        self.summaryData = summaryData
     }
 }

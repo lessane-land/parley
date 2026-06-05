@@ -1,25 +1,44 @@
 import Foundation
 import FoundationModels
 
-/// The structured shape we ask the on-device model to produce.
-///
-/// `@Generable` (Foundation Models, iOS/macOS 26) tells the model to emit this
-/// exact structure via guided generation — no fragile string parsing. Each
-/// `@Guide` description steers a field. We also make it `Codable` so we can
-/// persist the result on the note.
-@Generable
+/// The stored + displayed summary (Codable; persisted on `note.summaryData`).
+/// Action items carry user state (done) on top of the generated content.
 struct MeetingSummary: Codable, Equatable {
+    var overview: String
+    var decisions: [String]
+    var actionItems: [ActionItem]
+    var openQuestions: [String]
+}
+
+/// One action item: the generated task + owner, plus the user's checkbox state.
+struct ActionItem: Codable, Equatable, Identifiable {
+    var id: UUID = UUID()
+    var title: String
+    var owner: String = ""     // empty == no owner mentioned
+    var done: Bool = false
+}
+
+// MARK: - Generation shapes (what the model produces, kept separate from storage)
+
+/// `@Generable` (Foundation Models) — guided generation fills this exact shape.
+@Generable
+private struct SummaryDraft {
     @Guide(description: "A one or two sentence overview of what the meeting was about.")
     var overview: String
-
     @Guide(description: "Concrete decisions that were made. Empty if none.")
     var decisions: [String]
-
-    @Guide(description: "Action items — short imperative tasks, with an owner if one was mentioned. Empty if none.")
-    var actionItems: [String]
-
+    @Guide(description: "Action items from the meeting. Empty if none.")
+    var actions: [ActionDraft]
     @Guide(description: "Open questions or unresolved topics needing follow-up. Empty if none.")
     var openQuestions: [String]
+}
+
+@Generable
+private struct ActionDraft {
+    @Guide(description: "The task as a short imperative phrase.")
+    var title: String
+    @Guide(description: "The person responsible, or empty if none was mentioned.")
+    var owner: String
 }
 
 /// Runs the "Granola magic" entirely on-device: merge the user's sparse notes
@@ -58,8 +77,6 @@ final class SummaryService {
         }
 
         state = .working
-        // Instructions are passed as a string literal so they convert to the
-        // framework's `Instructions` type (which is ExpressibleByStringLiteral).
         let session = LanguageModelSession(instructions: """
         You are a meeting-notes assistant. From a user's sparse notes and a full \
         transcript, produce a clean, faithful summary. Only include information \
@@ -67,12 +84,17 @@ final class SummaryService {
         has nothing, return an empty list.
         """)
         do {
-            let response = try await session.respond(
+            let draft = try await session.respond(
                 to: Self.prompt(notes: notes, transcript: transcript),
-                generating: MeetingSummary.self
-            )
+                generating: SummaryDraft.self
+            ).content
             state = .idle
-            return response.content
+            return MeetingSummary(
+                overview: draft.overview,
+                decisions: draft.decisions,
+                actionItems: draft.actions.map { ActionItem(title: $0.title, owner: $0.owner) },
+                openQuestions: draft.openQuestions
+            )
         } catch {
             state = .unavailable(error.localizedDescription)
             return nil

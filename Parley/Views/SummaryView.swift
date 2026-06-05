@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The "Granola magic" surface: generate (and re-generate) an on-device summary
-/// of a note's typed notes + transcript, and send its action items to Reminders.
+/// of a note's typed notes + transcript. Action items are checkable, carry an
+/// owner, and can be pushed to Reminders individually or all at once.
 struct SummaryView: View {
     let theme: Theme
     @Bindable var note: Note
@@ -10,7 +11,7 @@ struct SummaryView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var summary: MeetingSummary?
-    @State private var remindersAdded: Int?
+    @State private var remindedTitles: Set<String> = []
 
     var body: some View {
         NavigationStack {
@@ -92,39 +93,71 @@ struct SummaryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if !summary.overview.isEmpty {
-                    section("Overview", icon: "text.alignleft") {
-                        Text(summary.overview)
-                            .font(theme.bodyFont(15))
-                            .foregroundStyle(theme.ink2)
-                    }
+                    // Lede — larger, no card, the way the design opens a summary.
+                    Text(summary.overview)
+                        .font(theme.titleFont(20, relativeTo: .title3))
+                        .foregroundStyle(theme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+
                 if !summary.decisions.isEmpty {
-                    section("Decisions", icon: "checkmark.seal") {
-                        bullets(summary.decisions)
-                    }
+                    section("Decisions", icon: "checkmark.seal") { bullets(summary.decisions) }
                 }
+
                 if !summary.actionItems.isEmpty {
-                    section("Action items", icon: "checklist") {
-                        VStack(alignment: .leading, spacing: 10) {
-                            bullets(summary.actionItems)
-                            Button { Task { await addReminders(summary.actionItems) } } label: {
-                                Label(remindersAdded.map { "Added \($0) to Reminders" } ?? "Send to Reminders",
-                                      systemImage: remindersAdded == nil ? "plus.circle" : "checkmark.circle")
-                                    .font(.subheadline.weight(.semibold))
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(theme.accent)
-                            .disabled(remindersAdded != nil)
-                        }
-                    }
+                    section("Action items", icon: "checklist") { actionItemsView(summary) }
                 }
+
                 if !summary.openQuestions.isEmpty {
-                    section("Open questions", icon: "questionmark.circle") {
-                        bullets(summary.openQuestions)
-                    }
+                    section("Open questions", icon: "questionmark.circle") { bullets(summary.openQuestions) }
                 }
             }
             .padding(16)
+        }
+    }
+
+    private func actionItemsView(_ summary: MeetingSummary) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(summary.actionItems) { item in
+                HStack(alignment: .top, spacing: 10) {
+                    Button { toggleDone(item) } label: {
+                        Image(systemName: item.done ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(item.done ? theme.accent : theme.inkFaint)
+                    }
+                    .buttonStyle(.plain)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.title)
+                            .font(theme.bodyFont(15))
+                            .foregroundStyle(item.done ? theme.inkFaint : theme.ink2)
+                            .strikethrough(item.done)
+                        if !item.owner.isEmpty {
+                            Label(item.owner, systemImage: "person")
+                                .font(theme.monoFont(10.5, relativeTo: .caption2))
+                                .foregroundStyle(theme.accentInk)
+                        }
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Button { Task { await remind([item.title]) } } label: {
+                        Image(systemName: remindedTitles.contains(item.title) ? "checkmark.circle" : "bell.badge.plus")
+                            .foregroundStyle(theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(remindedTitles.contains(item.title))
+                }
+            }
+
+            Divider().overlay(theme.line)
+
+            Button { Task { await remind(summary.actionItems.map(\.title)) } } label: {
+                Label("Send all to Reminders", systemImage: "plus.circle")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .tint(theme.accent)
         }
     }
 
@@ -172,15 +205,28 @@ struct SummaryView: View {
     // MARK: Actions
 
     private func generate() async {
-        remindersAdded = nil
+        remindedTitles = []
         let result = await service.summarize(notes: note.body, transcript: note.transcript)
         if let result {
             summary = result
-            note.summaryData = try? JSONEncoder().encode(result)
+            persist()
         }
     }
 
-    private func addReminders(_ items: [String]) async {
-        remindersAdded = await onAddReminders(items)
+    private func toggleDone(_ item: ActionItem) {
+        guard var current = summary,
+              let index = current.actionItems.firstIndex(where: { $0.id == item.id }) else { return }
+        current.actionItems[index].done.toggle()
+        summary = current
+        persist()
+    }
+
+    private func remind(_ titles: [String]) async {
+        let count = await onAddReminders(titles)
+        if count > 0 { remindedTitles.formUnion(titles) }
+    }
+
+    private func persist() {
+        note.summaryData = try? JSONEncoder().encode(summary)
     }
 }

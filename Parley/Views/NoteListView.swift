@@ -375,6 +375,7 @@ struct NoteListView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(theme.accent)
+                    .focusEffectDisabled()   // no stray macOS focus-ring "selected" box
                     .accessibilityLabel("New Note")
                 }
                 searchField

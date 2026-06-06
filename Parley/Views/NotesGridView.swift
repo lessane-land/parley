@@ -105,10 +105,10 @@ struct NotesGridView: View {
             }
         } label: {
             Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 15))
-                .foregroundStyle(theme.accent)
-                .padding(8)
-                .background(theme.accentTint, in: shape)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(9)
+                .background(theme.accent, in: shape)
                 .overlay(shape.strokeBorder(theme.accentLine, lineWidth: theme.borderWidth))
         }
         .menuStyle(.button)
@@ -484,10 +484,11 @@ private struct NotesBoardView: View {
             .onEnded { v in
                 let baseX = note.boardX.map { CGFloat($0) } ?? defaultPos(index).x
                 let baseY = note.boardY.map { CGFloat($0) } ?? defaultPos(index).y
-                // Light grid-snapping on drop so cards line up tidily (less overlap).
-                withAnimation(.snappy(duration: 0.18)) {
-                    note.boardX = Double(snap(max(0, baseX + v.translation.width), step: cellW + gap))
-                    note.boardY = Double(snap(max(0, baseY + v.translation.height), step: cellH + gap))
+                // Fine snapping only — freeform first, with a light tidy-up. Cards can
+                // go all the way to the top (0), so there's no invisible ceiling.
+                withAnimation(.snappy(duration: 0.12)) {
+                    note.boardX = Double(snap(baseX + v.translation.width))
+                    note.boardY = Double(snap(baseY + v.translation.height))
                 }
                 dragID = nil; dragOffset = .zero
             }
@@ -499,25 +500,17 @@ private struct NotesBoardView: View {
             .onEnded { v in
                 let baseW = note.boardW.map { CGFloat($0) } ?? cellW
                 let baseH = note.boardH.map { CGFloat($0) } ?? cellH
-                // Snap size to the same grid steps, so cards stay on the tidy grid.
-                withAnimation(.snappy(duration: 0.18)) {
-                    note.boardW = Double(snapStep(max(160, baseW + v.translation.width), step: cellW + gap, base: cellW))
-                    note.boardH = Double(snapStep(max(120, baseH + v.translation.height), step: cellH + gap, base: cellH))
+                withAnimation(.snappy(duration: 0.12)) {
+                    note.boardW = Double(max(160, snap(baseW + v.translation.width)))
+                    note.boardH = Double(max(120, snap(baseH + v.translation.height)))
                 }
                 resizeID = nil; resizeOffset = .zero
             }
     }
 
-    /// Snap a position to `margin + n·step`.
-    private func snap(_ value: CGFloat, step: CGFloat) -> CGFloat {
-        let s = max(1, step)
-        return margin + max(0, ((value - margin) / s).rounded()) * s
-    }
-
-    /// Snap a *size* so a card spans whole grid cells: `base + n·step` (n ≥ 0).
-    private func snapStep(_ value: CGFloat, step: CGFloat, base: CGFloat) -> CGFloat {
-        let s = max(1, step)
-        let extra = max(0, ((value - base) / s).rounded()) * s
-        return base + extra
+    /// Snap to a fine 20-pt grid (clamped ≥ 0) — light alignment, full freedom.
+    private func snap(_ value: CGFloat) -> CGFloat {
+        let grid: CGFloat = 20
+        return max(0, (value / grid).rounded() * grid)
     }
 }

@@ -897,7 +897,10 @@ struct NoteDetailView: View {
     /// The enrolled profile whose voice best matches `vector`, above the confidence
     /// threshold (else nil).
     private func bestProfile(for vector: [Float]) -> SpeakerProfile? {
-        let threshold: Float = 0.62
+        // Cross-recording, same-speaker cosine usually lands ~0.5–0.85 (mic and
+        // room differ between meetings), so 0.5 recognizes reliably while staying
+        // clear of the ~0.0–0.4 different-speaker range.
+        let threshold: Float = 0.5
         var best: SpeakerProfile?
         var bestScore = threshold
         for profile in speakerProfiles {

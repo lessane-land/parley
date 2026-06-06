@@ -1278,8 +1278,8 @@ enum HandwritingOCR {
                 if !customWords.isEmpty { request.customWords = customWords }
                 do {
                     try VNImageRequestHandler(cgImage: cg, options: [:]).perform([request])
-                    let lines = (request.results as? [VNRecognizedTextObservation])?
-                        .compactMap { $0.topCandidates(1).first?.string } ?? []
+                    let lines = (request.results ?? [])
+                        .compactMap { $0.topCandidates(1).first?.string }
                     cont.resume(returning: lines.joined(separator: "\n"))
                 } catch {
                     cont.resume(returning: "")

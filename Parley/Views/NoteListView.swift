@@ -30,6 +30,8 @@ struct NoteListView: View {
     /// Tag rename: the tag being renamed + draft text.
     @State private var editingTag: Tag?
     @State private var tagDraft = ""
+    /// The tag whose color is being picked (drives the swatch sheet).
+    @State private var coloringTag: Tag?
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
 
@@ -72,6 +74,9 @@ struct NoteListView: View {
                         isLoading: loadingMeetings,
                         onPick: openMeeting
                     )
+                }
+                .sheet(item: $coloringTag) { tag in
+                    TagColorSheet(tag: tag, theme: theme)
                 }
                 .sheet(isPresented: $showingReminders) {
                     RemindersSheet(
@@ -439,14 +444,9 @@ struct NoteListView: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button { startRenameTag(tag) } label: { Label("Rename", systemImage: "pencil") }
-            Menu {
-                ForEach(Array(Tag.palette.enumerated()), id: \.offset) { index, hex in
-                    Button { tag.colorHex = hex } label: {
-                        if hex == tag.colorHex { Label("Color \(index + 1)", systemImage: "checkmark") }
-                        else { Text("Color \(index + 1)") }
-                    }
-                }
-            } label: { Label("Color", systemImage: "paintpalette") }
+            // A swatch picker (sheet) instead of a text submenu — macOS menus render
+            // SF Symbols monochrome, so "Color 1…8" showed no actual colors.
+            Button { coloringTag = tag } label: { Label("Color…", systemImage: "paintpalette") }
             Divider()
             Button(role: .destructive) { deleteTag(tag) } label: { Label("Delete Tag", systemImage: "trash") }
         }
@@ -603,6 +603,63 @@ private struct SyncStatusChip: View {
         case .synced:    "Synced"
         case .error(let message): message
         }
+    }
+}
+
+/// A swatch grid for picking a tag's color — visible, tappable circles (works on
+/// both iOS and macOS, unlike the old text submenu where macOS rendered no color).
+private struct TagColorSheet: View {
+    let tag: Tag
+    let theme: Theme
+    @Environment(\.dismiss) private var dismiss
+
+    private let columns = [GridItem(.adaptive(minimum: 56), spacing: 16)]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(Array(Tag.palette.enumerated()), id: \.offset) { _, hex in
+                        swatch(hex)
+                    }
+                }
+                .padding(20)
+            }
+            .background(theme.paperSunk)
+            .navigationTitle("Tag Color")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 320, minHeight: 260)
+        #endif
+    }
+
+    private func swatch(_ hex: String) -> some View {
+        let selected = hex == tag.colorHex
+        return Button {
+            tag.colorHex = hex
+            dismiss()
+        } label: {
+            Circle()
+                .fill(Color(hex: hex))
+                .frame(width: 50, height: 50)
+                .overlay(Circle().strokeBorder(selected ? theme.ink : theme.edge,
+                                               lineWidth: selected ? 3 : 1))
+                .overlay {
+                    if selected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(selected ? "Selected color" : "Color")
     }
 }
 

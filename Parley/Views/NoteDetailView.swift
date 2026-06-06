@@ -192,34 +192,22 @@ struct NoteDetailView: View {
                 }
             }
         }
-        .confirmationDialog("Clear handwriting?", isPresented: $showClearDrawing, titleVisibility: .visible) {
-            Button("Clear", role: .destructive) {
-                note.drawing = nil
-                canvasID = UUID()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the Pencil strokes on this note. Your typed text is kept.")
-        }
-        .confirmationDialog("Delete this note?", isPresented: $showDeleteNote, titleVisibility: .visible) {
-            Button("Delete Note", role: .destructive) { deleteNote() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This permanently removes the note, its handwriting, and attachments.")
-        }
-        .alert("New Tag", isPresented: $showingNewTag) {
-            TextField("Name", text: $newTagName)
-            Button("Add") { createTag() }
-            Button("Cancel", role: .cancel) {}
-        }
-        .alert("Speaker name", isPresented: Binding(
-            get: { editingSpeakerID != nil },
-            set: { if !$0 { editingSpeakerID = nil } }
-        )) {
-            TextField("Name", text: $speakerDraft)
-            Button("Save") { saveSpeakerName() }
-            Button("Cancel", role: .cancel) { editingSpeakerID = nil }
-        }
+        // All the note's confirmations/alerts are bundled into one modifier. This
+        // isn't just tidiness: collapsing four chained modifiers into one keeps the
+        // body's modifier chain short enough for the Swift type-checker (a long
+        // chain trips "unable to type-check this expression in reasonable time").
+        .modifier(NoteDialogs(
+            showClearDrawing: $showClearDrawing,
+            showDeleteNote: $showDeleteNote,
+            showingNewTag: $showingNewTag,
+            newTagName: $newTagName,
+            editingSpeakerID: $editingSpeakerID,
+            speakerDraft: $speakerDraft,
+            onClear: { note.drawing = nil; canvasID = UUID() },
+            onDelete: { deleteNote() },
+            onCreateTag: { createTag() },
+            onSaveSpeaker: { saveSpeakerName() }
+        ))
         // Auto-start recording when opened via the Record CTA.
         .task {
             // Merge any duplicate enrolled voices that synced in from another device.
@@ -788,18 +776,22 @@ struct NoteDetailView: View {
 
     private func penSegment(_ mode: PenMode, title: String, icon: String, radius: CGFloat) -> some View {
         let on = penMode == mode
+        let fg: Color = on ? theme.paper : theme.inkSoft
+        let bg: Color = on ? theme.accent : .clear
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        return Button { withAnimation(.snappy) { penMode = mode } } label: {
+        return Button {
+            withAnimation(.snappy) { penMode = mode }
+        } label: {
             Label(title, systemImage: icon)
                 .font(theme.monoFont(12, relativeTo: .footnote))
                 .labelStyle(.titleAndIcon)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .foregroundStyle(on ? theme.paper : theme.inkSoft)
-                .background(on ? theme.accent : Color.clear, in: shape)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .foregroundStyle(fg)
+                .background(bg, in: shape)
                 .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? [.isSelected] : [])
     }
 
     /// Insert an image into the page (it's then draggable on the canvas). Shapes
@@ -1147,6 +1139,52 @@ struct NoteDetailView: View {
     }
 }
 
+// MARK: - Note dialogs
+
+/// Bundles the note detail's confirmations and alerts into a single modifier, so
+/// the main `body` keeps a short modifier chain (see the call site).
+private struct NoteDialogs: ViewModifier {
+    @Binding var showClearDrawing: Bool
+    @Binding var showDeleteNote: Bool
+    @Binding var showingNewTag: Bool
+    @Binding var newTagName: String
+    @Binding var editingSpeakerID: UUID?
+    @Binding var speakerDraft: String
+    var onClear: () -> Void
+    var onDelete: () -> Void
+    var onCreateTag: () -> Void
+    var onSaveSpeaker: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog("Clear handwriting?", isPresented: $showClearDrawing, titleVisibility: .visible) {
+                Button("Clear", role: .destructive) { onClear() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes the Pencil strokes on this note. Your typed text is kept.")
+            }
+            .confirmationDialog("Delete this note?", isPresented: $showDeleteNote, titleVisibility: .visible) {
+                Button("Delete Note", role: .destructive) { onDelete() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently removes the note, its handwriting, and attachments.")
+            }
+            .alert("New Tag", isPresented: $showingNewTag) {
+                TextField("Name", text: $newTagName)
+                Button("Add") { onCreateTag() }
+                Button("Cancel", role: .cancel) {}
+            }
+            .alert("Speaker name", isPresented: Binding(
+                get: { editingSpeakerID != nil },
+                set: { if !$0 { editingSpeakerID = nil } }
+            )) {
+                TextField("Name", text: $speakerDraft)
+                Button("Save") { onSaveSpeaker() }
+                Button("Cancel", role: .cancel) { editingSpeakerID = nil }
+            }
+    }
+}
+
 // MARK: - Read-only handwriting
 
 /// Renders a note's saved handwriting (`PKDrawing`) as a static image, for the
@@ -1195,23 +1233,28 @@ enum HandwritingOCR {
     static func recognize(_ data: Data, languages: [String] = [], customWords: [String] = []) async -> String {
         guard let cg = renderCGImage(data) else { return "" }
         return await withCheckedContinuation { (cont: CheckedContinuation<String, Never>) in
-            let request = VNRecognizeTextRequest { req, _ in
-                let lines = (req.results as? [VNRecognizedTextObservation])?
-                    .compactMap { $0.topCandidates(1).first?.string } ?? []
-                cont.resume(returning: lines.joined(separator: "\n"))
-            }
-            // `.accurate` + the latest revision is the configuration tuned for
-            // handwriting (vs. printed text).
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = true
-            if #available(iOS 16.0, macOS 13.0, *) {
-                request.revision = VNRecognizeTextRequestRevision3
-            }
-            if !languages.isEmpty { request.recognitionLanguages = languages }
-            if !customWords.isEmpty { request.customWords = customWords }
+            // Build and run the request *inside* the background closure so the
+            // non-Sendable `VNRecognizeTextRequest` never crosses a concurrency
+            // boundary (which was the "capture of non-Sendable type" warning).
             DispatchQueue.global(qos: .userInitiated).async {
-                do { try VNImageRequestHandler(cgImage: cg, options: [:]).perform([request]) }
-                catch { cont.resume(returning: "") }
+                let request = VNRecognizeTextRequest()
+                // `.accurate` + the latest revision is the configuration tuned for
+                // handwriting (vs. printed text).
+                request.recognitionLevel = .accurate
+                request.usesLanguageCorrection = true
+                if #available(iOS 16.0, macOS 13.0, *) {
+                    request.revision = VNRecognizeTextRequestRevision3
+                }
+                if !languages.isEmpty { request.recognitionLanguages = languages }
+                if !customWords.isEmpty { request.customWords = customWords }
+                do {
+                    try VNImageRequestHandler(cgImage: cg, options: [:]).perform([request])
+                    let lines = (request.results as? [VNRecognizedTextObservation])?
+                        .compactMap { $0.topCandidates(1).first?.string } ?? []
+                    cont.resume(returning: lines.joined(separator: "\n"))
+                } catch {
+                    cont.resume(returning: "")
+                }
             }
         }
     }

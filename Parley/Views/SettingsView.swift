@@ -11,6 +11,9 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \SpeakerProfile.name) private var speakerProfiles: [SpeakerProfile]
 
+    /// "Erase all content" confirmation.
+    @State private var showReset = false
+
     private var theme: Theme { themeManager.theme }
     private var cfg: MoodConfig { themeManager.mood.config }
 
@@ -24,6 +27,7 @@ struct SettingsView: View {
                 aiSection(themeManager)
                 transcriptionSection(themeManager)
                 voicesSection(themeManager)
+                dataSection()
             }
             .padding(20)
         }
@@ -32,6 +36,42 @@ struct SettingsView: View {
         // Fold duplicate enrolled voices (e.g. the same person enrolled on two
         // devices before they synced) so the list stays clean.
         .task { SpeakerProfile.dedupe(speakerProfiles, in: context) }
+        .confirmationDialog("Erase all content?", isPresented: $showReset, titleVisibility: .visible) {
+            Button("Erase Everything", role: .destructive) { eraseAll() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes all notes, tags, attachments, and enrolled voices on this device.")
+        }
+    }
+
+    /// Wipe every user-created object — the "start over" button. Uses SwiftData's
+    /// batch delete per model type. If iCloud sync is on, the erase propagates to
+    /// the user's other devices too.
+    @ViewBuilder
+    private func dataSection() -> some View {
+        sectionHeader("Data")
+        Text("Erase every note, tag, attachment, and enrolled voice on this device. This can't be undone.")
+            .font(theme.bodyFont(11.5))
+            .foregroundStyle(theme.inkFaint)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.bottom, 12)
+        Button(role: .destructive) { showReset = true } label: {
+            Label("Erase All Content", systemImage: "trash")
+                .font(theme.bodyFont(13).weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(theme.rec, in: cardShape)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func eraseAll() {
+        try? context.delete(model: Note.self)
+        try? context.delete(model: Tag.self)
+        try? context.delete(model: Attachment.self)
+        try? context.delete(model: SpeakerProfile.self)
+        try? context.save()
     }
 
     // MARK: Sections

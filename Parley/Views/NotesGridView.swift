@@ -11,38 +11,51 @@ struct NotesGridView: View {
     let onDelete: (Note) -> Void
     let onTogglePin: (Note) -> Void
 
-    private var columns: [GridItem] { [GridItem(.adaptive(minimum: 240), spacing: 14)] }
+    @Environment(ThemeManager.self) private var themeManager
+
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: themeManager.cardSize.columnMin), spacing: 14)]
+    }
+
+    /// Notes shown in the flowing grid. When pinned cards are *not* a hero, they go
+    /// in the grid too (at normal size, still styled as pinned).
+    private var gridNotes: [Note] { themeManager.featurePinned ? otherNotes : notes }
 
     var body: some View {
-        ScrollView {
+        @Bindable var manager = themeManager
+        return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(theme.titleFont(30, relativeTo: .largeTitle))
-                        .tracking(theme.titleTracking)
-                        .textCase(theme.titleUppercase ? .uppercase : nil)
-                        .foregroundStyle(theme.ink)
-                    Text("\(notes.count) note\(notes.count == 1 ? "" : "s")")
-                        .font(theme.monoFont(12))
-                        .foregroundStyle(theme.inkFaint)
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(theme.titleFont(30, relativeTo: .largeTitle))
+                            .tracking(theme.titleTracking)
+                            .textCase(theme.titleUppercase ? .uppercase : nil)
+                            .foregroundStyle(theme.ink)
+                        Text("\(notes.count) note\(notes.count == 1 ? "" : "s")")
+                            .font(theme.monoFont(12))
+                            .foregroundStyle(theme.inkFaint)
+                    }
+                    Spacer()
+                    dashboardConfig(manager)
                 }
 
                 if notes.isEmpty {
                     emptyState
                 } else {
-                    // Pinned notes are the design's wide "feature" cards — spanning
-                    // ~2 columns above the regular grid (not full-bleed, which left a
-                    // big empty block).
-                    if !pinnedNotes.isEmpty {
+                    // Pinned notes become the wide "feature" hero only when enabled;
+                    // its size follows the card-size setting.
+                    if manager.featurePinned && !pinnedNotes.isEmpty {
                         VStack(spacing: 14) {
                             ForEach(pinnedNotes) { note in
-                                cardButton(note).frame(maxWidth: 520, alignment: .leading)
+                                cardButton(note, hero: true)
+                                    .frame(maxWidth: manager.cardSize.columnMin * 2 + 14, alignment: .leading)
                             }
                         }
                     }
-                    if !otherNotes.isEmpty {
+                    if !gridNotes.isEmpty {
                         LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                            ForEach(otherNotes) { cardButton($0) }
+                            ForEach(gridNotes) { cardButton($0, hero: false) }
                         }
                     }
                 }
@@ -53,13 +66,35 @@ struct NotesGridView: View {
         .moodPaper(theme)
     }
 
+    /// Dashboard controls: card size + whether pinned shows as a big hero.
+    private func dashboardConfig(_ manager: ThemeManager) -> some View {
+        @Bindable var manager = manager
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9, style: .continuous)
+        return Menu {
+            Picker("Card size", selection: $manager.cardSize) {
+                ForEach(CardSize.allCases) { Label($0.name, systemImage: $0.icon).tag($0) }
+            }
+            Toggle("Big pinned card", isOn: $manager.featurePinned)
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 15))
+                .foregroundStyle(theme.inkSoft)
+                .padding(8)
+                .background(theme.paperRaised, in: shape)
+                .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+    }
+
     private var pinnedNotes: [Note] { notes.filter(\.pinned) }
     private var otherNotes: [Note] { notes.filter { !$0.pinned } }
 
-    /// A tappable card with the pin/delete context menu.
-    private func cardButton(_ note: Note) -> some View {
+    /// A tappable card with the pin/delete context menu. `hero` = the big wide
+    /// feature layout (only for pinned notes when "Big pinned card" is on).
+    private func cardButton(_ note: Note, hero: Bool) -> some View {
         Button { onOpen(note) } label: {
-            NoteCard(theme: theme, mood: mood, note: note)
+            NoteCard(theme: theme, mood: mood, note: note, size: themeManager.cardSize, hero: hero)
         }
         .buttonStyle(.plain)
         // Long-press (iPad) / right-click (Mac) → actions.
@@ -98,8 +133,12 @@ struct NoteCard: View {
     let theme: Theme
     let mood: Mood
     let note: Note
+    /// Drives the card's height (Small/Medium/Large).
+    var size: CardSize = .regular
+    /// The big wide "feature" layout (taller, bigger title, 3-line snippet).
+    var hero: Bool = false
 
-    /// Pinned notes render as the design's wider "feature" card.
+    /// Pinned notes get the feature *styling* (mood-specific fill/border).
     private var feature: Bool { note.pinned }
 
     /// Only the neubrutalist feature card inverts to white-on-accent.
@@ -116,7 +155,7 @@ struct NoteCard: View {
         VStack(alignment: .leading, spacing: 0) {
             dateLine
             Text(note.title.isEmpty ? "New Note" : note.title)
-                .font(theme.titleFont(feature ? 22 : 18, relativeTo: .headline))
+                .font(theme.titleFont(hero ? 22 : 18, relativeTo: .headline))
                 .tracking(theme.titleTracking)
                 .textCase(theme.titleUppercase ? .uppercase : nil)
                 .foregroundStyle(onAccent ? .white : theme.ink)
@@ -127,14 +166,14 @@ struct NoteCard: View {
                 Text(snippet)
                     .font(theme.bodyFont(13))
                     .foregroundStyle(onAccent ? .white.opacity(0.9) : theme.inkSoft)
-                    .lineLimit(feature ? 3 : 2)
+                    .lineLimit(hero ? 3 : 2)
             }
 
             Spacer(minLength: 10)
             foot
         }
         .padding(16)
-        .frame(height: feature ? 220 : 190, alignment: .topLeading)
+        .frame(height: hero ? size.featureHeight : size.cardHeight, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(CardSurface(theme: theme, mood: mood, feature: feature))
         // The prototype's `.hw-flag`: a faint accent mark for handwritten notes.

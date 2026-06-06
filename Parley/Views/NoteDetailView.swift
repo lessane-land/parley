@@ -259,39 +259,42 @@ struct NoteDetailView: View {
 
     private func attachmentCard(_ attachment: Attachment) -> some View {
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9, style: .continuous)
-        // Not a Button — a tappable card with its own visible delete control, so
-        // taps (preview) and the ✕ (remove) don't fight as nested buttons.
-        return VStack(spacing: 0) {
-            ZStack {
-                if let data = attachment.data,
-                   AttachmentSupport.isImage(attachment),
-                   let image = AttachmentSupport.image(from: data) {
-                    image.resizable().scaledToFill()
-                } else {
-                    theme.paperSunk
-                    Image(systemName: AttachmentSupport.icon(attachment))
-                        .font(.system(size: 20))
-                        .foregroundStyle(theme.accent)
-                }
-            }
-            .frame(width: 104, height: 58)
-            .clipped()
+        // The tile is a real Button (reliable click on macOS → preview); the ✕ is a
+        // *sibling* button in the ZStack, so the two don't nest and fight.
+        return ZStack(alignment: .topTrailing) {
+            Button { previewAttachment = attachment } label: {
+                VStack(spacing: 0) {
+                    ZStack {
+                        if let data = attachment.data,
+                           AttachmentSupport.isImage(attachment),
+                           let image = AttachmentSupport.image(from: data) {
+                            image.resizable().scaledToFill()
+                        } else {
+                            theme.paperSunk
+                            Image(systemName: AttachmentSupport.icon(attachment))
+                                .font(.system(size: 20))
+                                .foregroundStyle(theme.accent)
+                        }
+                    }
+                    .frame(width: 104, height: 58)
+                    .clipped()
 
-            Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
-                .font(theme.monoFont(9.5, relativeTo: .caption2))
-                .foregroundStyle(theme.inkSoft)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(width: 104, alignment: .leading)
-                .padding(.horizontal, 7).padding(.vertical, 5)
-        }
-        .frame(width: 104)
-        .background(theme.paperRaised)
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
-        .contentShape(shape)
-        .onTapGesture { previewAttachment = attachment }
-        .overlay(alignment: .topTrailing) {
+                    Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
+                        .font(theme.monoFont(9.5, relativeTo: .caption2))
+                        .foregroundStyle(theme.inkSoft)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(width: 104, alignment: .leading)
+                        .padding(.horizontal, 7).padding(.vertical, 5)
+                }
+                .frame(width: 104)
+                .background(theme.paperRaised)
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+                .contentShape(shape)
+            }
+            .buttonStyle(.plain)
+
             Button { removeAttachment(attachment) } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 17))
@@ -302,6 +305,12 @@ struct NoteDetailView: View {
             .padding(3)
             .accessibilityLabel("Remove attachment")
         }
+        .contextMenu {
+            Button { previewAttachment = attachment } label: { Label("Open", systemImage: "eye") }
+            Button(role: .destructive) { removeAttachment(attachment) } label: {
+                Label("Remove", systemImage: "trash")
+            }
+        }
     }
 
     /// The paperclip menu: attach a photo (PhotosPicker) or any file (importer).
@@ -310,11 +319,12 @@ struct NoteDetailView: View {
             Button { showPhotoPicker = true } label: { Label("Photo", systemImage: "photo") }
             Button { importingFile = true } label: { Label("File", systemImage: "doc") }
         } label: {
-            // Icon-only to match the other toolbar buttons (a Menu's text label
-            // otherwise renders larger/wider than the plain icon buttons).
             Label("Attach", systemImage: "paperclip")
                 .labelStyle(.iconOnly)
         }
+        // Hide the pull-down chevron so it matches the plain icon buttons (on macOS
+        // a toolbar Menu otherwise renders wider/taller than the others).
+        .menuIndicator(.hidden)
     }
 
     /// Meeting metadata, read from the note's real fields (E4) rather than parsed
@@ -1050,11 +1060,21 @@ private struct AttachmentPreviewSheet: View {
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
                     if let shareURL {
+                        #if os(macOS)
+                        ToolbarItem {
+                            Button { NSWorkspace.shared.open(shareURL) } label: {
+                                Label("Open", systemImage: "arrow.up.forward.app")
+                            }
+                        }
+                        #endif
                         ToolbarItem { ShareLink(item: shareURL) }
                     }
                 }
                 .onAppear { shareURL = AttachmentSupport.writeTemp(attachment) }
         }
+        #if os(macOS)
+        .frame(minWidth: 540, minHeight: 440)   // a real window, not a tiny sheet
+        #endif
     }
 
     @ViewBuilder
@@ -1072,8 +1092,19 @@ private struct AttachmentPreviewSheet: View {
                 Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
                     .font(theme.bodyFont(15)).foregroundStyle(theme.ink)
                     .multilineTextAlignment(.center)
-                Text("Use Share to open this file in another app.")
-                    .font(theme.bodyFont(12)).foregroundStyle(theme.inkSoft)
+                if let shareURL {
+                    #if os(macOS)
+                    Button { NSWorkspace.shared.open(shareURL) } label: {
+                        Label("Open in default app", systemImage: "arrow.up.forward.app")
+                    }
+                    .buttonStyle(.borderedProminent).tint(theme.accent)
+                    #else
+                    ShareLink(item: shareURL) {
+                        Label("Open / Share", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.borderedProminent).tint(theme.accent)
+                    #endif
+                }
             }
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)

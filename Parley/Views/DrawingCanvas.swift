@@ -38,10 +38,12 @@ struct DrawingCanvas: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = PKCanvasView()
-        // Pencil draws; a finger *scrolls* instead of drawing. PKCanvasView is a
-        // scroll view, so with `.pencilOnly` one-finger drags pan the canvas —
-        // which is what lets handwriting extend past one screen.
-        canvas.drawingPolicy = .pencilOnly
+        // `.default` follows the system: when an Apple Pencil is paired the Pencil
+        // draws and a finger scrolls/selects (so finger drags still pan the page and
+        // move shapes) — and, crucially, it surfaces the tool picker's "Draw with
+        // Finger" toggle so the user can opt into finger drawing if they want. (We
+        // previously forced `.pencilOnly`, which hid that option.)
+        canvas.drawingPolicy = .default
         canvas.backgroundColor = .clear         // overlays the typed notes; paper shows through
         canvas.isOpaque = false
         canvas.alwaysBounceVertical = true      // makes the scrollability discoverable

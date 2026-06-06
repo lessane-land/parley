@@ -468,8 +468,14 @@ struct SummaryView: View {
 
     private func generate() async {
         remindedTitles = []
+        // Include recognized handwriting so the summary reads pen notes too.
+        var notesText = note.body
+        if let drawing = note.drawing {
+            let handwritten = await HandwritingOCR.recognize(drawing)
+            if !handwritten.isEmpty { notesText += (notesText.isEmpty ? "" : "\n") + handwritten }
+        }
         let result = await service.summarize(
-            notes: note.body, transcript: note.transcript, attendees: note.attendees,
+            notes: notesText, transcript: note.transcript, attendees: note.attendees,
             tone: themeManager.summaryTone,
             includeDecisions: themeManager.extractDecisions,
             includeActionItems: themeManager.extractActionItems,

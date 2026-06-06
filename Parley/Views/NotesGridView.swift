@@ -410,15 +410,15 @@ private struct NotesBoardView: View {
     }
 
     private func origin(_ note: Note, _ index: Int) -> CGPoint {
-        var x = note.boardX.map(CGFloat.init) ?? defaultPos(index).x
-        var y = note.boardY.map(CGFloat.init) ?? defaultPos(index).y
+        var x = note.boardX.map { CGFloat($0) } ?? defaultPos(index).x
+        var y = note.boardY.map { CGFloat($0) } ?? defaultPos(index).y
         if dragID == note.id { x += dragOffset.width; y += dragOffset.height }
         return CGPoint(x: max(0, x), y: max(0, y))
     }
 
     private func cardSize(_ note: Note) -> CGSize {
-        var w = note.boardW.map(CGFloat.init) ?? cellW
-        var h = note.boardH.map(CGFloat.init) ?? cellH
+        var w = note.boardW.map { CGFloat($0) } ?? cellW
+        var h = note.boardH.map { CGFloat($0) } ?? cellH
         if resizeID == note.id { w += resizeOffset.width; h += resizeOffset.height }
         return CGSize(width: max(160, w), height: max(120, h))
     }
@@ -470,8 +470,8 @@ private struct NotesBoardView: View {
         DragGesture()
             .onChanged { v in dragID = note.id; dragOffset = v.translation }
             .onEnded { v in
-                let baseX = note.boardX.map(CGFloat.init) ?? defaultPos(index).x
-                let baseY = note.boardY.map(CGFloat.init) ?? defaultPos(index).y
+                let baseX = note.boardX.map { CGFloat($0) } ?? defaultPos(index).x
+                let baseY = note.boardY.map { CGFloat($0) } ?? defaultPos(index).y
                 note.boardX = Double(max(0, baseX + v.translation.width))
                 note.boardY = Double(max(0, baseY + v.translation.height))
                 dragID = nil; dragOffset = .zero
@@ -482,8 +482,8 @@ private struct NotesBoardView: View {
         DragGesture()
             .onChanged { v in resizeID = note.id; resizeOffset = v.translation }
             .onEnded { v in
-                let baseW = note.boardW.map(CGFloat.init) ?? cellW
-                let baseH = note.boardH.map(CGFloat.init) ?? cellH
+                let baseW = note.boardW.map { CGFloat($0) } ?? cellW
+                let baseH = note.boardH.map { CGFloat($0) } ?? cellH
                 note.boardW = Double(max(160, baseW + v.translation.width))
                 note.boardH = Double(max(120, baseH + v.translation.height))
                 resizeID = nil; resizeOffset = .zero

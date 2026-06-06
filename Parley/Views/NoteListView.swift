@@ -53,11 +53,14 @@ struct NoteListView: View {
                 .navigationTitle("")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                // Unified, paper-colored top bar (no translucent iOS band) so the
-                // iPad top reads like the Mac's merged toolbar — one continuous
-                // canvas rather than a separate chrome strip above the content.
+                // iPad has no top-bar actions anymore (everything's in the rail), so
+                // hide the navigation bar entirely and let the dashboard use the full
+                // height. iPhone keeps its bar (that's where its actions live).
+                // The bar's *background* must be hidden too — leaving it `.visible`
+                // kept the bar's height reserved (the gap at the top).
+                .toolbar(isRegular ? .hidden : .visible, for: .navigationBar)
                 .toolbarBackground(theme.paper, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarBackground(isRegular ? .hidden : .visible, for: .navigationBar)
                 .toolbar { homeToolbar }
                 #endif
                 .navigationDestination(for: Note.self) { note in
@@ -338,6 +341,13 @@ struct NoteListView: View {
                         .tracking(theme.titleTracking)
                         .foregroundStyle(theme.ink)
                     Spacer()
+                    // Compose a new note (sits with the brand, like Apple Notes).
+                    Button { addNote() } label: {
+                        Image(systemName: "square.and.pencil").font(.system(size: 17))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.accent)
+                    .accessibilityLabel("New Note")
                 }
                 searchField
             }
@@ -349,7 +359,6 @@ struct NoteListView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     navRow("All Notes", "tray.full", count: notes.count, target: .all)
                     navRow("Recent", "clock", count: recentCount, target: .recent)
-                    actionRow("New Note", "square.and.pencil") { addNote() }
                     actionRow("Ask Parley", "sparkles") { withAnimation(.snappy) { showingAsk = true } }
                     actionRow("Calendar", "calendar") { openCalendar() }
                     actionRow("Reminders", "checklist") { openReminders() }

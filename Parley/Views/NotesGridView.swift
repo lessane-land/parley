@@ -30,11 +30,14 @@ struct NotesGridView: View {
                 if notes.isEmpty {
                     emptyState
                 } else {
-                    // Pinned notes are the design's wide "feature" cards — they span
-                    // the row above the regular grid (the prototype's 2-col hero).
+                    // Pinned notes are the design's wide "feature" cards — spanning
+                    // ~2 columns above the regular grid (not full-bleed, which left a
+                    // big empty block).
                     if !pinnedNotes.isEmpty {
                         VStack(spacing: 14) {
-                            ForEach(pinnedNotes) { cardButton($0) }
+                            ForEach(pinnedNotes) { note in
+                                cardButton(note).frame(maxWidth: 520, alignment: .leading)
+                            }
                         }
                     }
                     if !otherNotes.isEmpty {

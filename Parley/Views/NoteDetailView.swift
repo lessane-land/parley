@@ -72,6 +72,9 @@ struct NoteDetailView: View {
     /// Canvas (images + shapes) editing state. Shapes float on top of the drawing
     /// and are draggable any time — no separate mode.
     @State private var selectedItemID: UUID?
+    /// The drawing canvas's current scroll offset, so canvas items scroll *with*
+    /// the page (stored in page coords, rendered at page − scroll).
+    @State private var canvasScroll: CGPoint = .zero
     @State private var showCanvasPhoto = false
     @State private var canvasPhotoItem: PhotosPickerItem?
     /// One-time per-open setup of the transcript panel visibility.
@@ -705,7 +708,8 @@ struct NoteDetailView: View {
             if showsHandwriting {
                 DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw,
                               recognizeShapes: true,
-                              onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) })
+                              onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) },
+                              onScroll: { canvasScroll = $0 })
                     .id(canvasID)
                     // Pause canvas input while a shape/image is selected, so dragging
                     // and resizing it isn't fought over by the PencilKit scroll view.
@@ -728,6 +732,7 @@ struct NoteDetailView: View {
                 items: Binding(get: { note.canvasItems }, set: { note.canvasItems = $0 }),
                 selectedID: $selectedItemID,
                 active: itemsInteractive,
+                scrollOffset: canvasScroll,
                 theme: theme
             )
         }
@@ -845,7 +850,11 @@ struct NoteDetailView: View {
         for provider in providers {
             guard let data = await loadImageData(provider),
                   let small = AttachmentSupport.downscaled(data, maxDimension: 1000) else { continue }
-            let item = CanvasItem(kind: .image, x: 40, y: 40, width: 220, height: 165, imageData: small)
+            // Drop it where the page is currently scrolled (page coords), so it
+            // appears in view and stays anchored to the page afterward.
+            let item = CanvasItem(kind: .image,
+                                  x: Double(canvasScroll.x) + 40, y: Double(canvasScroll.y) + 40,
+                                  width: 220, height: 165, imageData: small)
             note.canvasItems = note.canvasItems + [item]
             selectedItemID = item.id
         }
@@ -865,7 +874,9 @@ struct NoteDetailView: View {
     private func addCanvasImage(_ pick: PhotosPickerItem) async {
         guard let data = try? await pick.loadTransferable(type: Data.self),
               let small = AttachmentSupport.downscaled(data, maxDimension: 1000) else { return }
-        let item = CanvasItem(kind: .image, x: 40, y: 40, width: 220, height: 165, imageData: small)
+        let item = CanvasItem(kind: .image,
+                              x: Double(canvasScroll.x) + 40, y: Double(canvasScroll.y) + 40,
+                              width: 220, height: 165, imageData: small)
         note.canvasItems = note.canvasItems + [item]
         selectedItemID = item.id
     }
@@ -1376,6 +1387,9 @@ private struct CanvasItemsLayer: View {
     @Binding var items: [CanvasItem]
     @Binding var selectedID: UUID?
     let active: Bool
+    /// The drawing canvas's scroll offset. Items are stored in page coords and
+    /// rendered at (page − scroll), so they scroll *with* the ink.
+    var scrollOffset: CGPoint = .zero
     let theme: Theme
 
     @State private var dragID: UUID?
@@ -1435,7 +1449,8 @@ private struct CanvasItemsLayer: View {
             .overlay(alignment: .topLeading) { if selected { deleteHandle(item) } }
             .overlay(alignment: .bottomTrailing) { if selected { resizeHandle(item) } }
             .contentShape(Rectangle())
-            .offset(x: o.x - pad, y: o.y - pad)
+            // page coords − scroll offset, so the item scrolls with the ink.
+            .offset(x: o.x - pad - scrollOffset.x, y: o.y - pad - scrollOffset.y)
             .onTapGesture { selectedID = item.id }
             .highPriorityGesture(moveGesture(item))
     }

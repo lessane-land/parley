@@ -30,22 +30,16 @@ struct NotesGridView: View {
                 if notes.isEmpty {
                     emptyState
                 } else {
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                        ForEach(notes) { note in
-                            Button { onOpen(note) } label: {
-                                NoteCard(theme: theme, mood: mood, note: note)
-                            }
-                            .buttonStyle(.plain)
-                            // Long-press (iPad) / right-click (Mac) → actions.
-                            .contextMenu {
-                                Button { onTogglePin(note) } label: {
-                                    Label(note.pinned ? "Unpin" : "Pin",
-                                          systemImage: note.pinned ? "pin.slash" : "pin")
-                                }
-                                Button(role: .destructive) { onDelete(note) } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                            }
+                    // Pinned notes are the design's wide "feature" cards — they span
+                    // the row above the regular grid (the prototype's 2-col hero).
+                    if !pinnedNotes.isEmpty {
+                        VStack(spacing: 14) {
+                            ForEach(pinnedNotes) { cardButton($0) }
+                        }
+                    }
+                    if !otherNotes.isEmpty {
+                        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                            ForEach(otherNotes) { cardButton($0) }
                         }
                     }
                 }
@@ -54,6 +48,27 @@ struct NotesGridView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .moodPaper(theme)
+    }
+
+    private var pinnedNotes: [Note] { notes.filter(\.pinned) }
+    private var otherNotes: [Note] { notes.filter { !$0.pinned } }
+
+    /// A tappable card with the pin/delete context menu.
+    private func cardButton(_ note: Note) -> some View {
+        Button { onOpen(note) } label: {
+            NoteCard(theme: theme, mood: mood, note: note)
+        }
+        .buttonStyle(.plain)
+        // Long-press (iPad) / right-click (Mac) → actions.
+        .contextMenu {
+            Button { onTogglePin(note) } label: {
+                Label(note.pinned ? "Unpin" : "Pin",
+                      systemImage: note.pinned ? "pin.slash" : "pin")
+            }
+            Button(role: .destructive) { onDelete(note) } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 
     private var emptyState: some View {

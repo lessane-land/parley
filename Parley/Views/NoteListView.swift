@@ -58,8 +58,8 @@ struct NoteListView: View {
                 // canvas rather than a separate chrome strip above the content.
                 .toolbarBackground(theme.paper, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
-                #endif
                 .toolbar { homeToolbar }
+                #endif
                 .navigationDestination(for: Note.self) { note in
                     NoteDetailView(
                         note: note,
@@ -296,39 +296,35 @@ struct NoteListView: View {
         )
     }
 
+    #if os(iOS)
+    // iPad/Mac: every option lives in the rail (Settings + Record at the bottom),
+    // so the top bar stays empty — no top-right menu. Only iPhone, which has no
+    // rail, surfaces actions in the bar (plus an overflow for the rest). On macOS
+    // there's no `.toolbar` at all (this isn't compiled).
     @ToolbarContentBuilder
     private var homeToolbar: some ToolbarContent {
-        ToolbarItem { Button(action: addNote) { Label("New Note", systemImage: "square.and.pencil") } }
-        ToolbarItem { Button { withAnimation(.snappy) { showingAsk.toggle() } } label: { Label("Ask Parley", systemImage: "sparkles") } }
-        ToolbarItem { Button { openCalendar() } label: { Label("Calendar", systemImage: "calendar") } }
-        ToolbarItem { Button { openReminders() } label: { Label("Reminders", systemImage: "checklist") } }
-        #if os(macOS)
-        // macOS: Settings opens as a slide-over aside (toggle).
-        ToolbarItem {
-            Button { withAnimation(.snappy) { showingSettings.toggle() } } label: { Label("Settings", systemImage: "slider.horizontal.3") }
-        }
-        #else
-        // iPad: Settings on the right with the other actions; iPhone: leading.
-        ToolbarItem(placement: isRegular ? .automatic : .topBarLeading) {
-            Button { withAnimation(.snappy) { showingSettings = true } } label: { Label("Settings", systemImage: "slider.horizontal.3") }
-        }
         if !isRegular {
-            // On iPhone the rail is hidden, so Record + filters live in the bar.
-            ToolbarItem { Button(action: createAndRecord) { Label("Record", systemImage: "mic.fill") } }
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
+                    Button { showingSettings = true } label: { Label("Settings", systemImage: "gearshape") }
+                    Button { showingAsk = true } label: { Label("Ask Parley", systemImage: "sparkles") }
+                    Button { openCalendar() } label: { Label("Calendar", systemImage: "calendar") }
+                    Button { openReminders() } label: { Label("Reminders", systemImage: "checklist") }
+                    Divider()
                     Picker("Filter", selection: $scope) {
                         Label("All Notes", systemImage: "tray.full").tag(Scope.all)
                         Label("Recent", systemImage: "clock").tag(Scope.recent)
                         ForEach(allTags) { tag in Text(tag.name).tag(Scope.tag(tag.persistentModelID)) }
                     }
                 } label: {
-                    Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                    Label("Menu", systemImage: "line.3.horizontal")
                 }
             }
+            ToolbarItem { Button(action: addNote) { Label("New Note", systemImage: "square.and.pencil") } }
+            ToolbarItem { Button(action: createAndRecord) { Label("Record", systemImage: "mic.fill") } }
         }
-        #endif
     }
+    #endif
 
     // MARK: Rail
 
@@ -353,9 +349,13 @@ struct NoteListView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     navRow("All Notes", "tray.full", count: notes.count, target: .all)
                     navRow("Recent", "clock", count: recentCount, target: .recent)
+                    actionRow("New Note", "square.and.pencil") { addNote() }
+                    actionRow("Ask Parley", "sparkles") { withAnimation(.snappy) { showingAsk = true } }
+                    actionRow("Calendar", "calendar") { openCalendar() }
+                    actionRow("Reminders", "checklist") { openReminders() }
 
                     if !allTags.isEmpty {
-                        Text("TAGS")
+                        Text("SPACES")
                             .font(theme.monoFont(10))
                             .tracking(1.4)
                             .foregroundStyle(theme.inkFaint)
@@ -368,13 +368,54 @@ struct NoteListView: View {
                 .padding(.horizontal, 8)
             }
 
-            recordCTA
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+            // Side foot (pinned to the bottom, like the design): Settings, then the
+            // Record CTA. All app options live in the rail — nothing in a top menu.
+            VStack(spacing: 6) {
+                settingsLink
+                recordCTA
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
 
             SyncStatusChip(theme: theme, status: syncMonitor.status)
         }
         .background(theme.paperSunk)
+    }
+
+    /// A non-selectable sidebar action (Ask Parley, Calendar, …) styled like a nav
+    /// row but triggering a one-off action instead of switching the filter scope.
+    private func actionRow(_ label: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9)
+        return Button(action: action) {
+            HStack(spacing: 11) {
+                Image(systemName: icon).foregroundStyle(theme.inkFaint).frame(width: 18)
+                Text(label).font(theme.bodyFont(14)).foregroundStyle(theme.ink)
+                Spacer()
+            }
+            .padding(.horizontal, 11).padding(.vertical, 9)
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Settings lives at the bottom of the rail (slide-over on Mac, sheet on iPad).
+    private var settingsLink: some View {
+        Button {
+            #if os(macOS)
+            withAnimation(.snappy) { showingSettings.toggle() }
+            #else
+            showingSettings = true
+            #endif
+        } label: {
+            HStack(spacing: 11) {
+                Image(systemName: "gearshape").foregroundStyle(theme.inkFaint).frame(width: 18)
+                Text("Settings").font(theme.bodyFont(13.5)).foregroundStyle(theme.inkSoft)
+                Spacer()
+            }
+            .padding(.horizontal, 11).padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var brandMark: some View {

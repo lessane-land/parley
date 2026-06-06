@@ -1,5 +1,11 @@
 import SwiftUI
 import SwiftData
+#if canImport(UIKit)
+import UIKit
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /// The app entry point. `@main` tells Swift this struct boots the app.
 ///
@@ -71,6 +77,12 @@ struct ParleyApp: App {
                 .tint(themeManager.theme.accent)
                 // …and the whole window goes light/dark to match the mood.
                 .preferredColorScheme(themeManager.theme.colorScheme)
+                // Make the app icon follow the mood: iOS swaps the bundled
+                // alternate home-screen icon; macOS re-renders the live Dock icon.
+                // `.task(id:)` runs at launch and again whenever the theme changes.
+                .task(id: themeManager.theme) {
+                    AppIcon.apply(mood: themeManager.mood, theme: themeManager.theme)
+                }
         }
         // Inject the (CloudKit-backed) container; views read it via `@Query`
         // and `@Environment(\.modelContext)`.
@@ -81,5 +93,55 @@ struct ParleyApp: App {
         // from the toolbar), so there's no separate `Settings` window.
         .windowToolbarStyle(.unifiedCompact)
         #endif
+    }
+}
+
+/// Switches the app icon to match the current mood.
+///
+/// The two platforms differ: on iOS/iPadOS the home-screen icon must be a
+/// **pre-bundled** image, so we ship one alternate app icon per mood and call
+/// `setAlternateIconName`. On macOS the Finder icon can't change at runtime, but
+/// the **Dock** icon can — and we render it straight from `AppIconArt`, so it
+/// always matches the live mood and accent (even a custom one).
+enum AppIcon {
+    @MainActor
+    static func apply(mood: Mood, theme: Theme) {
+        #if canImport(UIKit)
+        guard UIApplication.shared.supportsAlternateIcons else { return }
+        // `paper` is the primary AppIcon (nil); the others are alternates whose
+        // names match the appiconset names in the asset catalog.
+        let name: String? = (mood == .paper) ? nil : "AppIcon\(mood.rawValue.capitalized)"
+        guard UIApplication.shared.alternateIconName != name else { return }
+        UIApplication.shared.setAlternateIconName(name)
+        #elseif canImport(AppKit)
+        let renderer = ImageRenderer(content: AppIconArt(theme: theme).frame(width: 512, height: 512))
+        renderer.scale = 2
+        if let cg = renderer.cgImage {
+            NSApp.applicationIconImage = NSImage(cgImage: cg, size: NSSize(width: 512, height: 512))
+        }
+        #endif
+    }
+}
+
+/// The app icon drawn in SwiftUI: a rounded accent tile with the mood's title "P"
+/// (matching the in-app brand mark). Used to render the macOS Dock icon live.
+struct AppIconArt: View {
+    let theme: Theme
+
+    var body: some View {
+        GeometryReader { geo in
+            let s = min(geo.size.width, geo.size.height)
+            let inset = s * 0.10                    // transparent margin for the Dock
+            let side = s - inset * 2
+            RoundedRectangle(cornerRadius: side * 0.225, style: .continuous)
+                .fill(theme.accent)
+                .frame(width: side, height: side)
+                .overlay(
+                    Text("P")
+                        .font(theme.titleFont(side * 0.62))
+                        .foregroundStyle(.white)
+                )
+                .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
     }
 }

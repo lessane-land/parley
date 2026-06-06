@@ -468,8 +468,12 @@
 		000000000000000000000013 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				"ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES[sdk=iphoneos*]" = "AppIconTerminal AppIconSwiss AppIconNeubrutalist";
+				"ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES[sdk=iphonesimulator*]" = "AppIconTerminal AppIconSwiss AppIconNeubrutalist";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS[sdk=iphoneos*]" = YES;
+				"ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS[sdk=iphonesimulator*]" = YES;
 				CODE_SIGN_ENTITLEMENTS = Parley/Parley.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -513,8 +517,12 @@
 		000000000000000000000014 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				"ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES[sdk=iphoneos*]" = "AppIconTerminal AppIconSwiss AppIconNeubrutalist";
+				"ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES[sdk=iphonesimulator*]" = "AppIconTerminal AppIconSwiss AppIconNeubrutalist";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS[sdk=iphoneos*]" = YES;
+				"ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS[sdk=iphonesimulator*]" = YES;
 				CODE_SIGN_ENTITLEMENTS = Parley/Parley.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

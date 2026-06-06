@@ -50,6 +50,11 @@ struct NoteListView: View {
                 .navigationTitle("")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                // Unified, paper-colored top bar (no translucent iOS band) so the
+                // iPad top reads like the Mac's merged toolbar — one continuous
+                // canvas rather than a separate chrome strip above the content.
+                .toolbarBackground(theme.paper, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
                 #endif
                 .toolbar { homeToolbar }
                 .navigationDestination(for: Note.self) { note in

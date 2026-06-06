@@ -33,6 +33,10 @@ struct NoteListView: View {
     @State private var tagDraft = ""
     /// The tag whose color is being picked (drives the swatch sheet).
     @State private var coloringTag: Tag?
+
+    /// Width of the macOS "Ask Parley" side column (drag the divider to resize).
+    @State private var askWidth: CGFloat = 380
+    @State private var askDragBase: CGFloat?
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
 
@@ -189,7 +193,7 @@ struct NoteListView: View {
                 }
                 grid
                 if usesSidePanels && showingAsk {
-                    verticalDivider
+                    askResizeHandle
                     chatColumn.transition(.move(edge: .trailing))
                 }
             }
@@ -232,14 +236,37 @@ struct NoteListView: View {
         Rectangle().fill(theme.line).frame(width: theme.borderWidth)
     }
 
-    /// Ask Parley as an inline right column (iPad/Mac).
+    /// Ask Parley as an inline right column (iPad/Mac), resizable on Mac.
     private var chatColumn: some View {
         VStack(spacing: 0) {
             panelHeader("Ask Parley") { withAnimation(.snappy) { showingAsk = false } }
             ChatView(theme: theme)
         }
-        .frame(width: 380)
+        .frame(width: askWidth)
         .background(theme.paperSunk)
+    }
+
+    /// Draggable divider to set the Ask column's width (drag left = wider).
+    private var askResizeHandle: some View {
+        ZStack {
+            Rectangle().fill(theme.line).frame(width: theme.borderWidth)
+            Rectangle().fill(Color.clear).frame(width: 12).contentShape(Rectangle())
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    let base = askDragBase ?? askWidth
+                    askDragBase = base
+                    askWidth = min(max(base - value.translation.width, 320), 760)
+                }
+                .onEnded { _ in askDragBase = nil }
+        )
+        #if os(macOS)
+        .onHover { inside in
+            if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+        }
+        #endif
+        .accessibilityLabel("Resize Ask Parley")
     }
 
     /// Settings as a right slide-over with a dimming scrim (iPad/Mac).

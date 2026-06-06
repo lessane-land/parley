@@ -72,9 +72,11 @@ struct NoteDetailView: View {
     /// Canvas (images + shapes) editing state. Shapes float on top of the drawing
     /// and are draggable any time — no separate mode.
     @State private var selectedItemID: UUID?
-    /// The drawing canvas's current scroll offset, so canvas items scroll *with*
-    /// the page (stored in page coords, rendered at page − scroll).
-    @State private var canvasScroll: CGPoint = .zero
+    /// The note page is one scroll container: typed text + ink + items all live on
+    /// it and scroll together. `pageHeight` is the page's length (grows with the
+    /// drawing); `notesScrollY` is how far it's scrolled (so new pics land in view).
+    @State private var pageHeight: CGFloat = 1400
+    @State private var notesScrollY: CGFloat = 0
     @State private var showCanvasPhoto = false
     @State private var canvasPhotoItem: PhotosPickerItem?
     /// One-time per-open setup of the transcript panel visibility.
@@ -219,6 +221,11 @@ struct NoteDetailView: View {
         ))
         // Auto-start recording when opened via the Record CTA.
         .task {
+            // Size the page to fit an already-saved drawing (the canvas only reports
+            // its height on edits, so seed it here for existing ink).
+            if let data = note.drawing, let drawing = try? PKDrawing(data: data), !drawing.bounds.isNull {
+                pageHeight = max(pageHeight, drawing.bounds.maxY + 500)
+            }
             // Merge any duplicate enrolled voices that synced in from another device.
             SpeakerProfile.dedupe(speakerProfiles, in: context)
             // A fresh note (no transcript yet) opens with the transcript hidden —
@@ -696,46 +703,61 @@ struct NoteDetailView: View {
         #endif
     }
 
-    /// One surface: typed notes with the Pencil canvas overlaid. The active mode
-    /// owns touches (the other layer is hit-test-transparent), so on iPad you
-    /// type *and* draw on the same page — the design's unified notes canvas.
+    /// One scrolling page: typed text + the Pencil canvas + the images/shapes all
+    /// live in a single outer `ScrollView`, so they scroll **together** as one note.
+    /// The canvas's own scrolling is disabled (`scrollEnabled: false`) and it's sized
+    /// to `pageHeight`; the outer scroll moves everything. Items are in page coords
+    /// (inside the scrolled stack) so they're anchored to the page.
     private var notesSurface: some View {
-        ZStack(alignment: .topLeading) {
-            typedNotes
-                .allowsHitTesting(typedActive)
+        ScrollView(.vertical) {
+            ZStack(alignment: .topLeading) {
+                typedNotes
+                    .scrollDisabled(true)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .allowsHitTesting(typedActive)
 
-            #if os(iOS)
-            if showsHandwriting {
-                DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw,
-                              recognizeShapes: true,
-                              onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) },
-                              onScroll: { canvasScroll = $0 })
-                    .id(canvasID)
-                    // Pause canvas input while a shape/image is selected, so dragging
-                    // and resizing it isn't fought over by the PencilKit scroll view.
-                    .allowsHitTesting(penMode == .draw && selectedItemID == nil)
-            } else if let data = note.drawing {
-                // iPhone (no live canvas): show the handwriting read-only.
-                DrawingImageView(data: data).allowsHitTesting(false)
-            }
-            #else
-            // macOS has no PencilKit input, but it can still *render* the synced
-            // strokes — so handwriting drawn on iPad is visible on the Mac.
-            if let data = note.drawing {
-                DrawingImageView(data: data).allowsHitTesting(false)
-            }
-            #endif
+                #if os(iOS)
+                if showsHandwriting {
+                    DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw,
+                                  recognizeShapes: true,
+                                  onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) },
+                                  scrollEnabled: false,
+                                  onContentHeight: { h in pageHeight = max(1400, h + 500) })
+                        .id(canvasID)
+                        .frame(height: pageHeight)
+                        // Pause canvas input while an item is selected, so dragging/
+                        // resizing it isn't fought over by the canvas.
+                        .allowsHitTesting(penMode == .draw && selectedItemID == nil)
+                } else if let data = note.drawing {
+                    DrawingImageView(data: data).frame(height: pageHeight).allowsHitTesting(false)
+                }
+                #else
+                // macOS has no PencilKit input, but it can still *render* the synced
+                // strokes — so handwriting drawn on iPad is visible on the Mac.
+                if let data = note.drawing {
+                    DrawingImageView(data: data).frame(height: pageHeight).allowsHitTesting(false)
+                }
+                #endif
 
-            // Shapes + images float on *top* of the drawing and are draggable any
-            // time (empty space passes touches through to the canvas below).
-            CanvasItemsLayer(
-                items: Binding(get: { note.canvasItems }, set: { note.canvasItems = $0 }),
-                selectedID: $selectedItemID,
-                active: itemsInteractive,
-                scrollOffset: canvasScroll,
-                theme: theme
+                CanvasItemsLayer(
+                    items: Binding(get: { note.canvasItems }, set: { note.canvasItems = $0 }),
+                    selectedID: $selectedItemID,
+                    active: itemsInteractive,
+                    theme: theme
+                )
+                .frame(height: pageHeight, alignment: .topLeading)
+            }
+            .frame(maxWidth: .infinity, minHeight: pageHeight, alignment: .topLeading)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: NotesScrollKey.self,
+                                           value: -geo.frame(in: .named("notesScroll")).minY)
+                }
             )
         }
+        .coordinateSpace(name: "notesScroll")
+        .onPreferenceChange(NotesScrollKey.self) { notesScrollY = $0 }
         .padding(.leading, 16)
         .overlay(alignment: .leading) {
             // Notebook margin rule (the design's .pk-notes::before).
@@ -748,12 +770,15 @@ struct NoteDetailView: View {
         !showsHandwriting || penMode == .type
     }
 
-    /// Canvas items are movable on iPad (where handwriting/pencil is available).
+    /// Canvas items are movable/resizable on iPad (where the pencil canvas is) and
+    /// on macOS (where there's no pencil but you can still drag/resize a pasted pic
+    /// with the cursor). Previously macOS returned false, so the handles showed but
+    /// did nothing — that's why "resize isn't doing anything" on the Mac.
     private var itemsInteractive: Bool {
         #if os(iOS)
         return showsHandwriting
         #else
-        return false
+        return true
         #endif
     }
 
@@ -853,7 +878,7 @@ struct NoteDetailView: View {
             // Drop it where the page is currently scrolled (page coords), so it
             // appears in view and stays anchored to the page afterward.
             let item = CanvasItem(kind: .image,
-                                  x: Double(canvasScroll.x) + 40, y: Double(canvasScroll.y) + 40,
+                                  x: 40, y: Double(notesScrollY) + 40,
                                   width: 220, height: 165, imageData: small)
             note.canvasItems = note.canvasItems + [item]
             selectedItemID = item.id
@@ -875,7 +900,7 @@ struct NoteDetailView: View {
         guard let data = try? await pick.loadTransferable(type: Data.self),
               let small = AttachmentSupport.downscaled(data, maxDimension: 1000) else { return }
         let item = CanvasItem(kind: .image,
-                              x: Double(canvasScroll.x) + 40, y: Double(canvasScroll.y) + 40,
+                              x: 40, y: Double(notesScrollY) + 40,
                               width: 220, height: 165, imageData: small)
         note.canvasItems = note.canvasItems + [item]
         selectedItemID = item.id
@@ -1383,6 +1408,12 @@ enum HandwritingOCR {
 /// The images-and-shapes layer floating on top of the handwriting page. Items
 /// render read-only on Mac/iPhone; on iPad they can be tapped to select, dragged
 /// to move, resized from the corner handle, and deleted — at any time, no mode.
+/// Reports the note page's scroll offset (so new pics drop into the current view).
+private struct NotesScrollKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 private struct CanvasItemsLayer: View {
     @Binding var items: [CanvasItem]
     @Binding var selectedID: UUID?
@@ -1449,9 +1480,12 @@ private struct CanvasItemsLayer: View {
             .overlay(alignment: .topLeading) { if selected { deleteHandle(item) } }
             .overlay(alignment: .bottomTrailing) { if selected { resizeHandle(item) } }
             .contentShape(Rectangle())
-            // page coords − scroll offset, so the item scrolls with the ink.
+            // page coords (the outer scroll moves the whole stack).
             .offset(x: o.x - pad - scrollOffset.x, y: o.y - pad - scrollOffset.y)
             .onTapGesture { selectedID = item.id }
+            // High-priority so dragging an item beats the outer page scroll. The
+            // resize handle (a deeper view) has its own high-priority gesture, so it
+            // still wins when you grab the corner.
             .highPriorityGesture(moveGesture(item))
     }
 

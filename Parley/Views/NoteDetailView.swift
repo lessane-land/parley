@@ -719,7 +719,8 @@ struct NoteDetailView: View {
 
                 #if os(iOS)
                 if showsHandwriting {
-                    DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw,
+                    DrawingCanvas(data: $note.drawing, inkColor: theme.ink,
+                                  isActive: penMode == .draw && !isEditingText,
                                   recognizeShapes: true,
                                   onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) },
                                   scrollEnabled: false,
@@ -768,6 +769,12 @@ struct NoteDetailView: View {
     /// Typed layer accepts touches unless we're drawing on iPad.
     private var typedActive: Bool {
         !showsHandwriting || penMode == .type
+    }
+
+    /// True while a text-input alert is open (speaker name / new tag). The pencil
+    /// canvas must drop first-responder then, or the alert's keyboard can't appear.
+    private var isEditingText: Bool {
+        editingSpeakerID != nil || showingNewTag
     }
 
     /// Canvas items are movable/resizable on iPad (where the pencil canvas is) and

@@ -198,10 +198,18 @@ struct NoteDetailView: View {
             Button("Cancel", role: .cancel) { editingSpeakerID = nil }
         }
         // Auto-start recording when opened via the Record CTA.
-        .onAppear {
-            if autoRecord, !didAutoStart, !transcription.isRecording {
-                didAutoStart = true
-                onAutoRecordConsumed()
+        .task {
+            guard autoRecord, !didAutoStart, !transcription.isRecording else { return }
+            didAutoStart = true
+            onAutoRecordConsumed()
+            // The very first launch needs the pushed view + audio session to settle;
+            // a synchronous start here can silently no-op. Defer briefly, then retry
+            // a couple of times until recording actually begins.
+            for attempt in 0..<3 {
+                if transcription.isRecording { break }
+                try? await Task.sleep(for: .milliseconds(attempt == 0 ? 300 : 500))
+                if transcription.isRecording || transcription.state == .preparing
+                    || transcription.state == .downloadingModel { continue }
                 toggleRecord()
             }
         }
@@ -251,41 +259,48 @@ struct NoteDetailView: View {
 
     private func attachmentCard(_ attachment: Attachment) -> some View {
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9, style: .continuous)
-        return Button { previewAttachment = attachment } label: {
-            VStack(spacing: 0) {
-                ZStack {
-                    if let data = attachment.data,
-                       AttachmentSupport.isImage(attachment),
-                       let image = AttachmentSupport.image(from: data) {
-                        image.resizable().scaledToFill()
-                    } else {
-                        theme.paperSunk
-                        Image(systemName: AttachmentSupport.icon(attachment))
-                            .font(.system(size: 20))
-                            .foregroundStyle(theme.accent)
-                    }
+        // Not a Button — a tappable card with its own visible delete control, so
+        // taps (preview) and the ✕ (remove) don't fight as nested buttons.
+        return VStack(spacing: 0) {
+            ZStack {
+                if let data = attachment.data,
+                   AttachmentSupport.isImage(attachment),
+                   let image = AttachmentSupport.image(from: data) {
+                    image.resizable().scaledToFill()
+                } else {
+                    theme.paperSunk
+                    Image(systemName: AttachmentSupport.icon(attachment))
+                        .font(.system(size: 20))
+                        .foregroundStyle(theme.accent)
                 }
-                .frame(width: 104, height: 58)
-                .clipped()
+            }
+            .frame(width: 104, height: 58)
+            .clipped()
 
-                Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
-                    .font(theme.monoFont(9.5, relativeTo: .caption2))
-                    .foregroundStyle(theme.inkSoft)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(width: 104, alignment: .leading)
-                    .padding(.horizontal, 7).padding(.vertical, 5)
-            }
-            .frame(width: 104)
-            .background(theme.paperRaised)
-            .clipShape(shape)
-            .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+            Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
+                .font(theme.monoFont(9.5, relativeTo: .caption2))
+                .foregroundStyle(theme.inkSoft)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(width: 104, alignment: .leading)
+                .padding(.horizontal, 7).padding(.vertical, 5)
         }
-        .buttonStyle(.plain)
-        .contextMenu {
-            Button(role: .destructive) { removeAttachment(attachment) } label: {
-                Label("Remove", systemImage: "trash")
+        .frame(width: 104)
+        .background(theme.paperRaised)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+        .contentShape(shape)
+        .onTapGesture { previewAttachment = attachment }
+        .overlay(alignment: .topTrailing) {
+            Button { removeAttachment(attachment) } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 17))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(theme.paperRaised, theme.inkSoft)
             }
+            .buttonStyle(.plain)
+            .padding(3)
+            .accessibilityLabel("Remove attachment")
         }
     }
 
@@ -295,7 +310,10 @@ struct NoteDetailView: View {
             Button { showPhotoPicker = true } label: { Label("Photo", systemImage: "photo") }
             Button { importingFile = true } label: { Label("File", systemImage: "doc") }
         } label: {
+            // Icon-only to match the other toolbar buttons (a Menu's text label
+            // otherwise renders larger/wider than the plain icon buttons).
             Label("Attach", systemImage: "paperclip")
+                .labelStyle(.iconOnly)
         }
     }
 

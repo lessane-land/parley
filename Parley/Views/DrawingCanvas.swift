@@ -41,6 +41,16 @@ struct DrawingCanvas: UIViewRepresentable {
     /// the ink (otherwise a pasted image/shape stays pinned to the screen).
     var onScroll: ((CGPoint) -> Void)? = nil
 
+    /// When false, the canvas does its own scrolling. When the note surface wraps
+    /// everything (text + ink + items) in one outer scroll view, set this false so
+    /// the canvas is a fixed-height drawing layer and the *outer* scroll moves it —
+    /// making text, ink, and pictures scroll together as one page.
+    var scrollEnabled: Bool = true
+
+    /// While `scrollEnabled` is false, reports the ink's lowest point so the owner
+    /// can grow the page height to keep room to draw.
+    var onContentHeight: ((CGFloat) -> Void)? = nil
+
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = PKCanvasView()
         // `.default` follows the system: when an Apple Pencil is paired the Pencil
@@ -51,8 +61,11 @@ struct DrawingCanvas: UIViewRepresentable {
         canvas.drawingPolicy = .default
         canvas.backgroundColor = .clear         // overlays the typed notes; paper shows through
         canvas.isOpaque = false
-        canvas.alwaysBounceVertical = true      // makes the scrollability discoverable
-        canvas.showsVerticalScrollIndicator = true
+        // When the outer surface scrolls, the canvas itself must not (it's a fixed
+        // drawing layer the outer scroll moves).
+        canvas.isScrollEnabled = scrollEnabled
+        canvas.alwaysBounceVertical = scrollEnabled
+        canvas.showsVerticalScrollIndicator = scrollEnabled
         // PKCanvasView is a UIScrollView; its default `.automatic` inset behavior
         // folds the surrounding safe area into an *adjusted content inset*, which
         // shoves a saved drawing to the right (blank gutter on the left, strokes
@@ -92,7 +105,15 @@ struct DrawingCanvas: UIViewRepresentable {
             context.coordinator.appliedActive = isActive
             applyActive(isActive, to: canvas, context: context)
         }
-        Self.growContent(canvas)
+        if scrollEnabled {
+            Self.growContent(canvas)
+        } else {
+            // Outer scroll owns scrolling: pin the canvas's content to its bounds.
+            canvas.isScrollEnabled = false
+            if canvas.contentSize != canvas.bounds.size {
+                canvas.contentSize = canvas.bounds.size
+            }
+        }
     }
 
     /// Grow the scrollable content so there's always room below the lowest stroke
@@ -139,7 +160,12 @@ struct DrawingCanvas: UIViewRepresentable {
         /// binding → SwiftData persists it.
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             parent.data = canvasView.drawing.dataRepresentation()
-            DrawingCanvas.growContent(canvasView)
+            if parent.scrollEnabled {
+                DrawingCanvas.growContent(canvasView)
+            } else {
+                let bottom = canvasView.drawing.bounds.isNull ? 0 : canvasView.drawing.bounds.maxY
+                parent.onContentHeight?(bottom)
+            }
         }
 
         /// The user actually started drawing — bring the canvas (and its tool

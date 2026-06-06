@@ -27,6 +27,15 @@ struct DrawingCanvas: UIViewRepresentable {
     /// underneath can be typed in.
     var isActive: Bool = true
 
+    /// When on, a freehand stroke that clearly traces a rectangle or oval is
+    /// swapped for a clean, movable shape. (Apple's own shape recognition isn't
+    /// available to third-party `PKCanvasView`s, so we do it ourselves.)
+    var recognizeShapes: Bool = true
+
+    /// Called when a stroke was recognized as a shape: its kind and rect in the
+    /// canvas's on-screen coordinates, so the overlay can drop a `CanvasItem` there.
+    var onRecognizeShape: ((CanvasItem.Kind, CGRect) -> Void)? = nil
+
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = PKCanvasView()
         // `.default` follows the system: when an Apple Pencil is paired the Pencil
@@ -57,6 +66,7 @@ struct DrawingCanvas: UIViewRepresentable {
         if let data, let drawing = try? PKDrawing(data: data) {
             canvas.drawing = drawing
         }
+        context.coordinator.lastStrokeCount = canvas.drawing.strokes.count
 
         context.coordinator.toolPicker.addObserver(canvas)
         applyActive(isActive, to: canvas, context: context)
@@ -114,6 +124,10 @@ struct DrawingCanvas: UIViewRepresentable {
         /// real changes (and never re-steals first responder from a text field).
         var appliedActive: Bool?
 
+        /// Stroke count after the last settled change, so on tool-end we can tell a
+        /// freehand stroke was just added (vs. an erase or our own edit).
+        var lastStrokeCount = 0
+
         init(_ parent: DrawingCanvas) { self.parent = parent }
 
         /// Fired whenever the strokes change. Serialize and push back through the
@@ -131,6 +145,76 @@ struct DrawingCanvas: UIViewRepresentable {
             if !canvasView.isFirstResponder { canvasView.becomeFirstResponder() }
             toolPicker.setVisible(true, forFirstResponder: canvasView)
         }
+
+        /// On pencil-up, if the just-finished stroke clearly traces a shape, swap
+        /// the freehand ink for a clean shape the user can move and resize.
+        func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+            defer { lastStrokeCount = canvasView.drawing.strokes.count }
+            guard parent.recognizeShapes else { return }
+            let strokes = canvasView.drawing.strokes
+            // Only a single, freshly-added stroke is a shape candidate.
+            guard strokes.count == lastStrokeCount + 1, let stroke = strokes.last,
+                  let (kind, pageRect) = ShapeRecognizer.classify(stroke) else { return }
+
+            var remaining = strokes
+            remaining.removeLast()
+            let cleaned = PKDrawing(strokes: remaining)
+            canvasView.drawing = cleaned
+            parent.data = cleaned.dataRepresentation()
+            DrawingCanvas.growContent(canvasView)
+
+            // Page → on-screen coords for the overlay layer (which isn't scrolled).
+            let onScreen = pageRect.offsetBy(dx: -canvasView.contentOffset.x,
+                                             dy: -canvasView.contentOffset.y)
+            parent.onRecognizeShape?(kind, onScreen)
+        }
+    }
+}
+
+/// Lightweight, on-device shape recognition for a single Pencil stroke. No ML —
+/// just geometry: a large, *closed* stroke is fit against a rectangle and an oval,
+/// and the better fit wins (if either is clean enough). Open strokes and small
+/// marks (handwriting) are left as ink.
+enum ShapeRecognizer {
+    static func classify(_ stroke: PKStroke) -> (CanvasItem.Kind, CGRect)? {
+        let path = stroke.path
+        guard path.count >= 6 else { return nil }
+
+        var pts: [CGPoint] = []
+        pts.reserveCapacity(path.count)
+        for i in 0..<path.count { pts.append(path[i].location.applying(stroke.transform)) }
+
+        var minX = CGFloat.greatestFiniteMagnitude, minY = CGFloat.greatestFiniteMagnitude
+        var maxX = -CGFloat.greatestFiniteMagnitude, maxY = -CGFloat.greatestFiniteMagnitude
+        for p in pts {
+            minX = min(minX, p.x); minY = min(minY, p.y)
+            maxX = max(maxX, p.x); maxY = max(maxY, p.y)
+        }
+        let w = maxX - minX, h = maxY - minY
+        let diag = hypot(w, h)
+        // Ignore small marks (letters, dots) and near-degenerate (flat) strokes.
+        guard diag > 54, w > 26, h > 26 else { return nil }
+
+        // Must be roughly closed (end returns near start) to be a rect/oval. A bit
+        // lenient so a hand-drawn shape with a small gap still counts.
+        let first = pts.first!, last = pts.last!
+        guard hypot(last.x - first.x, last.y - first.y) < diag * 0.30 else { return nil }
+
+        let cx = minX + w / 2, cy = minY + h / 2
+        let ax = w / 2, ay = h / 2
+        var ellErr: CGFloat = 0, rectErr: CGFloat = 0
+        for p in pts {
+            let nx = (p.x - cx) / ax, ny = (p.y - cy) / ay
+            ellErr += abs((nx * nx + ny * ny).squareRoot() - 1)   // distance from unit circle
+            rectErr += abs(max(abs(nx), abs(ny)) - 1)             // distance from unit square
+        }
+        let n = CGFloat(pts.count)
+        ellErr /= n; rectErr /= n
+        // Require a reasonably clean trace; otherwise keep the freehand ink.
+        guard min(ellErr, rectErr) < 0.26 else { return nil }
+
+        let rect = CGRect(x: minX, y: minY, width: w, height: h)
+        return (ellErr <= rectErr ? .ellipse : .rectangle, rect)
     }
 }
 #endif

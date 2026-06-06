@@ -8,6 +8,7 @@ struct NoteListView: View {
     @Environment(ThemeManager.self) private var themeManager
     @Environment(EventKitService.self) private var eventKit
     @Environment(SyncMonitor.self) private var syncMonitor
+    @Environment(RecordingCoordinator.self) private var recorder
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var hSize
@@ -107,6 +108,12 @@ struct NoteListView: View {
                 }
         }
         .tint(theme.accent)
+        // Menu bar "Open Parley" while recording → jump to that note.
+        .onChange(of: recorder.openTick) { _, _ in
+            guard let id = recorder.openNoteRequest,
+                  let note = notes.first(where: { $0.persistentModelID == id }) else { return }
+            if path.last?.persistentModelID != id { path.append(note) }
+        }
         .alert("Rename Tag", isPresented: Binding(
             get: { editingTag != nil },
             set: { if !$0 { editingTag = nil } }

@@ -107,30 +107,76 @@ struct ParleyApp: App {
         // introduces a new scene, not a modifier.
         #if os(macOS)
         MenuBarExtra {
-            if recorder.isRecording {
-                Text("Recording \(recorder.activeNoteTitle ?? "meeting")…")
-                Button("Stop Recording") { recorder.stop() }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-            } else {
-                Button("New Recording") {
-                    // No NSApp.activate — start capturing while staying in the
-                    // background so the user can keep using their meeting app.
+            // `.window` style hosts live SwiftUI (a TimelineView), so the dropdown
+            // can show a running "Recording mm:ss…" timer.
+            MenuBarPanel(
+                recorder: recorder,
+                startNew: {
+                    // No NSApp.activate — capture while staying in the background.
                     recorder.startNewRecording(context: modelContainer.mainContext,
                                                themeManager: themeManager)
+                },
+                openApp: {
+                    NSApp.activate(ignoringOtherApps: true)
+                    recorder.requestOpenActiveNote()   // jump to the recording note
                 }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-            }
-            Divider()
-            Button("Open Parley") { NSApp.activate(ignoringOtherApps: true) }
-            Button("Quit Parley") { NSApplication.shared.terminate(nil) }
+            )
         } label: {
             // A filled, red-tinted icon signals an active background recording.
             Image(systemName: recorder.isRecording ? "waveform.circle.fill" : "waveform")
                 .symbolRenderingMode(recorder.isRecording ? .multicolor : .monochrome)
         }
+        .menuBarExtraStyle(.window)
         #endif
     }
 }
+
+#if os(macOS)
+/// The macOS menu-bar dropdown panel. A `.window`-style `MenuBarExtra` renders this
+/// live, so the recording timer actually ticks.
+private struct MenuBarPanel: View {
+    let recorder: RecordingCoordinator
+    var startNew: () -> Void
+    var openApp: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if recorder.isRecording {
+                HStack(spacing: 8) {
+                    Circle().fill(.red).frame(width: 8, height: 8)
+                    if let started = recorder.startedAt {
+                        TimelineView(.periodic(from: started, by: 1)) { _ in
+                            Text("Recording \(elapsed(since: started))…")
+                                .font(.headline)
+                        }
+                    } else {
+                        Text("Recording…").font(.headline)
+                    }
+                }
+                if let title = recorder.activeNoteTitle {
+                    Text(title).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Button("Stop Recording") { recorder.stop() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+            } else {
+                Button("New Recording") { startNew() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+            }
+
+            Divider()
+            Button("Open Parley") { openApp() }
+            Button("Quit Parley") { NSApplication.shared.terminate(nil) }
+        }
+        .padding(14)
+        .frame(width: 250)
+    }
+
+    private func elapsed(since start: Date) -> String {
+        let s = max(0, Int(Date().timeIntervalSince(start)))
+        return String(format: "%02d:%02d", s / 60, s % 60)
+    }
+}
+#endif
 
 /// App-level recording that runs independently of any window, so the macOS menu
 /// bar can start capturing a meeting in the background. It owns one transcription
@@ -147,6 +193,17 @@ final class RecordingCoordinator {
     /// The note currently being recorded into (nil when idle). The view layer reads
     /// `activeNoteID` to show a live indicator / route Stop for that note.
     private(set) var activeNoteID: PersistentIdentifier?
+
+    /// Bumped (with the note id) when the menu bar asks the window to jump to the
+    /// note that's recording. `NoteListView` observes `openTick` and navigates.
+    private(set) var openNoteRequest: PersistentIdentifier?
+    private(set) var openTick = 0
+
+    /// Ask the main window to open the active (or most recent) recording note.
+    func requestOpenActiveNote() {
+        openNoteRequest = activeNoteID
+        openTick += 1
+    }
     private var activeNote: Note?
     private var context: ModelContext?
     private var themeManager: ThemeManager?

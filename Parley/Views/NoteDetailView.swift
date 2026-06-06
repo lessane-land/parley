@@ -64,7 +64,12 @@ struct NoteDetailView: View {
     /// Defaults to **Draw** (Pencil-first). The keyboard still works for the title
     /// and other fields; tap **Type** to type into the notes body.
     @State private var penMode: PenMode = .draw
-    private enum PenMode: Hashable { case type, draw }
+    private enum PenMode: Hashable { case type, draw, arrange }
+
+    /// Canvas (images + shapes) editing state.
+    @State private var selectedItemID: UUID?
+    @State private var showCanvasPhoto = false
+    @State private var canvasPhotoItem: PhotosPickerItem?
 
     /// Notes ⟷ transcript layout (order + split ratio) is a persisted preference
     /// on `ThemeManager`, so the arrangement sticks across notes and launches.
@@ -202,6 +207,8 @@ struct NoteDetailView: View {
         }
         // Auto-start recording when opened via the Record CTA.
         .task {
+            // Merge any duplicate enrolled voices that synced in from another device.
+            SpeakerProfile.dedupe(speakerProfiles, in: context)
             guard autoRecord, !didAutoStart, !transcription.isRecording else { return }
             didAutoStart = true
             onAutoRecordConsumed()
@@ -642,6 +649,13 @@ struct NoteDetailView: View {
             notesSurface
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        #if os(iOS)
+        .photosPicker(isPresented: $showCanvasPhoto, selection: $canvasPhotoItem, matching: .images)
+        .onChange(of: canvasPhotoItem) { _, item in
+            guard let item else { return }
+            Task { await addCanvasImage(item); canvasPhotoItem = nil }
+        }
+        #endif
     }
 
     /// One surface: typed notes with the Pencil canvas overlaid. The active mode
@@ -649,6 +663,14 @@ struct NoteDetailView: View {
     /// type *and* draw on the same page — the design's unified notes canvas.
     private var notesSurface: some View {
         ZStack(alignment: .topLeading) {
+            // Rich content (images + shapes) sits *behind* the text and strokes.
+            CanvasItemsLayer(
+                items: Binding(get: { note.canvasItems }, set: { note.canvasItems = $0 }),
+                selectedID: $selectedItemID,
+                active: arrangeActive,
+                theme: theme
+            )
+
             typedNotes
                 .allowsHitTesting(typedActive)
 
@@ -676,9 +698,18 @@ struct NoteDetailView: View {
         }
     }
 
-    /// Typed layer accepts touches unless we're actively drawing on iPad.
+    /// Typed layer accepts touches unless we're drawing or arranging on iPad.
     private var typedActive: Bool {
         !showsHandwriting || penMode == .type
+    }
+
+    /// Whether the canvas items layer is interactive (iPad "Arrange" mode).
+    private var arrangeActive: Bool {
+        #if os(iOS)
+        return showsHandwriting && penMode == .arrange
+        #else
+        return false
+        #endif
     }
 
     #if os(iOS)
@@ -687,6 +718,7 @@ struct NoteDetailView: View {
             Picker("Input", selection: $penMode) {
                 Label("Type", systemImage: "keyboard").tag(PenMode.type)
                 Label("Draw", systemImage: "pencil.tip").tag(PenMode.draw)
+                Label("Arrange", systemImage: "hand.point.up.left").tag(PenMode.arrange)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -700,8 +732,52 @@ struct NoteDetailView: View {
                 }
                 .tint(theme.accent)
                 .disabled(note.drawing == nil)
+            } else if penMode == .arrange {
+                insertPalette
             }
         }
+    }
+
+    /// The Arrange-mode palette: add an image or a shape, delete the selection.
+    private var insertPalette: some View {
+        HStack(spacing: 12) {
+            Button { showCanvasPhoto = true } label: { Image(systemName: "photo") }
+            Button { addShape(.rectangle) } label: { Image(systemName: "rectangle") }
+            Button { addShape(.ellipse) } label: { Image(systemName: "circle") }
+            Button { addShape(.line) } label: { Image(systemName: "line.diagonal") }
+            Button { addShape(.arrow) } label: { Image(systemName: "arrow.up.right") }
+            if selectedItemID != nil {
+                Divider().frame(height: 18)
+                Button(role: .destructive) { deleteSelectedItem() } label: { Image(systemName: "trash") }
+            }
+        }
+        .font(.system(size: 16))
+        .tint(theme.accent)
+    }
+
+    // MARK: Canvas items (images + shapes)
+
+    private func addShape(_ kind: CanvasItem.Kind) {
+        let hex = themeManager.accentHex ?? themeManager.mood.config.accentDefault
+        let wide = (kind == .line || kind == .arrow)
+        let item = CanvasItem(kind: kind, x: 40, y: 40,
+                              width: wide ? 200 : 180, height: wide ? 120 : 130, colorHex: hex)
+        note.canvasItems = note.canvasItems + [item]
+        selectedItemID = item.id
+    }
+
+    private func addCanvasImage(_ pick: PhotosPickerItem) async {
+        guard let data = try? await pick.loadTransferable(type: Data.self),
+              let small = AttachmentSupport.downscaled(data, maxDimension: 1000) else { return }
+        let item = CanvasItem(kind: .image, x: 40, y: 40, width: 220, height: 165, imageData: small)
+        note.canvasItems = note.canvasItems + [item]
+        selectedItemID = item.id
+    }
+
+    private func deleteSelectedItem() {
+        guard let id = selectedItemID else { return }
+        note.canvasItems = note.canvasItems.filter { $0.id != id }
+        selectedItemID = nil
     }
     #endif
 
@@ -1029,6 +1105,147 @@ struct DrawingImageView: View {
     }
 }
 
+// MARK: - Canvas items (images + shapes)
+
+/// The images-and-shapes layer on the handwriting page. Items render read-only on
+/// Mac/iPhone (and outside Arrange mode); in iPad's Arrange mode they can be tapped
+/// to select, dragged to move, resized from the corner handle, and deleted.
+private struct CanvasItemsLayer: View {
+    @Binding var items: [CanvasItem]
+    @Binding var selectedID: UUID?
+    let active: Bool
+    let theme: Theme
+
+    @State private var dragID: UUID?
+    @State private var dragOffset: CGSize = .zero
+    @State private var resizeID: UUID?
+    @State private var resizeOffset: CGSize = .zero
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(items) { item in itemView(item) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(active)
+    }
+
+    private func size(of item: CanvasItem) -> CGSize {
+        var w = item.width, h = item.height
+        if resizeID == item.id { w += resizeOffset.width; h += resizeOffset.height }
+        return CGSize(width: max(40, w), height: max(40, h))
+    }
+    private func origin(of item: CanvasItem) -> CGPoint {
+        var x = item.x, y = item.y
+        if dragID == item.id { x += dragOffset.width; y += dragOffset.height }
+        return CGPoint(x: max(0, x), y: max(0, y))
+    }
+
+    private func itemView(_ item: CanvasItem) -> some View {
+        let s = size(of: item)
+        let o = origin(of: item)
+        let selected = active && selectedID == item.id
+        return content(item, size: s)
+            .overlay { if selected { chrome(item, size: s) } }
+            .offset(x: o.x, y: o.y)
+            .contentShape(Rectangle())
+            .onTapGesture { selectedID = item.id }
+            .gesture(moveGesture(item))   // gated by the layer's allowsHitTesting(active)
+    }
+
+    @ViewBuilder
+    private func content(_ item: CanvasItem, size: CGSize) -> some View {
+        switch item.kind {
+        case .image:
+            Group {
+                if let data = item.imageData, let img = AttachmentSupport.image(from: data) {
+                    img.resizable().scaledToFill()
+                } else {
+                    theme.paperSunk
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        case .rectangle:
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(Color(hex: item.colorHex), lineWidth: 3)
+                .frame(width: size.width, height: size.height)
+        case .ellipse:
+            Ellipse().stroke(Color(hex: item.colorHex), lineWidth: 3)
+                .frame(width: size.width, height: size.height)
+        case .line:
+            CanvasLine().stroke(Color(hex: item.colorHex), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .frame(width: size.width, height: size.height)
+        case .arrow:
+            CanvasArrow().stroke(Color(hex: item.colorHex), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                .frame(width: size.width, height: size.height)
+        }
+    }
+
+    private func chrome(_ item: CanvasItem, size: CGSize) -> some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle().strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+            Circle().fill(theme.accent)
+                .frame(width: 22, height: 22)
+                .overlay(Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
+                .offset(x: size.width - 11, y: size.height - 11)
+                .highPriorityGesture(resizeGesture(item))
+        }
+    }
+
+    private func moveGesture(_ item: CanvasItem) -> some Gesture {
+        DragGesture()
+            .onChanged { v in selectedID = item.id; dragID = item.id; dragOffset = v.translation }
+            .onEnded { v in
+                if let i = items.firstIndex(where: { $0.id == item.id }) {
+                    items[i].x = max(0, items[i].x + v.translation.width)
+                    items[i].y = max(0, items[i].y + v.translation.height)
+                }
+                dragID = nil; dragOffset = .zero
+            }
+    }
+
+    private func resizeGesture(_ item: CanvasItem) -> some Gesture {
+        DragGesture()
+            .onChanged { v in resizeID = item.id; resizeOffset = v.translation }
+            .onEnded { v in
+                if let i = items.firstIndex(where: { $0.id == item.id }) {
+                    items[i].width = max(40, items[i].width + v.translation.width)
+                    items[i].height = max(40, items[i].height + v.translation.height)
+                }
+                resizeID = nil; resizeOffset = .zero
+            }
+    }
+}
+
+/// A diagonal line spanning its frame (top-left → bottom-right).
+private struct CanvasLine: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        return p
+    }
+}
+
+/// An arrow (bottom-left → top-right) with a small head.
+private struct CanvasArrow: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let start = CGPoint(x: r.minX, y: r.maxY)
+        let end = CGPoint(x: r.maxX, y: r.minY)
+        p.move(to: start); p.addLine(to: end)
+        let angle = atan2(end.y - start.y, end.x - start.x)
+        let head = min(r.width, r.height) * 0.28
+        for delta in [CGFloat.pi * 0.82, -CGFloat.pi * 0.82] {
+            p.move(to: end)
+            p.addLine(to: CGPoint(x: end.x + cos(angle + delta) * head,
+                                  y: end.y + sin(angle + delta) * head))
+        }
+        return p
+    }
+}
+
 // MARK: - Attachment helpers + preview
 
 /// Cross-platform helpers for rendering attachments — kept in one place so the
@@ -1047,6 +1264,23 @@ enum AttachmentSupport {
         if let ns = NSImage(data: data) { return Image(nsImage: ns) }
         #endif
         return nil
+    }
+
+    /// Downscale image bytes so a photo dropped on the page stays small enough to
+    /// live inline in the note's JSON (and sync cheaply). Returns JPEG data.
+    static func downscaled(_ data: Data, maxDimension: CGFloat) -> Data? {
+        #if canImport(UIKit)
+        guard let ui = UIImage(data: data) else { return nil }
+        let longest = max(ui.size.width, ui.size.height)
+        guard longest > maxDimension else { return ui.jpegData(compressionQuality: 0.7) ?? data }
+        let scale = maxDimension / longest
+        let target = CGSize(width: ui.size.width * scale, height: ui.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: target)
+        let resized = renderer.image { _ in ui.draw(in: CGRect(origin: .zero, size: target)) }
+        return resized.jpegData(compressionQuality: 0.7)
+        #else
+        return data   // canvas image insertion is an iPad feature; no resize needed elsewhere
+        #endif
     }
 
     /// An SF Symbol that suits the attachment's type.

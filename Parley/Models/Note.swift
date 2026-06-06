@@ -65,6 +65,11 @@ final class Note {
     /// note is open, not just right after recording. Optional Data → CloudKit-safe.
     var speakerEmbeddingsData: Data?
 
+    /// Canvas items placed on the handwriting page (images + shapes), as JSON of
+    /// `[CanvasItem]`. The handwriting strokes (`drawing`) sit on top; these are the
+    /// "rich content" layer behind them. Optional Data → CloudKit-safe.
+    var canvasItemsData: Data?
+
     /// Tags attached to this note. Optional to-many (CloudKit requirement); the
     /// inverse is declared on `Tag.notes`.
     var tags: [Tag]?
@@ -113,6 +118,18 @@ final class Note {
         }
         set {
             transcriptData = newValue.isEmpty ? nil : (try? JSONEncoder().encode(newValue))
+        }
+    }
+
+    /// Canvas items (images + shapes) on the page. Convenience around the JSON in
+    /// `canvasItemsData`.
+    var canvasItems: [CanvasItem] {
+        get {
+            guard let canvasItemsData else { return [] }
+            return (try? JSONDecoder().decode([CanvasItem].self, from: canvasItemsData)) ?? []
+        }
+        set {
+            canvasItemsData = newValue.isEmpty ? nil : (try? JSONEncoder().encode(newValue))
         }
     }
 
@@ -197,6 +214,48 @@ final class Attachment {
         self.typeIdentifier = typeIdentifier
         self.createdAt = createdAt
         self.data = data
+    }
+}
+
+/// A piece of rich content placed on the handwriting page: an image or a vector
+/// shape. Position/size are in the page's point coordinates. `Codable` so it
+/// persists inside `Note.canvasItemsData`; image bytes are stored inline
+/// (downscaled on insert) so the whole page syncs as one record.
+struct CanvasItem: Codable, Equatable, Identifiable {
+    enum Kind: String, Codable { case image, rectangle, ellipse, line, arrow }
+
+    var id: UUID = UUID()
+    var kind: Kind = .rectangle
+    var x: Double = 40
+    var y: Double = 40
+    var width: Double = 180
+    var height: Double = 130
+    var colorHex: String = "#3E5C50"
+    var imageData: Data?
+
+    init(id: UUID = UUID(), kind: Kind = .rectangle, x: Double = 40, y: Double = 40,
+         width: Double = 180, height: Double = 130, colorHex: String = "#3E5C50", imageData: Data? = nil) {
+        self.id = id
+        self.kind = kind
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.colorHex = colorHex
+        self.imageData = imageData
+    }
+
+    /// Lenient decode so items saved before a field existed still load.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        kind = try c.decodeIfPresent(Kind.self, forKey: .kind) ?? .rectangle
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 40
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 40
+        width = try c.decodeIfPresent(Double.self, forKey: .width) ?? 180
+        height = try c.decodeIfPresent(Double.self, forKey: .height) ?? 130
+        colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex) ?? "#3E5C50"
+        imageData = try c.decodeIfPresent(Data.self, forKey: .imageData)
     }
 }
 

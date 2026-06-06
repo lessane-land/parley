@@ -29,6 +29,9 @@ struct SettingsView: View {
         }
         .background(theme.paperSunk)
         .tint(theme.accent)
+        // Fold duplicate enrolled voices (e.g. the same person enrolled on two
+        // devices before they synced) so the list stays clean.
+        .task { SpeakerProfile.dedupe(speakerProfiles, in: context) }
     }
 
     // MARK: Sections

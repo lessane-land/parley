@@ -118,9 +118,13 @@ enum AppIcon {
         // uses, so it matches the artwork (and the current mood) exactly.
         let renderer = ImageRenderer(content: AppIconView(mood: mood, size: 512))
         renderer.scale = 2
-        if let cg = renderer.cgImage {
-            NSApp.applicationIconImage = NSImage(cgImage: cg, size: NSSize(width: 512, height: 512))
-        }
+        guard let cg = renderer.cgImage else { return }
+        let image = NSImage(cgImage: cg, size: NSSize(width: 512, height: 512))
+        NSApp.applicationIconImage = image
+        // Assigning `applicationIconImage` alone often doesn't repaint the Dock —
+        // set the tile's contents and force a redraw so the mood icon actually shows.
+        NSApp.dockTile.contentView = NSImageView(image: image)
+        NSApp.dockTile.display()
         #endif
     }
 }

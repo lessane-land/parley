@@ -471,7 +471,10 @@ struct SummaryView: View {
         // Include recognized handwriting so the summary reads pen notes too.
         var notesText = note.body
         if let drawing = note.drawing {
-            let handwritten = await HandwritingOCR.recognize(drawing)
+            let languages = (themeManager.transcriptionLanguage?.isEmpty == false)
+                ? [themeManager.transcriptionLanguage!] : []
+            let handwritten = await HandwritingOCR.recognize(
+                drawing, languages: languages, customWords: note.attendees)
             if !handwritten.isEmpty { notesText += (notesText.isEmpty ? "" : "\n") + handwritten }
         }
         let result = await service.summarize(

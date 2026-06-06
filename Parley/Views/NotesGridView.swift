@@ -10,8 +10,12 @@ struct NotesGridView: View {
     let onOpen: (Note) -> Void
     let onDelete: (Note) -> Void
     let onTogglePin: (Note) -> Void
+    /// Whether the freeform board is offered here (iPad/Mac only — not iPhone).
+    var allowsBoard: Bool = false
 
     @Environment(ThemeManager.self) private var themeManager
+
+    private var boardActive: Bool { allowsBoard && themeManager.freeformBoard }
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: themeManager.cardSize.columnMin), spacing: 14)]
@@ -23,47 +27,65 @@ struct NotesGridView: View {
 
     var body: some View {
         @Bindable var manager = themeManager
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(title)
-                            .font(theme.titleFont(30, relativeTo: .largeTitle))
-                            .tracking(theme.titleTracking)
-                            .textCase(theme.titleUppercase ? .uppercase : nil)
-                            .foregroundStyle(theme.ink)
-                        Text("\(notes.count) note\(notes.count == 1 ? "" : "s")")
-                            .font(theme.monoFont(12))
-                            .foregroundStyle(theme.inkFaint)
-                    }
-                    Spacer()
-                    dashboardConfig(manager)
+        return Group {
+            if boardActive && !notes.isEmpty {
+                // Freeform board: arrange/resize cards yourself (positions sync).
+                VStack(alignment: .leading, spacing: 0) {
+                    dashboardHeader(manager)
+                        .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
+                    NotesBoardView(
+                        notes: notes, theme: theme, mood: mood, size: manager.cardSize,
+                        onOpen: onOpen, onDelete: onDelete, onTogglePin: onTogglePin)
                 }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        dashboardHeader(manager)
 
-                if notes.isEmpty {
-                    emptyState
-                } else {
-                    // Pinned notes become the wide "feature" hero only when enabled;
-                    // its size follows the card-size setting.
-                    if manager.featurePinned && !pinnedNotes.isEmpty {
-                        VStack(spacing: 14) {
-                            ForEach(pinnedNotes) { note in
-                                cardButton(note, hero: true)
-                                    .frame(maxWidth: manager.cardSize.columnMin * 2 + 14, alignment: .leading)
+                        if notes.isEmpty {
+                            emptyState
+                        } else {
+                            // Pinned notes become the wide "feature" hero only when
+                            // enabled; its size follows the card-size setting.
+                            if manager.featurePinned && !pinnedNotes.isEmpty {
+                                VStack(spacing: 14) {
+                                    ForEach(pinnedNotes) { note in
+                                        cardButton(note, hero: true)
+                                            .frame(maxWidth: manager.cardSize.columnMin * 2 + 14, alignment: .leading)
+                                    }
+                                }
+                            }
+                            if !gridNotes.isEmpty {
+                                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                                    ForEach(gridNotes) { cardButton($0, hero: false) }
+                                }
                             }
                         }
                     }
-                    if !gridNotes.isEmpty {
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                            ForEach(gridNotes) { cardButton($0, hero: false) }
-                        }
-                    }
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .moodPaper(theme)
+    }
+
+    /// The "All Notes" title + count, with the config control on the right.
+    private func dashboardHeader(_ manager: ThemeManager) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(theme.titleFont(30, relativeTo: .largeTitle))
+                    .tracking(theme.titleTracking)
+                    .textCase(theme.titleUppercase ? .uppercase : nil)
+                    .foregroundStyle(theme.ink)
+                Text("\(notes.count) note\(notes.count == 1 ? "" : "s")")
+                    .font(theme.monoFont(12))
+                    .foregroundStyle(theme.inkFaint)
+            }
+            Spacer()
+            dashboardConfig(manager)
+        }
     }
 
     /// Dashboard controls: card size + whether pinned shows as a big hero.
@@ -74,7 +96,13 @@ struct NotesGridView: View {
             Picker("Card size", selection: $manager.cardSize) {
                 ForEach(CardSize.allCases) { Label($0.name, systemImage: $0.icon).tag($0) }
             }
+            .disabled(boardActive)
             Toggle("Big pinned card", isOn: $manager.featurePinned)
+                .disabled(boardActive)
+            if allowsBoard {
+                Divider()
+                Toggle("Freeform board", isOn: $manager.freeformBoard)
+            }
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 15))
@@ -137,6 +165,8 @@ struct NoteCard: View {
     var size: CardSize = .regular
     /// The big wide "feature" layout (taller, bigger title, 3-line snippet).
     var hero: Bool = false
+    /// Fill the parent's size instead of using a fixed height (freeform board).
+    var fill: Bool = false
 
     /// Pinned notes get the feature *styling* (mood-specific fill/border).
     private var feature: Bool { note.pinned }
@@ -173,8 +203,7 @@ struct NoteCard: View {
             foot
         }
         .padding(16)
-        .frame(height: hero ? size.featureHeight : size.cardHeight, alignment: .topLeading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(CardFrame(fill: fill, height: hero ? size.featureHeight : size.cardHeight))
         .modifier(CardSurface(theme: theme, mood: mood, feature: feature))
         // The prototype's `.hw-flag`: a faint accent mark for handwritten notes.
         .overlay(alignment: .topTrailing) {
@@ -283,6 +312,21 @@ struct NoteCard: View {
 ///   • Swiss — **no box**: transparent with a 2px ink top rule; feature → 5px accent rule.
 ///   • Neubrutalist — white block, 2px ink border, hard 4px offset shadow; feature →
 ///     filled with the accent (blue), white text.
+/// Card height: a fixed height in the grid, or fill-the-parent on the freeform board.
+private struct CardFrame: ViewModifier {
+    let fill: Bool
+    let height: CGFloat
+    func body(content: Content) -> some View {
+        if fill {
+            content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            content
+                .frame(height: height, alignment: .topLeading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 private struct CardSurface: ViewModifier {
     let theme: Theme
     let mood: Mood
@@ -316,5 +360,133 @@ private struct CardSurface: ViewModifier {
                 .background { shape.fill(fill).themeShadow(theme.shadow) }
                 .overlay(shape.strokeBorder(border, lineWidth: theme.borderWidth))
         }
+    }
+}
+
+// MARK: - Freeform board
+
+/// The dashboard as a freeform board: each note card sits at its own position and
+/// size (drag to move, corner grip to resize), persisted on the note so the layout
+/// **syncs** across devices. Notes without a saved position are auto-placed in a
+/// grid until you move them.
+private struct NotesBoardView: View {
+    let notes: [Note]
+    let theme: Theme
+    let mood: Mood
+    let size: CardSize
+    let onOpen: (Note) -> Void
+    let onDelete: (Note) -> Void
+    let onTogglePin: (Note) -> Void
+
+    @State private var dragID: UUID?
+    @State private var dragOffset: CGSize = .zero
+    @State private var resizeID: UUID?
+    @State private var resizeOffset: CGSize = .zero
+
+    private let columnsPerRow = 3
+    private let gap: CGFloat = 16
+    private let margin: CGFloat = 20
+    private var cellW: CGFloat { size.columnMin }
+    private var cellH: CGFloat { size.cardHeight }
+
+    var body: some View {
+        ScrollView([.horizontal, .vertical]) {
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
+                    boardCard(note, index: index)
+                }
+            }
+            .frame(width: boardWidth, height: boardHeight, alignment: .topLeading)
+        }
+    }
+
+    // MARK: Layout math
+
+    private func defaultPos(_ index: Int) -> CGPoint {
+        let col = index % columnsPerRow
+        let row = index / columnsPerRow
+        return CGPoint(x: margin + CGFloat(col) * (cellW + gap),
+                       y: margin + CGFloat(row) * (cellH + gap))
+    }
+
+    private func origin(_ note: Note, _ index: Int) -> CGPoint {
+        var x = note.boardX.map(CGFloat.init) ?? defaultPos(index).x
+        var y = note.boardY.map(CGFloat.init) ?? defaultPos(index).y
+        if dragID == note.id { x += dragOffset.width; y += dragOffset.height }
+        return CGPoint(x: max(0, x), y: max(0, y))
+    }
+
+    private func cardSize(_ note: Note) -> CGSize {
+        var w = note.boardW.map(CGFloat.init) ?? cellW
+        var h = note.boardH.map(CGFloat.init) ?? cellH
+        if resizeID == note.id { w += resizeOffset.width; h += resizeOffset.height }
+        return CGSize(width: max(160, w), height: max(120, h))
+    }
+
+    private var boardWidth: CGFloat {
+        var maxX: CGFloat = 700
+        for (i, n) in notes.enumerated() { maxX = max(maxX, origin(n, i).x + cardSize(n).width) }
+        return maxX + margin
+    }
+    private var boardHeight: CGFloat {
+        var maxY: CGFloat = 500
+        for (i, n) in notes.enumerated() { maxY = max(maxY, origin(n, i).y + cardSize(n).height) }
+        return maxY + margin + 80
+    }
+
+    // MARK: Card
+
+    private func boardCard(_ note: Note, index: Int) -> some View {
+        let p = origin(note, index)
+        let s = cardSize(note)
+        return ZStack(alignment: .bottomTrailing) {
+            Button { onOpen(note) } label: {
+                NoteCard(theme: theme, mood: mood, note: note, size: size, hero: false, fill: true)
+                    .frame(width: s.width, height: s.height)
+            }
+            .buttonStyle(.plain)
+
+            Circle().fill(theme.accent).frame(width: 26, height: 26)
+                .overlay(Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
+                .padding(6)
+                .highPriorityGesture(resizeGesture(note))
+        }
+        .frame(width: s.width, height: s.height, alignment: .bottomTrailing)
+        .offset(x: p.x, y: p.y)
+        // High-priority so a drag moves the card (a tap still opens it).
+        .highPriorityGesture(moveGesture(note, index))
+        .contextMenu {
+            Button { onTogglePin(note) } label: {
+                Label(note.pinned ? "Unpin" : "Pin", systemImage: note.pinned ? "pin.slash" : "pin")
+            }
+            Button(role: .destructive) { onDelete(note) } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    private func moveGesture(_ note: Note, _ index: Int) -> some Gesture {
+        DragGesture()
+            .onChanged { v in dragID = note.id; dragOffset = v.translation }
+            .onEnded { v in
+                let baseX = note.boardX.map(CGFloat.init) ?? defaultPos(index).x
+                let baseY = note.boardY.map(CGFloat.init) ?? defaultPos(index).y
+                note.boardX = Double(max(0, baseX + v.translation.width))
+                note.boardY = Double(max(0, baseY + v.translation.height))
+                dragID = nil; dragOffset = .zero
+            }
+    }
+
+    private func resizeGesture(_ note: Note) -> some Gesture {
+        DragGesture()
+            .onChanged { v in resizeID = note.id; resizeOffset = v.translation }
+            .onEnded { v in
+                let baseW = note.boardW.map(CGFloat.init) ?? cellW
+                let baseH = note.boardH.map(CGFloat.init) ?? cellH
+                note.boardW = Double(max(160, baseW + v.translation.width))
+                note.boardH = Double(max(120, baseH + v.translation.height))
+                resizeID = nil; resizeOffset = .zero
+            }
     }
 }

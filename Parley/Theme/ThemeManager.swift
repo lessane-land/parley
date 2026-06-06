@@ -52,6 +52,8 @@ final class ThemeManager {
     /// Whether pinned notes show as a big wide "feature" card. Off = pinned notes
     /// sit in the grid at normal size (just styled as pinned).
     var featurePinned: Bool { didSet { UserDefaults.standard.set(featurePinned, forKey: Self.featurePinnedKey) } }
+    /// Freeform dashboard: drag/resize each card anywhere (iPad/Mac). Off = grid.
+    var freeformBoard: Bool { didSet { UserDefaults.standard.set(freeformBoard, forKey: Self.freeformBoardKey) } }
 
     /// Preferred transcription language as a language code ("es"), or `nil` for
     /// Automatic (follow the device's preferred languages). Not an appearance
@@ -136,6 +138,7 @@ final class ThemeManager {
     private static let captureSystemAudioKey = "parley.captureSystemAudio"
     private static let cardSizeKey = "parley.cardSize"
     private static let featurePinnedKey = "parley.featurePinned"
+    private static let freeformBoardKey = "parley.freeformBoard"
     private static let densityKey = "parley.density"
     private static let languageKey = "parley.transcriptionLanguage"
     private static let layoutSwappedKey = "parley.layoutSwapped"
@@ -167,6 +170,7 @@ final class ThemeManager {
         density = Density(rawValue: d.string(forKey: Self.densityKey) ?? "") ?? .regular
         cardSize = CardSize(rawValue: d.string(forKey: Self.cardSizeKey) ?? "") ?? .regular
         featurePinned = d.object(forKey: Self.featurePinnedKey) as? Bool ?? true
+        freeformBoard = d.object(forKey: Self.freeformBoardKey) as? Bool ?? false
         transcriptionLanguage = d.string(forKey: Self.languageKey)
         layoutSwapped = d.object(forKey: Self.layoutSwappedKey) as? Bool ?? false
         splitFraction = d.object(forKey: Self.splitFractionKey) as? Double ?? 0.5

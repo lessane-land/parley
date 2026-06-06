@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 import PencilKit
+import Vision
 import UniformTypeIdentifiers
 #if canImport(UIKit)
 import UIKit
@@ -64,12 +65,15 @@ struct NoteDetailView: View {
     /// Defaults to **Draw** (Pencil-first). The keyboard still works for the title
     /// and other fields; tap **Type** to type into the notes body.
     @State private var penMode: PenMode = .draw
-    private enum PenMode: Hashable { case type, draw, arrange }
+    private enum PenMode: Hashable { case type, draw }
 
-    /// Canvas (images + shapes) editing state.
+    /// Canvas (images + shapes) editing state. Shapes float on top of the drawing
+    /// and are draggable any time — no separate mode.
     @State private var selectedItemID: UUID?
     @State private var showCanvasPhoto = false
     @State private var canvasPhotoItem: PhotosPickerItem?
+    /// One-time per-open setup of the transcript panel visibility.
+    @State private var didConfigureTranscript = false
 
     /// Notes ⟷ transcript layout (order + split ratio) is a persisted preference
     /// on `ThemeManager`, so the arrangement sticks across notes and launches.
@@ -209,6 +213,13 @@ struct NoteDetailView: View {
         .task {
             // Merge any duplicate enrolled voices that synced in from another device.
             SpeakerProfile.dedupe(speakerProfiles, in: context)
+            // A fresh note (no transcript yet) opens with the transcript hidden —
+            // it's revealed when a recording starts. Notes that already have a
+            // transcript open with it shown.
+            if !didConfigureTranscript {
+                didConfigureTranscript = true
+                showTranscript = !note.transcript.isEmpty
+            }
             guard autoRecord, !didAutoStart, !transcription.isRecording else { return }
             didAutoStart = true
             onAutoRecordConsumed()
@@ -663,14 +674,6 @@ struct NoteDetailView: View {
     /// type *and* draw on the same page — the design's unified notes canvas.
     private var notesSurface: some View {
         ZStack(alignment: .topLeading) {
-            // Rich content (images + shapes) sits *behind* the text and strokes.
-            CanvasItemsLayer(
-                items: Binding(get: { note.canvasItems }, set: { note.canvasItems = $0 }),
-                selectedID: $selectedItemID,
-                active: arrangeActive,
-                theme: theme
-            )
-
             typedNotes
                 .allowsHitTesting(typedActive)
 
@@ -690,6 +693,15 @@ struct NoteDetailView: View {
                 DrawingImageView(data: data).allowsHitTesting(false)
             }
             #endif
+
+            // Shapes + images float on *top* of the drawing and are draggable any
+            // time (empty space passes touches through to the canvas below).
+            CanvasItemsLayer(
+                items: Binding(get: { note.canvasItems }, set: { note.canvasItems = $0 }),
+                selectedID: $selectedItemID,
+                active: itemsInteractive,
+                theme: theme
+            )
         }
         .padding(.leading, 16)
         .overlay(alignment: .leading) {
@@ -698,15 +710,15 @@ struct NoteDetailView: View {
         }
     }
 
-    /// Typed layer accepts touches unless we're drawing or arranging on iPad.
+    /// Typed layer accepts touches unless we're drawing on iPad.
     private var typedActive: Bool {
         !showsHandwriting || penMode == .type
     }
 
-    /// Whether the canvas items layer is interactive (iPad "Arrange" mode).
-    private var arrangeActive: Bool {
+    /// Canvas items are movable on iPad (where handwriting/pencil is available).
+    private var itemsInteractive: Bool {
         #if os(iOS)
-        return showsHandwriting && penMode == .arrange
+        return showsHandwriting
         #else
         return false
         #endif
@@ -718,11 +730,12 @@ struct NoteDetailView: View {
             Picker("Input", selection: $penMode) {
                 Label("Type", systemImage: "keyboard").tag(PenMode.type)
                 Label("Draw", systemImage: "pencil.tip").tag(PenMode.draw)
-                Label("Arrange", systemImage: "hand.point.up.left").tag(PenMode.arrange)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .fixedSize()
+
+            insertPalette   // add image/shapes any time — they drop onto the page
 
             Spacer()
 
@@ -732,26 +745,20 @@ struct NoteDetailView: View {
                 }
                 .tint(theme.accent)
                 .disabled(note.drawing == nil)
-            } else if penMode == .arrange {
-                insertPalette
             }
         }
     }
 
-    /// The Arrange-mode palette: add an image or a shape, delete the selection.
+    /// Add an image or a shape to the page (they're then draggable on the canvas).
     private var insertPalette: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Button { showCanvasPhoto = true } label: { Image(systemName: "photo") }
             Button { addShape(.rectangle) } label: { Image(systemName: "rectangle") }
             Button { addShape(.ellipse) } label: { Image(systemName: "circle") }
             Button { addShape(.line) } label: { Image(systemName: "line.diagonal") }
             Button { addShape(.arrow) } label: { Image(systemName: "arrow.up.right") }
-            if selectedItemID != nil {
-                Divider().frame(height: 18)
-                Button(role: .destructive) { deleteSelectedItem() } label: { Image(systemName: "trash") }
-            }
         }
-        .font(.system(size: 16))
+        .font(.system(size: 15))
         .tint(theme.accent)
     }
 
@@ -772,12 +779,6 @@ struct NoteDetailView: View {
         let item = CanvasItem(kind: .image, x: 40, y: 40, width: 220, height: 165, imageData: small)
         note.canvasItems = note.canvasItems + [item]
         selectedItemID = item.id
-    }
-
-    private func deleteSelectedItem() {
-        guard let id = selectedItemID else { return }
-        note.canvasItems = note.canvasItems.filter { $0.id != id }
-        selectedItemID = nil
     }
     #endif
 
@@ -926,7 +927,7 @@ struct NoteDetailView: View {
     private func autoSummarizeIfEnabled() async {
         guard themeManager.autoSummarize, !note.transcript.isEmpty else { return }
         let result = await summaryService.summarize(
-            notes: note.body, transcript: note.transcript, attendees: note.attendees,
+            notes: await combinedNotesText(), transcript: note.transcript, attendees: note.attendees,
             tone: themeManager.summaryTone,
             includeDecisions: themeManager.extractDecisions,
             includeActionItems: themeManager.extractActionItems,
@@ -934,6 +935,18 @@ struct NoteDetailView: View {
             includeKeyQuotes: themeManager.extractKeyQuotes
         )
         if let result { note.summaryData = try? JSONEncoder().encode(result) }
+    }
+
+    /// The user's notes for summarization: typed body + any recognized handwriting.
+    private func combinedNotesText() async -> String {
+        var text = note.body
+        if let drawing = note.drawing {
+            let handwritten = await HandwritingOCR.recognize(drawing)
+            if !handwritten.isEmpty {
+                text += (text.isEmpty ? "" : "\n") + handwritten
+            }
+        }
+        return text
     }
 
     /// Speaker names already used in this note (for the quick-pick menu), distinct
@@ -1105,6 +1118,47 @@ struct DrawingImageView: View {
     }
 }
 
+// MARK: - Handwriting recognition
+
+/// Reads the text out of a saved `PKDrawing` so the on-device summary can include
+/// handwritten notes (not just typed text + transcript). Renders the strokes on
+/// white and runs Vision's text recognizer (which handles handwriting).
+enum HandwritingOCR {
+    static func recognize(_ data: Data) async -> String {
+        guard let cg = renderCGImage(data) else { return "" }
+        return await withCheckedContinuation { (cont: CheckedContinuation<String, Never>) in
+            let request = VNRecognizeTextRequest { req, _ in
+                let lines = (req.results as? [VNRecognizedTextObservation])?
+                    .compactMap { $0.topCandidates(1).first?.string } ?? []
+                cont.resume(returning: lines.joined(separator: "\n"))
+            }
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            DispatchQueue.global(qos: .userInitiated).async {
+                do { try VNImageRequestHandler(cgImage: cg, options: [:]).perform([request]) }
+                catch { cont.resume(returning: "") }
+            }
+        }
+    }
+
+    private static func renderCGImage(_ data: Data) -> CGImage? {
+        guard let drawing = try? PKDrawing(data: data), !drawing.bounds.isNull else { return nil }
+        let b = drawing.bounds
+        let rect = CGRect(x: 0, y: 0, width: max(b.maxX, 1), height: max(b.maxY, 1))
+        #if canImport(UIKit)
+        let image = UIGraphicsImageRenderer(size: rect.size).image { ctx in
+            UIColor.white.setFill(); ctx.fill(rect)
+            drawing.image(from: rect, scale: 1).draw(in: rect)
+        }
+        return image.cgImage
+        #elseif canImport(AppKit)
+        return drawing.image(from: rect, scale: 1).cgImage(forProposedRect: nil, context: nil, hints: nil)
+        #else
+        return nil
+        #endif
+    }
+}
+
 // MARK: - Canvas items (images + shapes)
 
 /// The images-and-shapes layer on the handwriting page. Items render read-only on
@@ -1184,6 +1238,19 @@ private struct CanvasItemsLayer: View {
     private func chrome(_ item: CanvasItem, size: CGSize) -> some View {
         ZStack(alignment: .topLeading) {
             Rectangle().strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+            // Delete (top-left)
+            Button {
+                items.removeAll { $0.id == item.id }
+                selectedID = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 20))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, theme.rec)
+            }
+            .buttonStyle(.plain)
+            .offset(x: -10, y: -10)
+            // Resize (bottom-right)
             Circle().fill(theme.accent)
                 .frame(width: 22, height: 22)
                 .overlay(Image(systemName: "arrow.down.right.and.arrow.up.left")

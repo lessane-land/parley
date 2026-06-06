@@ -1,0 +1,273 @@
+/* ============================================================
+   PARLEY — "digital paper" visual system
+   Calm, focused, premium. Ink-on-paper neutrals + ONE accent.
+   ============================================================ */
+
+:root{
+  /* — Paper (tweakable warmth) — */
+  --pk-paper:      #F6F2E9;   /* warm off-white canvas            */
+  --pk-paper-rec:  #FBF8F1;   /* raised / card surfaces           */
+  --pk-paper-sink: #EFE9DD;   /* recessed panels (transcript)     */
+  --pk-edge:       #E4DCCB;   /* paper edge / hairline on paper   */
+
+  /* — Ink neutrals — */
+  --pk-ink:        #2A2620;   /* near-black, warm                 */
+  --pk-ink-2:      #4A443B;   /* body                             */
+  --pk-ink-soft:   #6E675B;   /* secondary                        */
+  --pk-ink-faint:  #A39A89;   /* tertiary / timestamps            */
+  --pk-ink-ghost:  #C7BEAD;   /* hairlines, dividers              */
+  --pk-line:       rgba(42,38,32,.10);
+  --pk-line-soft:  rgba(42,38,32,.06);
+
+  /* — The single accent (forest ink) — */
+  --pk-accent:     #3E5C50;
+  --pk-accent-ink: #324A40;   /* darker for text on tint          */
+  --pk-accent-tint:#E8EEEA;   /* soft fill                        */
+  --pk-accent-line:rgba(62,92,80,.32);
+
+  /* — Recording status (functional signal, not brand) — */
+  --pk-rec:        #B14B3A;
+
+  /* — Type — */
+  --pk-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --pk-sans:  "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --pk-hand:  "Caveat", "Segoe Print", cursive;
+
+  /* — Transcript density (overridden by .density-*) — */
+  --pk-tx-size: 15.5px;
+  --pk-tx-lead: 1.5;
+  --pk-tx-gap:  17px;
+  --pk-tx-font: var(--pk-sans);   /* moods may switch to mono */
+  --pk-caret: 0;                  /* moods set to 1 to show live caret */
+
+  --pk-radius: 14px;
+  --pk-border-w: 1px;              /* moods may thicken (neubrutalist) */
+  --pk-shadow-card: 0 1px 2px rgba(42,38,32,.04);
+  --pk-hw-color: #2f4a40;          /* handwriting ink */
+}
+
+/* density variants set on the canvas root */
+.density-compact{ --pk-tx-size:14px;   --pk-tx-lead:1.42; --pk-tx-gap:11px; }
+.density-regular{ --pk-tx-size:15.5px; --pk-tx-lead:1.5;  --pk-tx-gap:17px; }
+.density-comfy  { --pk-tx-size:17px;   --pk-tx-lead:1.62; --pk-tx-gap:24px; }
+
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{ background:#f0eee9; font-family:var(--pk-sans); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+
+/* ============================================================
+   FRAME — one iPad screen (1194 × 834 landscape)
+   ============================================================ */
+.pk-frame{
+  width:100%; height:100%;
+  background:var(--pk-paper);
+  color:var(--pk-ink);
+  display:flex; flex-direction:column;
+  position:relative; overflow:hidden;
+  font-family:var(--pk-sans);
+  /* faint paper grain via layered radial noise-ish gradients */
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(255,255,255,.45), transparent 60%),
+    radial-gradient(circle at 88% 86%, rgba(0,0,0,.018), transparent 55%);
+}
+
+/* ----- TOP BAR ----- */
+.pk-top{
+  flex:0 0 auto; height:66px;
+  display:flex; align-items:center; gap:16px;
+  padding:0 22px 0 18px;
+  border-bottom:1px solid var(--pk-line);
+  background:linear-gradient(var(--pk-paper-rec),var(--pk-paper-rec)) padding-box;
+}
+.pk-top-left{ display:flex; align-items:center; gap:13px; min-width:0; flex:1 1 auto; }
+.pk-iconbtn{
+  flex:0 0 auto; width:34px; height:34px; border-radius:9px;
+  display:flex; align-items:center; justify-content:center;
+  border:1px solid transparent; background:transparent; color:var(--pk-ink-soft);
+  cursor:pointer; transition:background .15s,color .15s,border-color .15s;
+}
+.pk-iconbtn:hover{ background:rgba(42,38,32,.05); color:var(--pk-ink); }
+.pk-iconbtn svg{ width:19px; height:19px; }
+
+.pk-titlewrap{ min-width:0; display:flex; flex-direction:column; gap:1px; }
+.pk-title{
+  font-family:var(--pk-serif); font-size:20px; font-weight:500; letter-spacing:-.01em;
+  color:var(--pk-ink); line-height:1.15; outline:none; border-radius:5px;
+  padding:1px 4px; margin:0 -4px; max-width:100%;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  cursor:text; transition:background .15s, box-shadow .15s;
+}
+.pk-title:hover{ background:rgba(42,38,32,.04); }
+.pk-title:focus{ background:#fff; box-shadow:0 0 0 2px var(--pk-accent-line); overflow:visible; }
+.pk-sub{ font-size:11.5px; color:var(--pk-ink-faint); padding-left:4px; letter-spacing:.005em; display:flex; gap:8px; align-items:center; white-space:nowrap; flex-wrap:nowrap; }
+.pk-sub .dot{ width:2.5px; height:2.5px; border-radius:50%; background:var(--pk-ink-ghost); }
+
+/* recording status cluster */
+.pk-status{ flex:0 0 auto; display:flex; align-items:center; gap:14px; }
+.pk-rec{
+  display:flex; align-items:center; gap:8px;
+  padding:6px 12px 6px 11px; border-radius:999px;
+  background:color-mix(in srgb, var(--pk-rec) 9%, transparent);
+  border:1px solid color-mix(in srgb, var(--pk-rec) 20%, transparent);
+}
+.pk-rec-dot{ width:9px; height:9px; border-radius:50%; background:var(--pk-rec); position:relative; }
+.pk-rec-dot::after{
+  content:""; position:absolute; inset:-4px; border-radius:50%;
+  background:var(--pk-rec); opacity:.5; animation:pk-pulse 2.1s ease-out infinite;
+}
+@keyframes pk-pulse{ 0%{ transform:scale(.55); opacity:.55; } 70%{ transform:scale(2.1); opacity:0; } 100%{ opacity:0; } }
+.pk-rec-label{ font-size:11px; font-weight:600; letter-spacing:.13em; color:var(--pk-rec); text-transform:uppercase; }
+
+.pk-timer{ font-size:18px; font-weight:600; letter-spacing:.01em; color:var(--pk-ink); font-variant-numeric:tabular-nums; }
+
+.pk-stop{
+  flex:0 0 auto; width:42px; height:42px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  background:var(--pk-ink); border:none; transition:transform .12s, background .15s;
+}
+.pk-stop:hover{ transform:scale(1.05); }
+.pk-stop:active{ transform:scale(.96); }
+.pk-stop .sq{ width:13px; height:13px; border-radius:3px; background:var(--pk-paper-rec); }
+
+/* ============================================================
+   MAIN SPLIT
+   ============================================================ */
+.pk-main{ flex:1 1 auto; display:flex; min-height:0; }
+
+/* ----- NOTES (left) ----- */
+.pk-notes{
+  flex:0 0 55%; position:relative; min-width:0;
+  padding:30px 38px 30px 56px; overflow:hidden;
+  display:block;
+}
+/* notebook margin line */
+.pk-notes::before{
+  content:""; position:absolute; top:0; bottom:0; left:40px; width:1px;
+  background:var(--pk-accent-line); opacity:.5;
+}
+.pk-notes-h{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; }
+.pk-notes-h .lbl{ font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--pk-ink-faint); }
+.pk-notes-h .saved{ font-size:11px; color:var(--pk-ink-faint); display:flex; align-items:center; gap:5px; white-space:nowrap; }
+.pk-notes-h .saved svg{ width:12px; height:12px; }
+
+.pk-note-line{ font-family:var(--pk-serif); font-size:18.5px; line-height:1.62; color:var(--pk-ink-2); }
+.pk-note-bullet + .pk-note-bullet{ margin-top:5px; }
+.pk-note-line.h{ font-size:21px; font-weight:600; color:var(--pk-ink); margin:6px 0 4px; letter-spacing:-.005em; }
+.pk-note-line .em{ color:var(--pk-accent-ink); font-style:italic; }
+.pk-note-bullet{ display:block; position:relative; padding-left:26px; font-family:var(--pk-serif); font-size:18.5px; line-height:1.6; color:var(--pk-ink-2); }
+.pk-note-bullet .mk{ position:absolute; left:0; top:0; color:var(--pk-accent); }
+.pk-caret{ display:inline-block; width:1.5px; height:1.05em; background:var(--pk-accent); margin-left:2px; vertical-align:-.16em; animation:pk-blink 1.15s step-end infinite; }
+@keyframes pk-blink{ 0%,100%{ opacity:1; } 50%{ opacity:0; } }
+
+/* handwriting (Caveat lines + svg doodle) */
+.pk-hw{ font-family:var(--pk-hand); color:var(--pk-accent-ink); }
+.pk-hw-line{ font-family:var(--pk-hand); font-size:27px; line-height:1.18; color:var(--pk-hw-color); transform:rotate(-.5deg); }
+.pk-hw-line.blue{ color:var(--pk-hw-color); }
+.pk-hw-aside{ font-family:var(--pk-hand); font-size:23px; color:var(--pk-rec); transform:rotate(-1.2deg); }
+.pk-doodle{ margin:10px 0 6px; }
+.pk-doodle svg{ display:block; }
+/* hide handwriting when toggled off */
+.hide-hw .pk-hw, .hide-hw .pk-hw-line, .hide-hw .pk-hw-aside, .hide-hw .pk-doodle, .hide-hw .pk-hw-block{ display:none !important; }
+
+/* ----- TRANSCRIPT (right) ----- */
+.pk-tx{
+  flex:1 1 45%; min-width:0; position:relative;
+  border-left:1px solid var(--pk-line);
+  background:var(--pk-paper-sink);
+  display:flex; flex-direction:column;
+}
+.pk-tx-h{
+  flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+  padding:18px 24px 12px;
+}
+.pk-tx-h .ttl{ font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--pk-ink-soft); display:flex; align-items:center; gap:9px; }
+.pk-tx-live{ display:flex; align-items:center; gap:6px; font-size:11px; font-weight:600; letter-spacing:.04em; color:var(--pk-accent); }
+.pk-tx-live .d{ width:6px; height:6px; border-radius:50%; background:var(--pk-accent); animation:pk-breathe 1.8s ease-in-out infinite; }
+@keyframes pk-breathe{ 0%,100%{ opacity:.4; } 50%{ opacity:1; } }
+
+.pk-tx-feed{ flex:1 1 auto; overflow:hidden; padding:4px 24px 18px; position:relative; display:flex; flex-direction:column; justify-content:flex-end; }
+.pk-tx-feed::before{ content:""; position:absolute; top:0; left:0; right:0; height:34px; background:linear-gradient(var(--pk-paper-sink),transparent); z-index:2; pointer-events:none; }
+
+.pk-tx-line{ display:flex; flex-direction:column; gap:3px; padding:var(--pk-tx-gap) 0 0; }
+.pk-tx-meta{ display:flex; align-items:baseline; gap:9px; margin-bottom:3px; }
+.pk-tx-spk{ font-size:11px; font-weight:600; letter-spacing:.02em; color:var(--pk-ink-soft); white-space:nowrap; }
+.pk-tx-time{ font-size:10.5px; color:var(--pk-ink-faint); font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+.pk-tx-text{ font-size:var(--pk-tx-size); line-height:var(--pk-tx-lead); color:var(--pk-ink-2); font-family:var(--pk-tx-font); }
+.pk-tx-line.cur .pk-tx-text::after{
+  content:""; display:inline-block; width:.5ch; height:1.05em; margin-left:2px; vertical-align:-.18em;
+  background:var(--pk-accent); opacity:var(--pk-caret); animation:pk-blink 1.05s step-end infinite;
+}
+
+.pk-tx-line.cur{
+  position:relative; margin-left:-14px; padding-left:14px;
+  border-radius:7px; background:var(--pk-accent-tint);
+  padding-top:10px; padding-bottom:10px; padding-right:12px; margin-top:8px;
+}
+.pk-tx-line.cur::before{
+  content:""; position:absolute; left:0; top:9px; bottom:9px; width:2.5px; border-radius:2px; background:var(--pk-accent);
+}
+.pk-tx-line.cur .pk-tx-text{ color:var(--pk-ink); }
+.pk-tx-line.enter{ animation:pk-rise .45s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes pk-rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+
+/* speaker initial chip (used in variant C timeline) */
+.pk-spk-chip{ width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; flex:0 0 auto; }
+
+/* ----- BOTTOM BAR ----- */
+.pk-bottom{
+  flex:0 0 auto; height:58px; display:flex; align-items:center; justify-content:space-between;
+  padding:0 22px; border-top:1px solid var(--pk-line); background:var(--pk-paper-rec);
+}
+.pk-bottom .hint{ font-size:12px; color:var(--pk-ink-faint); display:flex; align-items:center; gap:8px; }
+.pk-bottom .hint svg{ width:14px; height:14px; }
+.pk-actions{ display:flex; align-items:center; gap:10px; }
+
+.pk-btn{
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+  font-family:var(--pk-sans); font-size:13.5px; font-weight:600; letter-spacing:.005em;
+  padding:9px 15px; border-radius:10px; border:1px solid transparent; transition:all .15s;
+}
+.pk-btn svg{ width:16px; height:16px; }
+.pk-btn-ghost{ color:var(--pk-ink-soft); background:transparent; border-color:var(--pk-line); }
+.pk-btn-ghost:hover{ background:rgba(42,38,32,.04); color:var(--pk-ink); border-color:var(--pk-ink-ghost); }
+/* Summarize: clearly secondary until meeting ends — outlined accent, muted */
+.pk-btn-summary{ color:var(--pk-accent-ink); background:transparent; border-color:var(--pk-accent-line); }
+.pk-btn-summary:hover{ background:var(--pk-accent-tint); }
+.pk-btn-summary .when{ font-size:11px; font-weight:500; color:var(--pk-ink-faint); margin-left:2px; }
+
+/* ============================================================
+   VARIANT B — "Two documents" (transcript as a raised card)
+   ============================================================ */
+.v-b .pk-top{ justify-content:space-between; }
+.v-b .pk-main{ padding:18px; gap:18px; background:var(--pk-paper); }
+.v-b .pk-notes{ flex:0 0 54%; background:var(--pk-paper-rec); border:var(--pk-border-w) solid var(--pk-edge); border-radius:var(--pk-radius); padding:26px 32px 26px 50px; box-shadow:var(--pk-shadow-card); }
+.v-b .pk-notes::before{ left:34px; }
+.v-b .pk-tx{ flex:1 1 46%; border-left:none; border:var(--pk-border-w) solid var(--pk-edge); border-radius:var(--pk-radius); overflow:hidden; background:var(--pk-paper-rec); box-shadow:var(--pk-shadow-card); }
+.v-b .pk-tx-h{ background:var(--pk-paper-sink); border-bottom:1px solid var(--pk-line); padding:15px 22px; }
+.v-b .pk-tx-feed::before{ display:none; }
+
+/* ============================================================
+   VARIANT C — "Editorial focus" (quiet timeline transcript)
+   ============================================================ */
+.v-c .pk-top{ height:72px; }
+.v-c .pk-top-center{ position:absolute; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none; }
+.v-c .pk-top-center .pk-timer{ font-size:22px; }
+.v-c .pk-top-center .cap{ font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--pk-ink-faint); display:flex; align-items:center; gap:7px; }
+.v-c .pk-notes{ flex:0 0 60%; padding:34px 40px 34px 60px; }
+.v-c .pk-tx{ flex:1 1 40%; background:transparent; border-left:1px solid var(--pk-line); }
+.v-c .pk-tx-feed{ padding-left:30px; }
+/* continuous timeline spine */
+.v-c .pk-tx-line{ position:relative; padding-left:26px; }
+.v-c .pk-tx-line::after{ content:""; position:absolute; left:7px; top:0; bottom:0; width:1.5px; background:var(--pk-line); }
+.v-c .pk-tx-line:last-child::after{ display:none; }
+.v-c .pk-tx-node{ position:absolute; left:2px; top:calc(var(--pk-tx-gap) + 2px); width:11px; height:11px; border-radius:50%; background:var(--pk-paper); border:2px solid var(--pk-ink-ghost); z-index:1; }
+.v-c .pk-tx-line.cur{ background:transparent; margin-left:0; padding-left:26px; }
+.v-c .pk-tx-line.cur::before{ display:none; }
+.v-c .pk-tx-line.cur .pk-tx-node{ border-color:var(--pk-accent); background:var(--pk-accent); box-shadow:0 0 0 4px var(--pk-accent-tint); }
+.v-c .pk-tx-line.cur .pk-tx-text{ color:var(--pk-ink); font-weight:500; }
+.v-c .pk-tx-meta{ margin-bottom:3px; }
+
+/* ============================================================
+   ION — generic inline label dot
+   ============================================================ */
+.pk-pill{ display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--pk-ink-soft); }

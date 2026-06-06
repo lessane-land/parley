@@ -4,6 +4,7 @@ import SwiftUI
 /// editor; the left rail holds search/filters. "Dumb" — it shows what it's given.
 struct NotesGridView: View {
     let theme: Theme
+    let mood: Mood
     let title: String
     let notes: [Note]
     let onOpen: (Note) -> Void
@@ -32,7 +33,7 @@ struct NotesGridView: View {
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                         ForEach(notes) { note in
                             Button { onOpen(note) } label: {
-                                NoteCard(theme: theme, note: note)
+                                NoteCard(theme: theme, mood: mood, note: note)
                             }
                             .buttonStyle(.plain)
                             // Long-press (iPad) / right-click (Mac) → actions.
@@ -71,10 +72,20 @@ struct NotesGridView: View {
     }
 }
 
-/// A note card in the dashboard grid: title, snippet, tags, date — uniform height.
+/// A note card in the dashboard grid, matching the prototype's `.pk-card`:
+/// an accent date line on top, a serif title, a snippet, and a foot of attendee
+/// avatars + meta chips. A **pinned** note becomes the prototype's `.feature`
+/// card, whose treatment is mood-specific (see `CardSurface`).
 struct NoteCard: View {
     let theme: Theme
+    let mood: Mood
     let note: Note
+
+    /// Pinned notes render as the design's wider "feature" card.
+    private var feature: Bool { note.pinned }
+
+    /// Only the neubrutalist feature card inverts to white-on-accent.
+    private var onAccent: Bool { mood == .neubrutalist && feature }
 
     private var snippet: String {
         note.body
@@ -83,34 +94,117 @@ struct NoteCard: View {
             .map(String.init) ?? ""
     }
 
-    /// Small status chips derived from the note's content.
-    private var metaItems: [(icon: String, text: String)] {
-        var items: [(String, String)] = []
-        if let start = note.startDate {
-            items.append(("clock", start.formatted(date: .omitted, time: .shortened)))
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            dateLine
+            Text(note.title.isEmpty ? "New Note" : note.title)
+                .font(theme.titleFont(feature ? 22 : 18, relativeTo: .headline))
+                .tracking(theme.titleTracking)
+                .textCase(theme.titleUppercase ? .uppercase : nil)
+                .foregroundStyle(onAccent ? .white : theme.ink)
+                .lineLimit(2)
+                .padding(.bottom, 7)
+
+            if !snippet.isEmpty {
+                Text(snippet)
+                    .font(theme.bodyFont(13))
+                    .foregroundStyle(onAccent ? .white.opacity(0.9) : theme.inkSoft)
+                    .lineLimit(feature ? 3 : 2)
+            }
+
+            Spacer(minLength: 10)
+            foot
         }
-        // Recording: show its length when we can derive it, else just "Rec".
+        .padding(16)
+        .frame(height: feature ? 220 : 190, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modifier(CardSurface(theme: theme, mood: mood, feature: feature))
+        // The prototype's `.hw-flag`: a faint accent mark for handwritten notes.
+        .overlay(alignment: .topTrailing) {
+            if note.drawing != nil {
+                Image(systemName: "hand.draw")
+                    .font(.system(size: 12))
+                    .foregroundStyle((onAccent ? Color.white : theme.accent).opacity(0.7))
+                    .padding(14)
+            }
+        }
+    }
+
+    /// The prototype's `.ct-date`: an accent-colored date on top (+ a pin marker
+    /// for pinned notes).
+    private var dateLine: some View {
+        HStack(spacing: 7) {
+            if note.pinned { Image(systemName: "pin.fill").font(.system(size: 10)) }
+            Text(note.createdAt.formatted(.relative(presentation: .named)))
+                .font(theme.monoFont(11, relativeTo: .caption2).weight(.semibold))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(onAccent ? .white : theme.accent)
+        .padding(.bottom, 9)
+    }
+
+    /// The prototype's `.foot`: attendee avatars on the left, meta chips on the right.
+    private var foot: some View {
+        HStack(spacing: 8) {
+            if !avatars.isEmpty {
+                HStack(spacing: -6) {
+                    ForEach(Array(avatars.enumerated()), id: \.offset) { index, initial in
+                        Text(initial)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 21, height: 21)
+                            .background(Color(hex: Tag.palette[index % Tag.palette.count]), in: Circle())
+                            .overlay(Circle().strokeBorder(cardFill, lineWidth: 2))
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            ForEach(Array(metaItems.enumerated()), id: \.offset) { _, item in
+                HStack(spacing: 5) {
+                    Image(systemName: item.icon).font(.system(size: 11))
+                    Text(item.text)
+                }
+                .font(theme.monoFont(11, relativeTo: .caption2).weight(.semibold))
+                .foregroundStyle(onAccent ? .white.opacity(0.85) : (item.accent ? theme.accent : theme.inkFaint))
+            }
+        }
+        .lineLimit(1)
+    }
+
+    /// The surface color behind the avatars (for their ring), matching the card.
+    private var cardFill: Color {
+        onAccent ? theme.accent : theme.paperRaised
+    }
+
+    private var avatars: [String] {
+        note.attendees.prefix(3).map { name in
+            let trimmed = name.trimmingCharacters(in: .whitespaces)
+            return trimmed.isEmpty ? "?" : String(trimmed.first!).uppercased()
+        }
+    }
+
+    /// Meta chips (right side of the foot): recording length, action items,
+    /// attachments. `accent` flags the one that should pop in the accent color.
+    private var metaItems: [(icon: String, text: String, accent: Bool)] {
+        var items: [(String, String, Bool)] = []
         if let duration = recordingDuration {
-            items.append(("waveform", duration))
+            items.append(("waveform", duration, true))
         } else if !note.transcript.isEmpty {
-            items.append(("waveform", "Rec"))
+            items.append(("waveform", "Rec", true))
         }
-        // Summary: prefer the action-item count over a generic "Summary" badge.
         let actions = actionItemCount
         if actions > 0 {
-            items.append(("checklist", "\(actions) to-do\(actions == 1 ? "" : "s")"))
+            items.append(("checklist", "\(actions)", false))
         } else if note.summaryData != nil {
-            items.append(("sparkles", "Summary"))
+            items.append(("sparkles", "Summary", false))
         }
-        if !note.attendees.isEmpty { items.append(("person.2", "\(note.attendees.count)")) }
         if let attachments = note.attachments, !attachments.isEmpty {
-            items.append(("paperclip", "\(attachments.count)"))
+            items.append(("paperclip", "\(attachments.count)", false))
         }
         return items
     }
 
-    /// Recording length, derived from the first/last finalized segment timestamps
-    /// (we don't store an explicit duration). `mm:ss`, or nil if not derivable.
+    /// Recording length from the first/last finalized segment timestamps.
     private var recordingDuration: String? {
         let times = note.transcriptSegments.compactMap(\.at)
         guard let first = times.min(), let last = times.max(), last > first else { return nil }
@@ -118,90 +212,52 @@ struct NoteCard: View {
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
-    /// How many action items the saved summary holds (0 if none / no summary).
     private var actionItemCount: Int {
         guard let data = note.summaryData,
               let summary = try? JSONDecoder().decode(MeetingSummary.self, from: data) else { return 0 }
         return summary.actionItems.count
     }
+}
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            if note.pinned { pinnedBadge }
+/// The prototype's `.pk-card` surface, per mood — this is the piece that was wrong
+/// before. Faithful to `parley-screens.css` / `parley-moods.css`:
+///   • Paper / Terminal — a boxed card (paper-rec fill, edge hairline, the mood's
+///     radius + shadow). Feature adds a faint accent diagonal wash + accent-line border.
+///   • Swiss — **no box**: transparent with a 2px ink top rule; feature → 5px accent rule.
+///   • Neubrutalist — white block, 2px ink border, hard 4px offset shadow; feature →
+///     filled with the accent (blue), white text.
+private struct CardSurface: ViewModifier {
+    let theme: Theme
+    let mood: Mood
+    let feature: Bool
 
-            HStack(alignment: .top, spacing: 6) {
-                Text(note.title.isEmpty ? "New Note" : note.title)
-                    .font(theme.titleFont(18, relativeTo: .headline))
-                    .tracking(theme.titleTracking)
-                    .textCase(theme.titleUppercase ? .uppercase : nil)
-                    .foregroundStyle(theme.ink)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
+    func body(content: Content) -> some View {
+        switch mood {
+        case .swiss:
+            content.overlay(alignment: .top) {
+                Rectangle()
+                    .fill(feature ? theme.accent : theme.ink)
+                    .frame(height: feature ? 5 : 2)
             }
-
-            if !snippet.isEmpty {
-                Text(snippet)
-                    .font(theme.bodyFont(13))
-                    .foregroundStyle(theme.inkSoft)
-                    .lineLimit(3)
-            }
-
-            Spacer(minLength: 0)
-
-            if !metaItems.isEmpty {
-                HStack(spacing: 9) {
-                    ForEach(Array(metaItems.enumerated()), id: \.offset) { _, item in
-                        HStack(spacing: 3) {
-                            Image(systemName: item.icon).font(.system(size: 9))
-                            Text(item.text)
-                        }
-                        .font(theme.monoFont(9.5, relativeTo: .caption2))
-                        .foregroundStyle(theme.inkSoft)
+        default:
+            let shape = RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
+            let fill: Color = (mood == .neubrutalist && feature) ? theme.accent : theme.paperRaised
+            let border: Color = feature
+                ? (mood == .neubrutalist ? theme.edge : theme.accentLine)
+                : theme.edge
+            content
+                .background {
+                    shape.fill(fill)
+                    if feature && mood != .neubrutalist {
+                        // The design's 5% accent diagonal wash on a feature card.
+                        shape.fill(LinearGradient(colors: [theme.accent.opacity(0.06), .clear],
+                                                  startPoint: .topLeading, endPoint: .bottomTrailing))
                     }
                 }
-                .lineLimit(1)
-            }
-
-            if let tags = note.tags, !tags.isEmpty {
-                HStack(spacing: 5) {
-                    ForEach(Array(tags.prefix(3))) { tag in
-                        HStack(spacing: 4) {
-                            Circle().fill(tag.color).frame(width: 6, height: 6)
-                            Text(tag.name).font(theme.monoFont(9.5, relativeTo: .caption2))
-                        }
-                        .foregroundStyle(theme.inkSoft)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(theme.paperSunk, in: Capsule())
-                    }
-                }
-            }
-
-            Text(note.createdAt.formatted(.relative(presentation: .named)))
-                .font(theme.monoFont(10.5, relativeTo: .caption2))
-                .foregroundStyle(theme.inkFaint)
+                .clipShape(shape)
+                // Shadow cast by a shape behind the content (never the text).
+                .background { shape.fill(fill).themeShadow(theme.shadow) }
+                .overlay(shape.strokeBorder(border, lineWidth: theme.borderWidth))
         }
-        .padding(16)
-        .frame(height: 192, alignment: .topLeading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Pinned cards fill with the mood's accent tint and take the "selected"
-        // border. Because `moodCard` already encodes each mood's signature shape +
-        // shadow (paper's soft round, swiss's square hairline, neubrutalist's hard
-        // offset shadow + lime tint, terminal's dark tint), a pinned card reads
-        // distinctly *per mood* — exactly the dashboard's per-mood look.
-        .moodCard(theme, fill: note.pinned ? theme.accentTint : nil, selected: note.pinned)
-    }
-
-    /// The "Pinned" marker — an accent pill so it stands out on the tinted card.
-    private var pinnedBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "pin.fill").font(.system(size: 8))
-            Text("Pinned")
-                .font(theme.monoFont(9, relativeTo: .caption2))
-                .tracking(0.6)
-                .textCase(.uppercase)
-        }
-        .foregroundStyle(theme.paper)
-        .padding(.horizontal, 7).padding(.vertical, 3)
-        .background(theme.accent, in: Capsule())
     }
 }

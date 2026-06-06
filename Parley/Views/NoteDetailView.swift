@@ -703,7 +703,9 @@ struct NoteDetailView: View {
 
             #if os(iOS)
             if showsHandwriting {
-                DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw)
+                DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw,
+                              recognizeShapes: true,
+                              onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) })
                     .id(canvasID)
                     // Pause canvas input while a shape/image is selected, so dragging
                     // and resizing it isn't fought over by the PencilKit scroll view.
@@ -806,8 +808,8 @@ struct NoteDetailView: View {
     }
 
     /// Insert or paste an image onto the page (it's then draggable/resizable).
-    /// Shapes aren't inserted from a button — draw one and Apple's Auto-Refine
-    /// Handwriting snaps it into clean ink (toggle it in the tool picker's "…").
+    /// Shapes aren't inserted from a button — draw a rough rectangle or oval and it
+    /// snaps to a clean, movable shape (see `ShapeRecognizer`).
     private var insertPalette: some View {
         HStack(spacing: 14) {
             Button { showCanvasPhoto = true } label: {
@@ -824,7 +826,19 @@ struct NoteDetailView: View {
         .tint(theme.accent)
     }
 
-    // MARK: Canvas items (images)
+    // MARK: Canvas items (images + recognized shapes)
+
+    /// Turn a recognized freehand shape into a clean, movable `CanvasItem` placed
+    /// where it was drawn.
+    private func addRecognizedShape(_ kind: CanvasItem.Kind, _ rect: CGRect) {
+        let hex = themeManager.accentHex ?? themeManager.mood.config.accentDefault
+        let item = CanvasItem(kind: kind,
+                              x: max(0, Double(rect.minX)), y: max(0, Double(rect.minY)),
+                              width: max(40, Double(rect.width)), height: max(40, Double(rect.height)),
+                              colorHex: hex)
+        note.canvasItems = note.canvasItems + [item]
+        selectedItemID = item.id
+    }
 
     /// Insert pasted image(s) as movable canvas items.
     private func pasteImages(_ providers: [NSItemProvider]) async {
@@ -1404,26 +1418,26 @@ private struct CanvasItemsLayer: View {
         // *inside* the hittable area. Previously they hung half outside the item's
         // frame and were nearly impossible to grab — which is why resizing "didn't
         // work". `pad` is 0 when unselected so the halo never blocks drawing nearby.
-        let pad: CGFloat = selected ? 22 : 0
-        return ZStack {
-            // A clear layer fixes the ZStack's size (and thus the coordinate space
-            // that `.position` resolves against) to the padded frame.
-            Color.clear
-                .frame(width: s.width + pad * 2, height: s.height + pad * 2)
-            content(item, size: s)
-                .frame(width: s.width, height: s.height)
-            if selected {
-                Rectangle()
-                    .strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-                    .frame(width: s.width, height: s.height)
-                deleteHandle(item).position(x: pad, y: pad)
-                resizeHandle(item).position(x: pad + s.width, y: pad + s.height)
+        // `pad` expands the hit area so the corner handles sit inside it. Handles
+        // are anchored with `.overlay(alignment:)` (not `.position`) so they always
+        // land on the item's corners regardless of size — the previous `.position`
+        // approach made the container greedy and the handles drifted off the item.
+        let pad: CGFloat = selected ? 20 : 0
+        return content(item, size: s)
+            .frame(width: s.width, height: s.height)
+            .overlay {
+                if selected {
+                    Rectangle()
+                        .strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                }
             }
-        }
-        .contentShape(Rectangle())
-        .offset(x: o.x - pad, y: o.y - pad)
-        .onTapGesture { selectedID = item.id }
-        .highPriorityGesture(moveGesture(item))
+            .padding(pad)
+            .overlay(alignment: .topLeading) { if selected { deleteHandle(item) } }
+            .overlay(alignment: .bottomTrailing) { if selected { resizeHandle(item) } }
+            .contentShape(Rectangle())
+            .offset(x: o.x - pad, y: o.y - pad)
+            .onTapGesture { selectedID = item.id }
+            .highPriorityGesture(moveGesture(item))
     }
 
     @ViewBuilder

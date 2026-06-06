@@ -37,6 +37,9 @@ final class ThemeManager {
     /// Whether the iPad handwriting canvas is shown.
     var handwriting: Bool { didSet { UserDefaults.standard.set(handwriting, forKey: Self.handwritingKey) } }
 
+    /// Whether to recognize enrolled voices and auto-label them across meetings.
+    var recognizeSpeakers: Bool { didSet { UserDefaults.standard.set(recognizeSpeakers, forKey: Self.recognizeSpeakersKey) } }
+
     var density: Density { didSet { UserDefaults.standard.set(density.rawValue, forKey: Self.densityKey) } }
 
     /// Preferred transcription language as a language code ("es"), or `nil` for
@@ -118,6 +121,7 @@ final class ThemeManager {
     private static let faceKey = "parley.face"
     private static let warmthKey = "parley.warmth"
     private static let handwritingKey = "parley.handwriting"
+    private static let recognizeSpeakersKey = "parley.recognizeSpeakers"
     private static let densityKey = "parley.density"
     private static let languageKey = "parley.transcriptionLanguage"
     private static let layoutSwappedKey = "parley.layoutSwapped"
@@ -144,6 +148,7 @@ final class ThemeManager {
         faceName = d.string(forKey: Self.faceKey)
         warmth = d.object(forKey: Self.warmthKey) as? Double ?? 38
         handwriting = d.object(forKey: Self.handwritingKey) as? Bool ?? true
+        recognizeSpeakers = d.object(forKey: Self.recognizeSpeakersKey) as? Bool ?? true
         density = Density(rawValue: d.string(forKey: Self.densityKey) ?? "") ?? .regular
         transcriptionLanguage = d.string(forKey: Self.languageKey)
         layoutSwapped = d.object(forKey: Self.layoutSwappedKey) as? Bool ?? false

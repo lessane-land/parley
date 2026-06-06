@@ -42,6 +42,12 @@ final class TranscriptionService {
     /// mirrored by the owner into `note.transcriptData`. Additive — `finalizedText`
     /// stays the flat source of truth.
     private(set) var finalizedSegments: [TranscriptSegment] = []
+
+    /// Per-speaker voice embeddings from the last diarization, keyed by the speaker
+    /// label ("Speaker 1"). The owner persists these on the note and uses them to
+    /// recognize / enroll voices across meetings. Empty until `identifySpeakers()`
+    /// runs (and only populated when FluidAudio is linked).
+    private(set) var speakerEmbeddings: [String: [Float]] = [:]
     /// The in-flight guess for what's being said right now (updates rapidly).
     private(set) var volatileText: String = ""
     /// When the current session began (for the timer).
@@ -73,7 +79,7 @@ final class TranscriptionService {
     private var diarAudioURL: URL?
     private var diarSessionStart: Date?
     #if canImport(FluidAudio)
-    private var diarizer: LSEENDDiarizer?   // cached so models load once
+    private var diarizer: DiarizerManager?   // cached so the Core ML models load once
     #endif
 
     // MARK: Start / stop
@@ -85,6 +91,7 @@ final class TranscriptionService {
         guard state == .idle || isError else { return }
         finalizedText = seed
         finalizedSegments = seedSegments
+        speakerEmbeddings = [:]
         volatileText = ""
         state = .preparing
 
@@ -268,10 +275,18 @@ final class TranscriptionService {
 
     // MARK: Speaker diarization (FluidAudio, on-device)
 
-    /// Run after `stop()`. Diarizes the recorded session audio and labels each
-    /// transcript segment with "Speaker N" by time overlap. Best-effort: on any
-    /// failure (or when FluidAudio isn't linked) it simply leaves segments as-is,
-    /// so manual labeling still works. Never overwrites a custom (renamed) speaker.
+    /// Run after `stop()`. Diarizes the recorded session audio, labels each
+    /// transcript segment with "Speaker N" by time overlap, and captures a voice
+    /// embedding per speaker (into `speakerEmbeddings`) so the owner can recognize
+    /// and enroll voices across meetings. Best-effort: on any failure (or when
+    /// FluidAudio isn't linked) it leaves segments as-is, so manual labeling still
+    /// works. Never overwrites a custom (renamed) speaker.
+    ///
+    /// NOTE: the FluidAudio calls below (`DiarizerManager`, `performCompleteDiarization`,
+    /// `TimedSpeakerSegment.speakerId/startTimeSeconds/endTimeSeconds`,
+    /// `speakerManager.getSpeaker(for:)?.currentEmbedding`) follow FluidAudio's
+    /// documented API; if the installed package differs, this one method is the
+    /// only place to adjust.
     func identifySpeakers() async {
         #if canImport(FluidAudio)
         guard let url = diarAudioURL, let sessionStart = diarSessionStart else { return }
@@ -280,16 +295,24 @@ final class TranscriptionService {
 
         state = .identifyingSpeakers
         do {
-            let engine: LSEENDDiarizer
+            let manager: DiarizerManager
             if let cached = diarizer {
-                engine = cached
+                manager = cached
             } else {
-                engine = try await LSEENDDiarizer(variant: .dihard3)
-                diarizer = engine
+                manager = DiarizerManager()
+                try await manager.initialize()
+                diarizer = manager
             }
-            // processComplete is throwing-but-synchronous and returns the timeline.
-            let timeline = try engine.processComplete(audioFileURL: url)
-            applySpeakers(turns: Self.turns(from: timeline), sessionStart: sessionStart)
+            // Diarization wants 16 kHz mono Float32 samples.
+            let samples = try Self.loadMonoSamples(url: url, sampleRate: 16_000)
+            guard !samples.isEmpty else { state = .idle; return }
+
+            let result = try manager.performCompleteDiarization(samples)
+            let turns = result.segments.map {
+                Turn(id: $0.speakerId, start: Double($0.startTimeSeconds), end: Double($0.endTimeSeconds))
+            }
+            let labelForId = applySpeakers(turns: turns, sessionStart: sessionStart)
+            captureEmbeddings(from: manager, labelForId: labelForId)
         } catch {
             // Diarization is a bonus; keep the transcript even if it fails.
         }
@@ -298,7 +321,7 @@ final class TranscriptionService {
     }
 
     #if canImport(FluidAudio)
-    private struct Turn { let slot: Int; let start: Double; let end: Double }
+    private struct Turn { let id: String; let start: Double; let end: Double }
 
     private func makeDiarFile(format: AVAudioFormat) -> AVAudioFile? {
         let url = FileManager.default.temporaryDirectory
@@ -314,28 +337,20 @@ final class TranscriptionService {
         diarSessionStart = nil
     }
 
-    /// Flatten the diarization timeline into time-ordered speaker turns.
-    /// (`DiarizerSegment.startTime/endTime` are `Float` seconds.)
-    private static func turns(from timeline: DiarizerTimeline) -> [Turn] {
-        var turns: [Turn] = []
-        for (slot, speaker) in timeline.speakers {
-            for seg in speaker.finalizedSegments {
-                turns.append(Turn(slot: slot, start: Double(seg.startTime), end: Double(seg.endTime)))
-            }
-        }
-        return turns.sorted { $0.start < $1.start }
-    }
-
     /// Assign "Speaker N" to each segment by which speaker dominates the audio
-    /// window in which that line was spoken. Each finalized line's window is
-    /// approximated as [previous finalize, this finalize] relative to the session
-    /// start — no dependency on the WWDC audio-time API.
-    private func applySpeakers(turns: [Turn], sessionStart: Date) {
-        guard !turns.isEmpty else { return }
-        // Stable display numbers: sort distinct slots, number them 1…k.
-        let numberForSlot = Dictionary(
-            uniqueKeysWithValues: Set(turns.map(\.slot)).sorted().enumerated().map { ($1, $0 + 1) }
-        )
+    /// window in which that line was spoken. Returns the speakerId → display-label
+    /// map so embeddings can be keyed by the same label. Each finalized line's
+    /// window is approximated as [previous finalize, this finalize] relative to the
+    /// session start — no dependency on the WWDC audio-time API.
+    @discardableResult
+    private func applySpeakers(turns: [Turn], sessionStart: Date) -> [String: String] {
+        guard !turns.isEmpty else { return [:] }
+
+        // Stable display numbers, in first-appearance order of each speakerId.
+        var order: [String] = []
+        for turn in turns where !order.contains(turn.id) { order.append(turn.id) }
+        var labelForId: [String: String] = [:]
+        for (index, id) in order.enumerated() { labelForId[id] = "Speaker \(index + 1)" }
 
         var previousOffset = 0.0
         for index in finalizedSegments.indices {
@@ -343,28 +358,73 @@ final class TranscriptionService {
             let offset = max(previousOffset, at.timeIntervalSince(sessionStart))
             defer { previousOffset = offset }
 
-            var overlapBySlot: [Int: Double] = [:]
+            var overlapById: [String: Double] = [:]
             for turn in turns {
                 let overlap = min(offset, turn.end) - max(previousOffset, turn.start)
-                if overlap > 0 { overlapBySlot[turn.slot, default: 0] += overlap }
+                if overlap > 0 { overlapById[turn.id, default: 0] += overlap }
             }
-            guard let slot = overlapBySlot.max(by: { $0.value < $1.value })?.key,
-                  let number = numberForSlot[slot] else { continue }
+            guard let id = overlapById.max(by: { $0.value < $1.value })?.key,
+                  let label = labelForId[id] else { continue }
 
             // Don't clobber a name the user typed; only (re)set the auto labels.
             let current = finalizedSegments[index].speaker
             if current == nil || Self.isAutoSpeakerLabel(current!) {
-                finalizedSegments[index].speaker = "Speaker \(number)"
+                finalizedSegments[index].speaker = label
             }
         }
+        return labelForId
     }
 
+    /// Pull each speaker's averaged voice embedding from the diarizer, keyed by the
+    /// display label, into `speakerEmbeddings`.
+    private func captureEmbeddings(from manager: DiarizerManager, labelForId: [String: String]) {
+        var embeddings: [String: [Float]] = [:]
+        for (id, label) in labelForId {
+            if let vector = manager.speakerManager.getSpeaker(for: id)?.currentEmbedding, !vector.isEmpty {
+                embeddings[label] = vector
+            }
+        }
+        speakerEmbeddings = embeddings
+    }
+
+    /// Load an audio file as 16 kHz mono Float32 samples (what diarization expects).
+    private static func loadMonoSamples(url: URL, sampleRate: Double) throws -> [Float] {
+        let file = try AVAudioFile(forReading: url)
+        let inFormat = file.processingFormat
+        guard let outFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate,
+                                            channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: inFormat, to: outFormat) else {
+            return []
+        }
+        let frames = AVAudioFrameCount(file.length)
+        guard frames > 0, let inBuffer = AVAudioPCMBuffer(pcmFormat: inFormat, frameCapacity: frames) else {
+            return []
+        }
+        try file.read(into: inBuffer)
+
+        let ratio = sampleRate / inFormat.sampleRate
+        let outCapacity = AVAudioFrameCount(Double(inBuffer.frameLength) * ratio) + 1024
+        guard let outBuffer = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: outCapacity) else { return [] }
+
+        var fed = false
+        var conversionError: NSError?
+        converter.convert(to: outBuffer, error: &conversionError) { _, status in
+            if fed { status.pointee = .endOfStream; return nil }
+            fed = true
+            status.pointee = .haveData
+            return inBuffer
+        }
+        if conversionError != nil { return [] }
+        guard let channel = outBuffer.floatChannelData?[0] else { return [] }
+        return Array(UnsafeBufferPointer(start: channel, count: Int(outBuffer.frameLength)))
+    }
+    #endif
+
     /// True for the auto-generated "Speaker 3" form (so we never overwrite a name
-    /// the user typed).
+    /// the user typed). Available regardless of FluidAudio so the UI can use it.
     static func isAutoSpeakerLabel(_ name: String) -> Bool {
         name.range(of: #"^Speaker \d+$"#, options: .regularExpression) != nil
     }
-    #endif
 
     /// Pick a supported locale for transcription.
     ///
@@ -407,6 +467,34 @@ final class TranscriptionService {
             "zh": "zh-CN", "ja": "ja-JP", "ko": "ko-KR"
         ]
         return Locale(identifier: defaults[language] ?? "en-US")
+    }
+}
+
+/// Voice-embedding math for cross-meeting speaker recognition. Embeddings are
+/// L2-normalized 256-d vectors, so cosine similarity (≈ dot product) in [-1, 1]
+/// measures how alike two voices are; ~0.6+ is a confident same-speaker match.
+enum SpeakerMatch {
+    /// Cosine similarity between two equal-length embeddings (0 if mismatched).
+    static func cosine(_ a: [Float], _ b: [Float]) -> Float {
+        guard a.count == b.count, !a.isEmpty else { return 0 }
+        var dot: Float = 0, na: Float = 0, nb: Float = 0
+        for i in a.indices { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i] }
+        let denom = na.squareRoot() * nb.squareRoot()
+        return denom > 0 ? dot / denom : 0
+    }
+
+    /// A running mean of two embeddings (so re-enrolling a voice refines it), then
+    /// L2-normalized to keep cosine comparisons meaningful.
+    static func averaged(_ existing: [Float], count: Int, with new: [Float]) -> [Float] {
+        guard !existing.isEmpty, existing.count == new.count else { return normalized(new) }
+        let n = Float(max(count, 1))
+        let mean = zip(existing, new).map { ($0 * n + $1) / (n + 1) }
+        return normalized(mean)
+    }
+
+    static func normalized(_ v: [Float]) -> [Float] {
+        let norm = v.reduce(0) { $0 + $1 * $1 }.squareRoot()
+        return norm > 0 ? v.map { $0 / norm } : v
     }
 }
 

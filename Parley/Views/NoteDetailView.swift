@@ -27,6 +27,7 @@ struct NoteDetailView: View {
     @Environment(EventKitService.self) private var eventKit
 
     @Query(sort: \Tag.name) private var allTags: [Tag]
+    @Query private var speakerProfiles: [SpeakerProfile]
 
     /// One transcription engine per open note. `@State` keeps it alive for the
     /// view's lifetime; the detail is rebuilt per note (via `.id`), so each note
@@ -754,9 +755,12 @@ struct NoteDetailView: View {
                 note.transcript = transcription.finalizedText
                 note.transcriptSegments = transcription.finalizedSegments
                 // Identify speakers from the recorded audio (no-op without
-                // FluidAudio); persist the labeled segments when it finishes.
+                // FluidAudio); persist the labeled segments + their embeddings when
+                // it finishes, then auto-label any voices we already recognize.
                 await transcription.identifySpeakers()
                 note.transcriptSegments = transcription.finalizedSegments
+                mergeSpeakerEmbeddings(transcription.speakerEmbeddings)
+                autoLabelKnownSpeakers()
                 await autoSummarizeIfEnabled()
             } else {
                 // Reveal the transcript so the live text is visible while recording.
@@ -837,7 +841,8 @@ struct NoteDetailView: View {
 
         var segments = note.transcriptSegments
         guard let target = segments.first(where: { $0.id == id }) else { return }
-        if let current = target.speaker {
+        let previousLabel = target.speaker
+        if let current = previousLabel {
             for i in segments.indices where segments[i].speaker == current {
                 segments[i].speaker = newName
             }
@@ -845,6 +850,82 @@ struct NoteDetailView: View {
             segments[i].speaker = newName
         }
         note.transcriptSegments = segments
+
+        // Naming a speaker enrolls their voice, so we recognize them next time.
+        if let newName, let previousLabel {
+            enrollVoice(named: newName, fromLabel: previousLabel)
+        }
+    }
+
+    // MARK: Speaker enrollment / recognition
+
+    /// Persist this meeting's speaker embeddings onto the note, so a voice can be
+    /// named (→ enrolled) any time the note is open — not only right after recording.
+    private func mergeSpeakerEmbeddings(_ embeddings: [String: [Float]]) {
+        guard !embeddings.isEmpty else { return }
+        var merged = note.speakerEmbeddings
+        for (label, vector) in embeddings { merged[label] = vector }
+        note.speakerEmbeddings = merged
+    }
+
+    /// Auto-rename auto-labeled speakers ("Speaker N") to an enrolled voice when
+    /// the embeddings match closely enough, re-keying the stored embeddings.
+    private func autoLabelKnownSpeakers() {
+        guard themeManager.recognizeSpeakers, !speakerProfiles.isEmpty else { return }
+        let embeddings = note.speakerEmbeddings
+        guard !embeddings.isEmpty else { return }
+
+        var segments = note.transcriptSegments
+        var stored = embeddings
+        var changed = false
+        for (label, vector) in embeddings {
+            guard TranscriptionService.isAutoSpeakerLabel(label),
+                  let match = bestProfile(for: vector) else { continue }
+            for i in segments.indices where segments[i].speaker == label {
+                segments[i].speaker = match.name
+            }
+            stored[match.name] = vector
+            stored[label] = nil
+            changed = true
+        }
+        if changed {
+            note.transcriptSegments = segments
+            note.speakerEmbeddings = stored
+        }
+    }
+
+    /// The enrolled profile whose voice best matches `vector`, above the confidence
+    /// threshold (else nil).
+    private func bestProfile(for vector: [Float]) -> SpeakerProfile? {
+        let threshold: Float = 0.62
+        var best: SpeakerProfile?
+        var bestScore = threshold
+        for profile in speakerProfiles {
+            let score = SpeakerMatch.cosine(vector, profile.embedding)
+            if score >= bestScore { best = profile; bestScore = score }
+        }
+        return best
+    }
+
+    /// Save or refine an enrolled voice for `name` using the embedding stored under
+    /// `label`, then re-key the note's stored embedding to the name.
+    private func enrollVoice(named name: String, fromLabel label: String) {
+        var stored = note.speakerEmbeddings
+        guard let vector = stored[label] ?? stored[name], !vector.isEmpty else { return }
+
+        if let existing = speakerProfiles.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            existing.embedding = SpeakerMatch.averaged(existing.embedding, count: existing.sampleCount, with: vector)
+            existing.sampleCount += 1
+            existing.updatedAt = Date()
+        } else {
+            context.insert(SpeakerProfile(name: name, embedding: SpeakerMatch.normalized(vector)))
+        }
+
+        if label != name {
+            stored[name] = vector
+            stored[label] = nil
+            note.speakerEmbeddings = stored
+        }
     }
 }
 
@@ -979,7 +1060,7 @@ private struct AttachmentPreviewSheet: View {
 
 #Preview {
     let container = try! ModelContainer(
-        for: Note.self,
+        for: Note.self, SpeakerProfile.self,
         configurations: ModelConfiguration(isStoredInMemoryOnly: true)
     )
     let note = Note(title: "Kickoff sync", body: "Discussed Phase 0 scope.")

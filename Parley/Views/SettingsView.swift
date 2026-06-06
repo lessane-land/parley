@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Settings — the design's slide-over: **Appearance** (mood, accent, type, size),
 /// **Editor**, **AI & Summarize**, and **Transcription**. Styled with the mood
@@ -7,6 +8,8 @@ import SwiftUI
 /// title bar, so this view is just the scrolling body.
 struct SettingsView: View {
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(\.modelContext) private var context
+    @Query(sort: \SpeakerProfile.name) private var speakerProfiles: [SpeakerProfile]
 
     private var theme: Theme { themeManager.theme }
     private var cfg: MoodConfig { themeManager.mood.config }
@@ -20,6 +23,7 @@ struct SettingsView: View {
                 editorSection(themeManager)
                 aiSection(themeManager)
                 transcriptionSection(themeManager)
+                voicesSection(themeManager)
             }
             .padding(20)
         }
@@ -141,6 +145,49 @@ struct SettingsView: View {
             .foregroundStyle(theme.inkFaint)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 2)
+    }
+
+    @ViewBuilder
+    private func voicesSection(_ manager: ThemeManager) -> some View {
+        @Bindable var manager = manager
+        sectionHeader("Voices")
+        toggleRow("Recognize known speakers",
+                  desc: "Auto-labels enrolled voices in new meetings. Name a speaker in a transcript to enroll their voice.",
+                  isOn: $manager.recognizeSpeakers)
+        if speakerProfiles.isEmpty {
+            Text("No enrolled voices yet. In a meeting transcript, tap a speaker and give them a name — Parley remembers that voice on this device (and your iCloud).")
+                .font(theme.bodyFont(11.5))
+                .foregroundStyle(theme.inkFaint)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
+        } else {
+            VStack(spacing: 8) {
+                ForEach(speakerProfiles) { voiceRow($0) }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func voiceRow(_ profile: SpeakerProfile) -> some View {
+        HStack(spacing: 11) {
+            Image(systemName: "waveform.circle.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(theme.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(profile.name).font(theme.bodyFont(13).weight(.semibold)).foregroundStyle(theme.ink)
+                Text("Enrolled · \(profile.sampleCount) sample\(profile.sampleCount == 1 ? "" : "s")")
+                    .font(theme.monoFont(10, relativeTo: .caption2)).foregroundStyle(theme.inkFaint)
+            }
+            Spacer(minLength: 0)
+            Button(role: .destructive) { context.delete(profile) } label: {
+                Image(systemName: "trash").foregroundStyle(theme.rec)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Delete \(profile.name)")
+        }
+        .padding(11)
+        .background(theme.paper, in: cardShape)
+        .overlay(cardShape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
     }
 
     // MARK: Sections / labels
@@ -443,4 +490,5 @@ struct ThemePreviewCard: View {
             .navigationTitle("Settings")
     }
     .environment(ThemeManager())
+    .modelContainer(for: SpeakerProfile.self, inMemory: true)
 }

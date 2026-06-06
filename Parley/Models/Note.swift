@@ -59,6 +59,12 @@ final class Note {
     /// Optional Data → lightweight migration and CloudKit-safe.
     var transcriptData: Data?
 
+    /// Per-speaker voice embeddings captured during this meeting's diarization,
+    /// keyed by the speaker label ("Speaker 1", or an enrolled name). JSON of
+    /// `[String: [Float]]`. Kept so a speaker can be named (→ enrolled) any time the
+    /// note is open, not just right after recording. Optional Data → CloudKit-safe.
+    var speakerEmbeddingsData: Data?
+
     /// Tags attached to this note. Optional to-many (CloudKit requirement); the
     /// inverse is declared on `Tag.notes`.
     var tags: [Tag]?
@@ -108,6 +114,59 @@ final class Note {
         set {
             transcriptData = newValue.isEmpty ? nil : (try? JSONEncoder().encode(newValue))
         }
+    }
+
+    /// This meeting's per-speaker embeddings (label → 256-d voiceprint).
+    /// Convenience around the JSON in `speakerEmbeddingsData`.
+    var speakerEmbeddings: [String: [Float]] {
+        get {
+            guard let speakerEmbeddingsData else { return [:] }
+            return (try? JSONDecoder().decode([String: [Float]].self, from: speakerEmbeddingsData)) ?? [:]
+        }
+        set {
+            speakerEmbeddingsData = newValue.isEmpty ? nil : (try? JSONEncoder().encode(newValue))
+        }
+    }
+}
+
+/// An enrolled voice: a name plus its averaged voice embedding, so Parley can
+/// recognize the same person across meetings ("that's Vanesa again"). The bytes
+/// are a 256-d `[Float]` (L2-normalized) from on-device diarization — math, not
+/// audio. CloudKit-safe (defaults + optional), so your enrolled voices sync across
+/// your own devices and never leave your private iCloud.
+@Model
+final class SpeakerProfile {
+    var id: UUID = UUID()
+    var name: String = ""
+    /// The averaged embedding, encoded as raw `Float` bytes.
+    var embeddingData: Data?
+    /// How many samples have been averaged in (for a running mean on re-enroll).
+    var sampleCount: Int = 1
+    var updatedAt: Date = Date()
+
+    init(id: UUID = UUID(), name: String = "", embedding: [Float] = [], sampleCount: Int = 1) {
+        self.id = id
+        self.name = name
+        self.sampleCount = sampleCount
+        self.updatedAt = Date()
+        self.embedding = embedding
+    }
+
+    /// The embedding as a `[Float]` (computed → not separately persisted).
+    var embedding: [Float] {
+        get { SpeakerEmbedding.decode(embeddingData) }
+        set { embeddingData = SpeakerEmbedding.encode(newValue) }
+    }
+}
+
+/// Raw `[Float]` ⇄ `Data` for compact, CloudKit-friendly embedding storage.
+enum SpeakerEmbedding {
+    static func encode(_ vector: [Float]) -> Data? {
+        vector.isEmpty ? nil : vector.withUnsafeBufferPointer { Data(buffer: $0) }
+    }
+    static func decode(_ data: Data?) -> [Float] {
+        guard let data, !data.isEmpty else { return [] }
+        return data.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
     }
 }
 

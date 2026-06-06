@@ -202,6 +202,8 @@ struct NoteDetailView: View {
         }
         // Auto-start recording when opened via the Record CTA.
         .task {
+            // Merge any duplicate enrolled voices that synced in from another device.
+            SpeakerProfile.dedupe(speakerProfiles, in: context)
             guard autoRecord, !didAutoStart, !transcription.isRecording else { return }
             didAutoStart = true
             onAutoRecordConsumed()

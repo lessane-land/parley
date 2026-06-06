@@ -1,6 +1,7 @@
 import Foundation
 @preconcurrency import AVFoundation
 import Speech
+import SwiftData
 #if canImport(FluidAudio)
 import FluidAudio   // on-device speaker diarization (Core ML / ANE). Add via SPM.
 #endif
@@ -514,6 +515,42 @@ enum SpeakerMatch {
     static func normalized(_ v: [Float]) -> [Float] {
         let norm = v.reduce(0) { $0 + $1 * $1 }.squareRoot()
         return norm > 0 ? v.map { $0 / norm } : v
+    }
+
+    /// A sample-count-weighted mean of two embeddings (for merging two profiles of
+    /// the same voice), L2-normalized.
+    static func weightedMean(_ a: [Float], _ wa: Int, _ b: [Float], _ wb: Int) -> [Float] {
+        guard !a.isEmpty else { return normalized(b) }
+        guard !b.isEmpty, a.count == b.count else { return normalized(a) }
+        let fa = Float(max(wa, 1)), fb = Float(max(wb, 1))
+        let total = fa + fb
+        return normalized(zip(a, b).map { ($0 * fa + $1 * fb) / total })
+    }
+}
+
+extension SpeakerProfile {
+    /// Fold profiles that share a name (case-insensitively) into a single one —
+    /// merging their embeddings (weighted by sample count) and deleting the extras.
+    /// This cleans up the duplicate records cross-device enrollment can create in
+    /// CloudKit (e.g. "Me" enrolled on both the Mac and the iPad before they synced).
+    @MainActor
+    static func dedupe(_ profiles: [SpeakerProfile], in context: ModelContext) {
+        let key: (SpeakerProfile) -> String = {
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }
+        let groups = Dictionary(grouping: profiles.filter { !key($0).isEmpty }, by: key)
+        for (_, group) in groups where group.count > 1 {
+            // Keep the most-refined (most samples); merge the rest into it.
+            let ordered = group.sorted { $0.sampleCount > $1.sampleCount }
+            let keeper = ordered[0]
+            for duplicate in ordered.dropFirst() {
+                keeper.embedding = SpeakerMatch.weightedMean(
+                    keeper.embedding, keeper.sampleCount, duplicate.embedding, duplicate.sampleCount)
+                keeper.sampleCount += duplicate.sampleCount
+                keeper.updatedAt = max(keeper.updatedAt, duplicate.updatedAt)
+                context.delete(duplicate)
+            }
+        }
     }
 }
 

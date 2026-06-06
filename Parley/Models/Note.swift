@@ -48,6 +48,15 @@ final class Note {
     /// Pinned to the top of the dashboard (and shown in an accent style).
     var pinned: Bool = false
 
+    /// Freeform-board layout: where this card sits and how big it is on the
+    /// dashboard when the user arranges it themselves. All optional (CloudKit-safe
+    /// lightweight migration); nil = not yet placed, so it's auto-laid-out. Stored
+    /// on the note so the arrangement **syncs** across devices.
+    var boardX: Double?
+    var boardY: Double?
+    var boardW: Double?
+    var boardH: Double?
+
     /// The last on-device AI summary (a `MeetingSummary` encoded as JSON).
     /// Optional → lightweight migration.
     var summaryData: Data?

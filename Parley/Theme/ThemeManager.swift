@@ -47,6 +47,14 @@ final class ThemeManager {
 
     var density: Density { didSet { UserDefaults.standard.set(density.rawValue, forKey: Self.densityKey) } }
 
+    /// Dashboard note-card size (Small / Medium / Large).
+    var cardSize: CardSize { didSet { UserDefaults.standard.set(cardSize.rawValue, forKey: Self.cardSizeKey) } }
+    /// Whether pinned notes show as a big wide "feature" card. Off = pinned notes
+    /// sit in the grid at normal size (just styled as pinned).
+    var featurePinned: Bool { didSet { UserDefaults.standard.set(featurePinned, forKey: Self.featurePinnedKey) } }
+    /// Freeform dashboard: drag/resize each card anywhere (iPad/Mac). Off = grid.
+    var freeformBoard: Bool { didSet { UserDefaults.standard.set(freeformBoard, forKey: Self.freeformBoardKey) } }
+
     /// Preferred transcription language as a language code ("es"), or `nil` for
     /// Automatic (follow the device's preferred languages). Not an appearance
     /// setting, but this is the app's single persisted-preferences store.
@@ -128,6 +136,9 @@ final class ThemeManager {
     private static let handwritingKey = "parley.handwriting"
     private static let recognizeSpeakersKey = "parley.recognizeSpeakers"
     private static let captureSystemAudioKey = "parley.captureSystemAudio"
+    private static let cardSizeKey = "parley.cardSize"
+    private static let featurePinnedKey = "parley.featurePinned"
+    private static let freeformBoardKey = "parley.freeformBoard"
     private static let densityKey = "parley.density"
     private static let languageKey = "parley.transcriptionLanguage"
     private static let layoutSwappedKey = "parley.layoutSwapped"
@@ -157,6 +168,9 @@ final class ThemeManager {
         recognizeSpeakers = d.object(forKey: Self.recognizeSpeakersKey) as? Bool ?? true
         captureSystemAudio = d.object(forKey: Self.captureSystemAudioKey) as? Bool ?? true
         density = Density(rawValue: d.string(forKey: Self.densityKey) ?? "") ?? .regular
+        cardSize = CardSize(rawValue: d.string(forKey: Self.cardSizeKey) ?? "") ?? .regular
+        featurePinned = d.object(forKey: Self.featurePinnedKey) as? Bool ?? true
+        freeformBoard = d.object(forKey: Self.freeformBoardKey) as? Bool ?? false
         transcriptionLanguage = d.string(forKey: Self.languageKey)
         layoutSwapped = d.object(forKey: Self.layoutSwappedKey) as? Bool ?? false
         splitFraction = d.object(forKey: Self.splitFractionKey) as? Double ?? 0.5
@@ -181,6 +195,57 @@ enum SummaryTone: String, CaseIterable, Identifiable {
         case .brief: "Be very concise — short phrases, only the essentials."
         case .balanced: "Be concise but complete."
         case .detailed: "Be thorough; capture nuance and context."
+        }
+    }
+}
+
+/// Dashboard note-card size. Drives the grid's column width and each card's height
+/// so the user can make cards smaller or larger.
+enum CardSize: String, CaseIterable, Identifiable {
+    case compact, regular, large
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .compact: "Small"
+        case .regular: "Medium"
+        case .large:   "Large"
+        }
+    }
+
+    /// SF Symbol for the size control.
+    var icon: String {
+        switch self {
+        case .compact: "square.grid.3x3"
+        case .regular: "square.grid.2x2"
+        case .large:   "square"
+        }
+    }
+
+    /// Minimum grid column width (adaptive columns).
+    var columnMin: CGFloat {
+        switch self {
+        case .compact: 190
+        case .regular: 240
+        case .large:   300
+        }
+    }
+
+    /// Standard card height.
+    var cardHeight: CGFloat {
+        switch self {
+        case .compact: 150
+        case .regular: 188
+        case .large:   240
+        }
+    }
+
+    /// Pinned ("feature") card height — a bit taller.
+    var featureHeight: CGFloat {
+        switch self {
+        case .compact: 170
+        case .regular: 210
+        case .large:   270
         }
     }
 }

@@ -1,5 +1,5 @@
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 import Speech
 #if canImport(FluidAudio)
 import FluidAudio   // on-device speaker diarization (Core ML / ANE). Add via SPM.
@@ -299,12 +299,17 @@ final class TranscriptionService {
             if let cached = diarizer {
                 manager = cached
             } else {
-                manager = DiarizerManager()
-                try await manager.initialize()
-                diarizer = manager
+                // Load the Core ML models (downloads once from Hugging Face) and
+                // bind them to a fresh manager.
+                let models = try await DiarizerModels.downloadIfNeeded()
+                let created = DiarizerManager()
+                created.initialize(models: models)
+                diarizer = created
+                manager = created
             }
-            // Diarization wants 16 kHz mono Float32 samples.
-            let samples = try Self.loadMonoSamples(url: url, sampleRate: 16_000)
+            // FluidAudio's converter resamples the recording to the 16 kHz mono
+            // Float32 the diarizer expects.
+            let samples = try AudioConverter().resampleAudioFile(url)
             guard !samples.isEmpty else { state = .idle; return }
 
             let result = try manager.performCompleteDiarization(samples)
@@ -385,38 +390,6 @@ final class TranscriptionService {
             }
         }
         speakerEmbeddings = embeddings
-    }
-
-    /// Load an audio file as 16 kHz mono Float32 samples (what diarization expects).
-    private static func loadMonoSamples(url: URL, sampleRate: Double) throws -> [Float] {
-        let file = try AVAudioFile(forReading: url)
-        let inFormat = file.processingFormat
-        guard let outFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate,
-                                            channels: 1, interleaved: false),
-              let converter = AVAudioConverter(from: inFormat, to: outFormat) else {
-            return []
-        }
-        let frames = AVAudioFrameCount(file.length)
-        guard frames > 0, let inBuffer = AVAudioPCMBuffer(pcmFormat: inFormat, frameCapacity: frames) else {
-            return []
-        }
-        try file.read(into: inBuffer)
-
-        let ratio = sampleRate / inFormat.sampleRate
-        let outCapacity = AVAudioFrameCount(Double(inBuffer.frameLength) * ratio) + 1024
-        guard let outBuffer = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: outCapacity) else { return [] }
-
-        var fed = false
-        var conversionError: NSError?
-        converter.convert(to: outBuffer, error: &conversionError) { _, status in
-            if fed { status.pointee = .endOfStream; return nil }
-            fed = true
-            status.pointee = .haveData
-            return inBuffer
-        }
-        if conversionError != nil { return [] }
-        guard let channel = outBuffer.floatChannelData?[0] else { return [] }
-        return Array(UnsafeBufferPointer(start: channel, count: Int(outBuffer.frameLength)))
     }
     #endif
 

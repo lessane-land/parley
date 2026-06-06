@@ -28,8 +28,9 @@ struct ParleyApp: App {
     /// Reports CloudKit sync activity to the UI.
     @State private var syncMonitor: SyncMonitor
 
-    /// Lets the macOS menu-bar item ask the main window to start a new recording.
-    @State private var recordLauncher = RecordLauncher()
+    /// App-level recording so the macOS menu bar can capture a meeting in the
+    /// background — no window needed, and it keeps running if the window is closed.
+    @State private var recorder = RecordingCoordinator()
 
     init() {
         // Register the bundled fonts before any view renders, so custom faces
@@ -76,7 +77,7 @@ struct ParleyApp: App {
                 .environment(themeManager)
                 .environment(eventKit)
                 .environment(syncMonitor)
-                .environment(recordLauncher)
+                .environment(recorder)
                 // Tint (selection, controls) follows the mood's accent…
                 .tint(themeManager.theme.accent)
                 // …and the whole window goes light/dark to match the mood.
@@ -101,31 +102,142 @@ struct ParleyApp: App {
         #endif
 
         // A menu-bar item so a meeting can be captured without hunting for the
-        // window: click it and "New Recording" creates a note and starts recording.
-        // This is a separate `#if` because it introduces a *new scene*, not a modifier.
+        // window: click "New Recording" and it records in the *background* (no app
+        // activation), into a fresh note. This is a separate `#if` because it
+        // introduces a new scene, not a modifier.
         #if os(macOS)
-        MenuBarExtra("Parley", systemImage: "waveform") {
-            Button("New Recording") {
-                recordLauncher.requestNewRecording()
-                NSApp.activate(ignoringOtherApps: true)
+        MenuBarExtra {
+            if recorder.isRecording {
+                Text("Recording \(recorder.activeNoteTitle ?? "meeting")…")
+                Button("Stop Recording") { recorder.stop() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+            } else {
+                Button("New Recording") {
+                    // No NSApp.activate — start capturing while staying in the
+                    // background so the user can keep using their meeting app.
+                    recorder.startNewRecording(context: modelContainer.mainContext,
+                                               themeManager: themeManager)
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
             }
-            .keyboardShortcut("r", modifiers: [.command, .shift])
             Divider()
             Button("Open Parley") { NSApp.activate(ignoringOtherApps: true) }
             Button("Quit Parley") { NSApplication.shared.terminate(nil) }
+        } label: {
+            // A filled, red-tinted icon signals an active background recording.
+            Image(systemName: recorder.isRecording ? "waveform.circle.fill" : "waveform")
+                .symbolRenderingMode(recorder.isRecording ? .multicolor : .monochrome)
         }
         #endif
     }
 }
 
-/// A tiny app-level signal so the macOS menu-bar item can ask the main window to
-/// start a new recording. The menu bar lives in its own scene and can't reach the
-/// note list's navigation state directly, so it bumps `requestTick`; `NoteListView`
-/// observes the change and runs its normal "create note + record" flow.
+/// App-level recording that runs independently of any window, so the macOS menu
+/// bar can start capturing a meeting in the background. It owns one transcription
+/// session, writes the live transcript onto a note as it streams, and on stop runs
+/// speaker ID + (optional) auto-summary — the same finishing steps the in-note
+/// recorder does. The note is created in the shared store, so when the user opens
+/// the app later the meeting is just there, transcribed.
+@MainActor
 @Observable
-final class RecordLauncher {
-    private(set) var requestTick = 0
-    func requestNewRecording() { requestTick += 1 }
+final class RecordingCoordinator {
+    private let transcription = TranscriptionService()
+    private let summaryService = SummaryService()
+
+    /// The note currently being recorded into (nil when idle). The view layer reads
+    /// `activeNoteID` to show a live indicator / route Stop for that note.
+    private(set) var activeNoteID: PersistentIdentifier?
+    private var activeNote: Note?
+    private var context: ModelContext?
+    private var themeManager: ThemeManager?
+    private var persistTask: Task<Void, Never>?
+
+    var isRecording: Bool { transcription.isRecording }
+    var startedAt: Date? { transcription.startedAt }
+    var state: TranscriptionService.State { transcription.state }
+    var activeNoteTitle: String? {
+        activeNote.map { $0.title.isEmpty ? "New recording" : $0.title }
+    }
+
+    /// Create a note and begin recording into it in the background.
+    func startNewRecording(context: ModelContext, themeManager: ThemeManager) {
+        guard !isRecording else { return }
+        self.context = context
+        self.themeManager = themeManager
+
+        let note = Note(title: "New recording")
+        context.insert(note)
+        try? context.save()
+        activeNote = note
+        activeNoteID = note.persistentModelID
+
+        Task {
+            #if os(macOS)
+            let captureSystem = themeManager.captureSystemAudio
+            #else
+            let captureSystem = false
+            #endif
+            await transcription.start(seed: "", seedSegments: [],
+                                      preferredLanguage: themeManager.transcriptionLanguage,
+                                      captureSystemAudio: captureSystem)
+            startPersisting(into: note)
+        }
+    }
+
+    /// Stop the background session and run the finishing steps.
+    func stop() {
+        guard isRecording || state == .finishing else { return }
+        Task { await finish() }
+    }
+
+    /// Mirror the streaming transcript onto the note every second, so an open
+    /// detail view (and the store) reflect progress even while in the background.
+    private func startPersisting(into note: Note) {
+        persistTask?.cancel()
+        persistTask = Task { @MainActor in
+            while transcription.isRecording {
+                note.transcript = transcription.finalizedText
+                note.transcriptSegments = transcription.finalizedSegments
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func finish() async {
+        persistTask?.cancel(); persistTask = nil
+        guard let note = activeNote else { return }
+
+        await transcription.stop()
+        note.transcript = transcription.finalizedText
+        note.transcriptSegments = transcription.finalizedSegments
+
+        // Speaker ID — hand over enrolled voices so they're recognized by name.
+        let profiles: [SpeakerProfile] = context.flatMap {
+            try? $0.fetch(FetchDescriptor<SpeakerProfile>())
+        } ?? []
+        let known = profiles.map { KnownVoice(name: $0.name, embedding: $0.embedding) }
+        await transcription.identifySpeakers(knownVoices: known)
+        note.transcriptSegments = transcription.finalizedSegments
+        var merged = note.speakerEmbeddings
+        for (label, vector) in transcription.speakerEmbeddings { merged[label] = vector }
+        note.speakerEmbeddings = merged
+
+        // Optional auto-summary, matching the in-note behavior.
+        if let tm = themeManager, tm.autoSummarize, !note.transcript.isEmpty {
+            let result = await summaryService.summarize(
+                notes: note.body, transcript: note.transcript, attendees: note.attendees,
+                tone: tm.summaryTone,
+                includeDecisions: tm.extractDecisions,
+                includeActionItems: tm.extractActionItems,
+                includeOpenQuestions: tm.extractOpenQuestions,
+                includeKeyQuotes: tm.extractKeyQuotes)
+            if let result { note.summaryData = try? JSONEncoder().encode(result) }
+        }
+
+        try? context?.save()
+        activeNote = nil
+        activeNoteID = nil
+    }
 }
 
 /// Switches the app icon to match the current mood.

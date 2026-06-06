@@ -27,6 +27,7 @@ struct NoteDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(ThemeManager.self) private var themeManager
     @Environment(EventKitService.self) private var eventKit
+    @Environment(RecordingCoordinator.self) private var recorder
 
     @Query(sort: \Tag.name) private var allTags: [Tag]
     @Query private var speakerProfiles: [SpeakerProfile]
@@ -222,8 +223,13 @@ struct NoteDetailView: View {
             // transcript open with it shown.
             if !didConfigureTranscript {
                 didConfigureTranscript = true
-                showTranscript = !note.transcript.isEmpty
+                // Show the transcript if there's text, or if this note is being
+                // recorded in the background (so its live text is visible).
+                showTranscript = !note.transcript.isEmpty || backgroundRecordingThisNote
             }
+            // Never start a local session for a note already recording in the
+            // background — the menu-bar recorder owns it.
+            guard !backgroundRecordingThisNote else { return }
             guard autoRecord, !didAutoStart, !transcription.isRecording else { return }
             didAutoStart = true
             onAutoRecordConsumed()
@@ -906,9 +912,39 @@ struct NoteDetailView: View {
 
     // MARK: Top-bar record control (the design's REC pill + circular stop)
 
+    /// True when *this* note is the one the app-level (menu-bar) recorder is
+    /// capturing in the background — so the detail reflects/controls that session
+    /// instead of starting a second, local one.
+    private var backgroundRecordingThisNote: Bool {
+        recorder.activeNoteID == note.persistentModelID
+    }
+
     @ViewBuilder
     private var recordControl: some View {
-        if transcription.isRecording {
+        if backgroundRecordingThisNote {
+            // Mirror the background session: live timer + a Stop that ends it.
+            HStack(spacing: 8) {
+                if let startedAt = recorder.startedAt {
+                    TimelineView(.periodic(from: startedAt, by: 1)) { _ in
+                        HStack(spacing: 5) {
+                            Circle().fill(theme.rec).frame(width: 7, height: 7)
+                            Text(elapsed(since: startedAt))
+                                .font(theme.monoFont(12, relativeTo: .subheadline))
+                                .foregroundStyle(theme.rec)
+                        }
+                    }
+                }
+                Button { recorder.stop() } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.caption)
+                        .foregroundStyle(theme.paperRaised)
+                        .padding(8)
+                        .background(theme.ink, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Stop recording")
+            }
+        } else if transcription.isRecording {
             HStack(spacing: 8) {
                 if let startedAt = transcription.startedAt {
                     TimelineView(.periodic(from: startedAt, by: 1)) { _ in
@@ -1648,4 +1684,5 @@ private struct AttachmentPreviewSheet: View {
     .modelContainer(container)
     .environment(ThemeManager())
     .environment(EventKitService())
+    .environment(RecordingCoordinator())
 }

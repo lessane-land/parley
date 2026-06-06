@@ -24,6 +24,7 @@ struct NoteDetailView: View {
     var onAutoRecordConsumed: () -> Void = {}
 
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     @Environment(ThemeManager.self) private var themeManager
     @Environment(EventKitService.self) private var eventKit
 
@@ -92,6 +93,9 @@ struct NoteDetailView: View {
     @State private var previewAttachment: Attachment?
     @State private var showAttachMenu = false
 
+    /// Delete-this-note confirmation.
+    @State private var showDeleteNote = false
+
     private var theme: Theme { themeManager.theme }
     private var density: Density { themeManager.density }
 
@@ -136,6 +140,7 @@ struct NoteDetailView: View {
             ToolbarItem { attachControl }
             ToolbarItem { transcriptToggle }
             ToolbarItem { swapControl }
+            ToolbarItem { noteMenu }
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems, maxSelectionCount: 10, matching: .images)
@@ -195,6 +200,12 @@ struct NoteDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes the Pencil strokes on this note. Your typed text is kept.")
+        }
+        .confirmationDialog("Delete this note?", isPresented: $showDeleteNote, titleVisibility: .visible) {
+            Button("Delete Note", role: .destructive) { deleteNote() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently removes the note, its handwriting, and attachments.")
         }
         .alert("New Tag", isPresented: $showingNewTag) {
             TextField("Name", text: $newTagName)
@@ -358,24 +369,18 @@ struct NoteDetailView: View {
     }
 
     /// The paperclip control: a plain Button (so it matches the other toolbar
-    /// icons in size/tint — a `Menu` renders larger) that opens a small popover to
-    /// pick a photo or a file.
+    /// icons in size) that offers Photo / File. A `confirmationDialog` (not a
+    /// popover) dismisses *itself* before running the action, so presenting the
+    /// file importer afterwards no longer races a closing popover — which is why
+    /// "Add File" previously did nothing.
     private var attachControl: some View {
         Button { showAttachMenu = true } label: {
             Label("Attach", systemImage: "paperclip").labelStyle(.iconOnly)
         }
-        .popover(isPresented: $showAttachMenu, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 2) {
-                Button { showAttachMenu = false; showPhotoPicker = true } label: {
-                    Label("Photo", systemImage: "photo").frame(maxWidth: .infinity, alignment: .leading)
-                }
-                Button { showAttachMenu = false; importingFile = true } label: {
-                    Label("File", systemImage: "doc").frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(10)
-            .frame(minWidth: 150)
+        .confirmationDialog("Add Attachment", isPresented: $showAttachMenu, titleVisibility: .visible) {
+            Button("Photo") { showPhotoPicker = true }
+            Button("File") { importingFile = true }
+            Button("Cancel", role: .cancel) {}
         }
     }
 
@@ -631,6 +636,26 @@ struct NoteDetailView: View {
         .accessibilityLabel("Swap notes and transcript")
     }
 
+    /// Per-note overflow menu — currently just Delete, which removes the note from
+    /// within the detail (no need to go back to the list) and pops back.
+    private var noteMenu: some View {
+        Menu {
+            Button(role: .destructive) { showDeleteNote = true } label: {
+                Label("Delete Note", systemImage: "trash")
+            }
+        } label: {
+            Label("More", systemImage: "ellipsis.circle")
+        }
+    }
+
+    /// Delete this note and return to the list. Stops any live recording first so
+    /// the session doesn't outlive the note it was writing into.
+    private func deleteNote() {
+        if transcription.isRecording { Task { await transcription.stop() } }
+        context.delete(note)
+        dismiss()
+    }
+
     /// Collapse / show the transcript panel.
     private var transcriptToggle: some View {
         Button { withAnimation(.snappy) { showTranscript.toggle() } } label: {
@@ -679,7 +704,9 @@ struct NoteDetailView: View {
 
             #if os(iOS)
             if showsHandwriting {
-                DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw)
+                DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw,
+                              recognizeShapes: true,
+                              onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) })
                     .id(canvasID)
                     .allowsHitTesting(penMode == .draw)
             } else if let data = note.drawing {
@@ -727,15 +754,9 @@ struct NoteDetailView: View {
     #if os(iOS)
     private var penModeBar: some View {
         HStack(spacing: 10) {
-            Picker("Input", selection: $penMode) {
-                Label("Type", systemImage: "keyboard").tag(PenMode.type)
-                Label("Draw", systemImage: "pencil.tip").tag(PenMode.draw)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
+            penModeToggle
 
-            insertPalette   // add image/shapes any time — they drop onto the page
+            insertPalette   // add an image any time — it drops onto the page
 
             Spacer()
 
@@ -749,14 +770,44 @@ struct NoteDetailView: View {
         }
     }
 
-    /// Add an image or a shape to the page (they're then draggable on the canvas).
+    /// A mood-styled Type/Draw switch (the system segmented control ignores the
+    /// theme). Geometry follows the mood — pill on paper, square on swiss/terminal/
+    /// neubrutalist — and the selected segment fills with the accent.
+    private var penModeToggle: some View {
+        let radius: CGFloat = theme.cornerRadius == 0 ? 0 : 9
+        let outer = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return HStack(spacing: 3) {
+            penSegment(.type, title: "Type", icon: "keyboard", radius: max(0, radius - 3))
+            penSegment(.draw, title: "Draw", icon: "pencil.tip", radius: max(0, radius - 3))
+        }
+        .padding(3)
+        .background(theme.paperSunk, in: outer)
+        .overlay(outer.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+        .fixedSize()
+    }
+
+    private func penSegment(_ mode: PenMode, title: String, icon: String, radius: CGFloat) -> some View {
+        let on = penMode == mode
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return Button { withAnimation(.snappy) { penMode = mode } } label: {
+            Label(title, systemImage: icon)
+                .font(theme.monoFont(12, relativeTo: .footnote))
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .foregroundStyle(on ? theme.paper : theme.inkSoft)
+                .background(on ? theme.accent : Color.clear, in: shape)
+                .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? [.isSelected] : [])
+    }
+
+    /// Insert an image into the page (it's then draggable on the canvas). Shapes
+    /// aren't inserted from a button anymore — draw one freehand and it snaps to a
+    /// clean, movable/resizable shape (see `ShapeRecognizer`).
     private var insertPalette: some View {
-        HStack(spacing: 14) {
-            Button { showCanvasPhoto = true } label: { Image(systemName: "photo") }
-            Button { addShape(.rectangle) } label: { Image(systemName: "rectangle") }
-            Button { addShape(.ellipse) } label: { Image(systemName: "circle") }
-            Button { addShape(.line) } label: { Image(systemName: "line.diagonal") }
-            Button { addShape(.arrow) } label: { Image(systemName: "arrow.up.right") }
+        Button { showCanvasPhoto = true } label: {
+            Label("Add image", systemImage: "photo").labelStyle(.iconOnly)
         }
         .font(.system(size: 15))
         .tint(theme.accent)
@@ -764,11 +815,14 @@ struct NoteDetailView: View {
 
     // MARK: Canvas items (images + shapes)
 
-    private func addShape(_ kind: CanvasItem.Kind) {
+    /// Turn a recognized freehand shape into a clean, movable `CanvasItem` placed
+    /// where it was drawn.
+    private func addRecognizedShape(_ kind: CanvasItem.Kind, _ rect: CGRect) {
         let hex = themeManager.accentHex ?? themeManager.mood.config.accentDefault
-        let wide = (kind == .line || kind == .arrow)
-        let item = CanvasItem(kind: kind, x: 40, y: 40,
-                              width: wide ? 200 : 180, height: wide ? 120 : 130, colorHex: hex)
+        let item = CanvasItem(kind: kind,
+                              x: max(0, Double(rect.minX)), y: max(0, Double(rect.minY)),
+                              width: max(40, Double(rect.width)), height: max(40, Double(rect.height)),
+                              colorHex: hex)
         note.canvasItems = note.canvasItems + [item]
         selectedItemID = item.id
     }
@@ -941,12 +995,20 @@ struct NoteDetailView: View {
     private func combinedNotesText() async -> String {
         var text = note.body
         if let drawing = note.drawing {
-            let handwritten = await HandwritingOCR.recognize(drawing)
+            let handwritten = await HandwritingOCR.recognize(
+                drawing, languages: ocrLanguages, customWords: note.attendees)
             if !handwritten.isEmpty {
                 text += (text.isEmpty ? "" : "\n") + handwritten
             }
         }
         return text
+    }
+
+    /// Preferred OCR languages, seeded from the transcription language preference
+    /// (handwriting is usually in the same language the user speaks).
+    private var ocrLanguages: [String] {
+        if let lang = themeManager.transcriptionLanguage, !lang.isEmpty { return [lang] }
+        return []
     }
 
     /// Speaker names already used in this note (for the quick-pick menu), distinct
@@ -1124,7 +1186,13 @@ struct DrawingImageView: View {
 /// handwritten notes (not just typed text + transcript). Renders the strokes on
 /// white and runs Vision's text recognizer (which handles handwriting).
 enum HandwritingOCR {
-    static func recognize(_ data: Data) async -> String {
+    /// - Parameters:
+    ///   - languages: preferred recognition languages (BCP-47, e.g. "en-US",
+    ///     "es-ES"). Setting this is the single biggest accuracy win for non-English
+    ///     handwriting. Empty = let Vision auto-detect.
+    ///   - customWords: domain words (attendee names, jargon) that bias recognition
+    ///     so the model spells them right.
+    static func recognize(_ data: Data, languages: [String] = [], customWords: [String] = []) async -> String {
         guard let cg = renderCGImage(data) else { return "" }
         return await withCheckedContinuation { (cont: CheckedContinuation<String, Never>) in
             let request = VNRecognizeTextRequest { req, _ in
@@ -1132,8 +1200,15 @@ enum HandwritingOCR {
                     .compactMap { $0.topCandidates(1).first?.string } ?? []
                 cont.resume(returning: lines.joined(separator: "\n"))
             }
+            // `.accurate` + the latest revision is the configuration tuned for
+            // handwriting (vs. printed text).
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
+            if #available(iOS 16.0, macOS 13.0, *) {
+                request.revision = VNRecognizeTextRequestRevision3
+            }
+            if !languages.isEmpty { request.recognitionLanguages = languages }
+            if !customWords.isEmpty { request.customWords = customWords }
             DispatchQueue.global(qos: .userInitiated).async {
                 do { try VNImageRequestHandler(cgImage: cg, options: [:]).perform([request]) }
                 catch { cont.resume(returning: "") }
@@ -1141,18 +1216,29 @@ enum HandwritingOCR {
         }
     }
 
+    /// Render the ink dark-on-white at 3× — more pixels per stroke and high contrast
+    /// both measurably help Vision read handwriting.
     private static func renderCGImage(_ data: Data) -> CGImage? {
         guard let drawing = try? PKDrawing(data: data), !drawing.bounds.isNull else { return nil }
         let b = drawing.bounds
         let rect = CGRect(x: 0, y: 0, width: max(b.maxX, 1), height: max(b.maxY, 1))
         #if canImport(UIKit)
-        let image = UIGraphicsImageRenderer(size: rect.size).image { ctx in
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 3
+        let image = UIGraphicsImageRenderer(size: rect.size, format: format).image { ctx in
             UIColor.white.setFill(); ctx.fill(rect)
-            drawing.image(from: rect, scale: 1).draw(in: rect)
+            drawing.image(from: rect, scale: 3).draw(in: rect)
         }
         return image.cgImage
         #elseif canImport(AppKit)
-        return drawing.image(from: rect, scale: 1).cgImage(forProposedRect: nil, context: nil, hints: nil)
+        // Compose the strokes over a white background so Vision isn't reading ink
+        // on transparency.
+        let target = NSImage(size: rect.size)
+        target.lockFocus()
+        NSColor.white.setFill(); rect.fill()
+        drawing.image(from: rect, scale: 3).draw(in: rect)
+        target.unlockFocus()
+        return target.cgImage(forProposedRect: nil, context: nil, hints: nil)
         #else
         return nil
         #endif
@@ -1161,9 +1247,9 @@ enum HandwritingOCR {
 
 // MARK: - Canvas items (images + shapes)
 
-/// The images-and-shapes layer on the handwriting page. Items render read-only on
-/// Mac/iPhone (and outside Arrange mode); in iPad's Arrange mode they can be tapped
-/// to select, dragged to move, resized from the corner handle, and deleted.
+/// The images-and-shapes layer floating on top of the handwriting page. Items
+/// render read-only on Mac/iPhone; on iPad they can be tapped to select, dragged
+/// to move, resized from the corner handle, and deleted — at any time, no mode.
 private struct CanvasItemsLayer: View {
     @Binding var items: [CanvasItem]
     @Binding var selectedID: UUID?

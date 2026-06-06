@@ -81,6 +81,7 @@ struct NoteDetailView: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var importingFile = false
     @State private var previewAttachment: Attachment?
+    @State private var showAttachMenu = false
 
     private var theme: Theme { themeManager.theme }
     private var density: Density { themeManager.density }
@@ -115,6 +116,8 @@ struct NoteDetailView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .moodPaper(theme)
         }
+        .overlay(alignment: .top) { processingBanner }
+        .animation(.snappy, value: transcription.state)
         .navigationTitle(note.title.isEmpty ? "New Note" : note.title)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -217,6 +220,29 @@ struct NoteDetailView: View {
 
     // MARK: Pieces
 
+    /// A non-blocking banner shown while a recording is being finalized/diarized
+    /// (which now runs off the main thread, so this can actually animate).
+    @ViewBuilder
+    private var processingBanner: some View {
+        if transcription.state == .identifyingSpeakers || transcription.state == .finishing {
+            let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 12, style: .continuous)
+            HStack(spacing: 10) {
+                ProgressView().controlSize(.small)
+                Text(transcription.state == .identifyingSpeakers
+                     ? "Processing recording · identifying speakers…"
+                     : "Finishing recording…")
+                    .font(theme.bodyFont(13))
+                    .foregroundStyle(theme.ink)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 11)
+            .background(theme.paperRaised, in: shape)
+            .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+            .themeShadow(theme.shadow)
+            .padding(.top, 10)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             TextField("Title", text: $note.title)
@@ -313,18 +339,26 @@ struct NoteDetailView: View {
         }
     }
 
-    /// The paperclip menu: attach a photo (PhotosPicker) or any file (importer).
+    /// The paperclip control: a plain Button (so it matches the other toolbar
+    /// icons in size/tint — a `Menu` renders larger) that opens a small popover to
+    /// pick a photo or a file.
     private var attachControl: some View {
-        Menu {
-            Button { showPhotoPicker = true } label: { Label("Photo", systemImage: "photo") }
-            Button { importingFile = true } label: { Label("File", systemImage: "doc") }
-        } label: {
-            Label("Attach", systemImage: "paperclip")
-                .labelStyle(.iconOnly)
+        Button { showAttachMenu = true } label: {
+            Label("Attach", systemImage: "paperclip").labelStyle(.iconOnly)
         }
-        // Hide the pull-down chevron so it matches the plain icon buttons (on macOS
-        // a toolbar Menu otherwise renders wider/taller than the others).
-        .menuIndicator(.hidden)
+        .popover(isPresented: $showAttachMenu, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 2) {
+                Button { showAttachMenu = false; showPhotoPicker = true } label: {
+                    Label("Photo", systemImage: "photo").frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Button { showAttachMenu = false; importingFile = true } label: {
+                    Label("File", systemImage: "doc").frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(10)
+            .frame(minWidth: 150)
+        }
     }
 
     /// Meeting metadata, read from the note's real fields (E4) rather than parsed
@@ -1082,9 +1116,13 @@ private struct AttachmentPreviewSheet: View {
         if let data = attachment.data,
            AttachmentSupport.isImage(attachment),
            let image = AttachmentSupport.image(from: data) {
-            ScrollView([.horizontal, .vertical]) {
-                image.resizable().scaledToFit().frame(maxWidth: .infinity)
-            }
+            // Fit to the window — rendering at the photo's full native size in an
+            // unbounded scroll view overflows CoreGraphics (blank image).
+            image
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(12)
         } else {
             VStack(spacing: 14) {
                 Image(systemName: AttachmentSupport.icon(attachment))

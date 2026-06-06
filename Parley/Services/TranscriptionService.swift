@@ -78,9 +78,8 @@ final class TranscriptionService {
     // `identifySpeakers()` can use it. Harmless when FluidAudio isn't linked.
     private var diarAudioURL: URL?
     private var diarSessionStart: Date?
-    #if canImport(FluidAudio)
-    private var diarizer: DiarizerManager?   // cached so the Core ML models load once
-    #endif
+    // The diarizer's Core ML models are cached inside `DiarizationEngine` (a
+    // background actor), so the heavy work never runs on the main thread.
 
     // MARK: Start / stop
 
@@ -295,38 +294,22 @@ final class TranscriptionService {
 
         state = .identifyingSpeakers
         do {
-            let manager: DiarizerManager
-            if let cached = diarizer {
-                manager = cached
-            } else {
-                // Load the Core ML models (downloads once from Hugging Face) and
-                // bind them to a fresh manager.
-                let models = try await DiarizerModels.downloadIfNeeded()
-                let created = DiarizerManager()
-                created.initialize(models: models)
-                diarizer = created
-                manager = created
-            }
+            // All the heavy Core ML work happens on the background DiarizationEngine
+            // actor, so the UI stays responsive (and can show "Processing…").
+            let output = try await DiarizationEngine.shared.diarize(url: url, knownVoices: knownVoices)
+            guard !output.turns.isEmpty else { state = .idle; return }
 
-            // Seed the recognizer with voices we've already enrolled, so FluidAudio
-            // assigns the enrolled *name* as the speakerId when it hears them again.
+            let turns = output.turns.map { Turn(id: $0.id, start: $0.start, end: $0.end) }
             let knownNames = Set(knownVoices.map(\.name))
-            if !knownVoices.isEmpty {
-                let speakers = knownVoices.map { Speaker(id: $0.name, name: $0.name, currentEmbedding: $0.embedding) }
-                manager.speakerManager.initializeKnownSpeakers(speakers)
-            }
-
-            // FluidAudio's converter resamples the recording to the 16 kHz mono
-            // Float32 the diarizer expects.
-            let samples = try AudioConverter().resampleAudioFile(url)
-            guard !samples.isEmpty else { state = .idle; return }
-
-            let result = try manager.performCompleteDiarization(samples)
-            let turns = result.segments.map {
-                Turn(id: $0.speakerId, start: Double($0.startTimeSeconds), end: Double($0.endTimeSeconds))
-            }
             let labelForId = applySpeakers(turns: turns, sessionStart: sessionStart, knownNames: knownNames)
-            captureEmbeddings(from: manager, labelForId: labelForId)
+
+            // Re-key the per-speaker embeddings by display label.
+            var embeddings: [String: [Float]] = [:]
+            for (id, vector) in output.embeddingsById {
+                if let label = labelForId[id] { embeddings[label] = vector }
+            }
+            speakerEmbeddings = embeddings
+
             print("Parley.speakers › known=\(Array(knownNames)) detectedIDs=\(Array(Set(turns.map(\.id)))) labels=\(labelForId) embeddingDims=\(speakerEmbeddings.mapValues(\.count))")
         } catch {
             print("Parley.speakers › diarization failed: \(error)")
@@ -399,17 +382,6 @@ final class TranscriptionService {
         return labelForId
     }
 
-    /// Pull each speaker's averaged voice embedding from the diarizer, keyed by the
-    /// display label, into `speakerEmbeddings`.
-    private func captureEmbeddings(from manager: DiarizerManager, labelForId: [String: String]) {
-        var embeddings: [String: [Float]] = [:]
-        for (id, label) in labelForId {
-            if let vector = manager.speakerManager.getSpeaker(for: id)?.currentEmbedding, !vector.isEmpty {
-                embeddings[label] = vector
-            }
-        }
-        speakerEmbeddings = embeddings
-    }
     #endif
 
     /// True for the auto-generated "Speaker 3" form (so we never overwrite a name
@@ -464,10 +436,58 @@ final class TranscriptionService {
 
 /// An enrolled voice handed to diarization so FluidAudio can recognize it and
 /// return the enrolled name as the speaker id.
-struct KnownVoice {
+struct KnownVoice: Sendable {
     let name: String
     let embedding: [Float]
 }
+
+#if canImport(FluidAudio)
+/// One diarized speaker turn (a time span attributed to a speaker id).
+struct DiarTurn: Sendable { let id: String; let start: Double; let end: Double }
+
+/// Runs diarization off the main thread. `TranscriptionService` is `@MainActor`,
+/// so doing the Core ML work there froze the UI; this dedicated actor keeps the
+/// heavy resample + inference on a background executor and caches the models so
+/// they load once. Inputs/outputs are all `Sendable`.
+actor DiarizationEngine {
+    static let shared = DiarizationEngine()
+    private var manager: DiarizerManager?
+
+    func diarize(url: URL, knownVoices: [KnownVoice]) async throws -> (turns: [DiarTurn], embeddingsById: [String: [Float]]) {
+        let manager = try await self.makeManager()
+
+        // Seed enrolled voices so a recognized speaker comes back as its name.
+        if !knownVoices.isEmpty {
+            let speakers = knownVoices.map { Speaker(id: $0.name, name: $0.name, currentEmbedding: $0.embedding) }
+            manager.speakerManager.initializeKnownSpeakers(speakers)
+        }
+
+        let samples = try AudioConverter().resampleAudioFile(url)
+        guard !samples.isEmpty else { return ([], [:]) }
+
+        let result = try manager.performCompleteDiarization(samples)
+        let turns = result.segments.map {
+            DiarTurn(id: $0.speakerId, start: Double($0.startTimeSeconds), end: Double($0.endTimeSeconds))
+        }
+        var embeddingsById: [String: [Float]] = [:]
+        for id in Set(turns.map(\.id)) {
+            if let vector = manager.speakerManager.getSpeaker(for: id)?.currentEmbedding, !vector.isEmpty {
+                embeddingsById[id] = vector
+            }
+        }
+        return (turns, embeddingsById)
+    }
+
+    private func makeManager() async throws -> DiarizerManager {
+        if let manager { return manager }
+        let models = try await DiarizerModels.downloadIfNeeded()
+        let created = DiarizerManager()
+        created.initialize(models: models)
+        manager = created
+        return created
+    }
+}
+#endif
 
 /// Voice-embedding math for cross-meeting speaker recognition. Embeddings are
 /// L2-normalized 256-d vectors, so cosine similarity (≈ dot product) in [-1, 1]

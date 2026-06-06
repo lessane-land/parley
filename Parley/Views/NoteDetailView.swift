@@ -755,9 +755,11 @@ struct NoteDetailView: View {
                 note.transcript = transcription.finalizedText
                 note.transcriptSegments = transcription.finalizedSegments
                 // Identify speakers from the recorded audio (no-op without
-                // FluidAudio); persist the labeled segments + their embeddings when
-                // it finishes, then auto-label any voices we already recognize.
-                await transcription.identifySpeakers()
+                // FluidAudio). Hand FluidAudio the voices we've enrolled so it can
+                // recognize them directly; persist the labeled segments + their
+                // embeddings, then run our own match as a backstop.
+                let known = speakerProfiles.map { KnownVoice(name: $0.name, embedding: $0.embedding) }
+                await transcription.identifySpeakers(knownVoices: known)
                 note.transcriptSegments = transcription.finalizedSegments
                 mergeSpeakerEmbeddings(transcription.speakerEmbeddings)
                 autoLabelKnownSpeakers()

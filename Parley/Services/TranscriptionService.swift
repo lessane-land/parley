@@ -287,7 +287,7 @@ final class TranscriptionService {
     /// `speakerManager.getSpeaker(for:)?.currentEmbedding`) follow FluidAudio's
     /// documented API; if the installed package differs, this one method is the
     /// only place to adjust.
-    func identifySpeakers() async {
+    func identifySpeakers(knownVoices: [KnownVoice] = []) async {
         #if canImport(FluidAudio)
         guard let url = diarAudioURL, let sessionStart = diarSessionStart else { return }
         defer { cleanupDiarAudio() }
@@ -307,6 +307,15 @@ final class TranscriptionService {
                 diarizer = created
                 manager = created
             }
+
+            // Seed the recognizer with voices we've already enrolled, so FluidAudio
+            // assigns the enrolled *name* as the speakerId when it hears them again.
+            let knownNames = Set(knownVoices.map(\.name))
+            if !knownVoices.isEmpty {
+                let speakers = knownVoices.map { Speaker(id: $0.name, name: $0.name, currentEmbedding: $0.embedding) }
+                manager.speakerManager.initializeKnownSpeakers(speakers)
+            }
+
             // FluidAudio's converter resamples the recording to the 16 kHz mono
             // Float32 the diarizer expects.
             let samples = try AudioConverter().resampleAudioFile(url)
@@ -316,10 +325,11 @@ final class TranscriptionService {
             let turns = result.segments.map {
                 Turn(id: $0.speakerId, start: Double($0.startTimeSeconds), end: Double($0.endTimeSeconds))
             }
-            let labelForId = applySpeakers(turns: turns, sessionStart: sessionStart)
+            let labelForId = applySpeakers(turns: turns, sessionStart: sessionStart, knownNames: knownNames)
             captureEmbeddings(from: manager, labelForId: labelForId)
+            print("Parley.speakers › known=\(Array(knownNames)) detectedIDs=\(Array(Set(turns.map(\.id)))) labels=\(labelForId) embeddingDims=\(speakerEmbeddings.mapValues(\.count))")
         } catch {
-            // Diarization is a bonus; keep the transcript even if it fails.
+            print("Parley.speakers › diarization failed: \(error)")
         }
         state = .idle
         #endif
@@ -348,14 +358,23 @@ final class TranscriptionService {
     /// window is approximated as [previous finalize, this finalize] relative to the
     /// session start — no dependency on the WWDC audio-time API.
     @discardableResult
-    private func applySpeakers(turns: [Turn], sessionStart: Date) -> [String: String] {
+    private func applySpeakers(turns: [Turn], sessionStart: Date, knownNames: Set<String> = []) -> [String: String] {
         guard !turns.isEmpty else { return [:] }
 
-        // Stable display numbers, in first-appearance order of each speakerId.
+        // A recognized voice comes back with its enrolled name as the id — use it
+        // directly. Unknown voices get sequential "Speaker N" labels.
         var order: [String] = []
         for turn in turns where !order.contains(turn.id) { order.append(turn.id) }
         var labelForId: [String: String] = [:]
-        for (index, id) in order.enumerated() { labelForId[id] = "Speaker \(index + 1)" }
+        var unknownCount = 0
+        for id in order {
+            if knownNames.contains(id) {
+                labelForId[id] = id
+            } else {
+                unknownCount += 1
+                labelForId[id] = "Speaker \(unknownCount)"
+            }
+        }
 
         var previousOffset = 0.0
         for index in finalizedSegments.indices {
@@ -441,6 +460,13 @@ final class TranscriptionService {
         ]
         return Locale(identifier: defaults[language] ?? "en-US")
     }
+}
+
+/// An enrolled voice handed to diarization so FluidAudio can recognize it and
+/// return the enrolled name as the speaker id.
+struct KnownVoice {
+    let name: String
+    let embedding: [Float]
 }
 
 /// Voice-embedding math for cross-meeting speaker recognition. Embeddings are

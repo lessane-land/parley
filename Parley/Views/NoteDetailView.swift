@@ -724,7 +724,14 @@ struct NoteDetailView: View {
                                   recognizeShapes: true,
                                   onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) },
                                   scrollEnabled: false,
-                                  onContentHeight: { h in pageHeight = max(1400, h + 500) })
+                                  onContentHeight: { h in
+                                      // Defer so we never set @State during a layout pass
+                                      // ("Modifying state during view update").
+                                      let target = max(1400, h + 500)
+                                      if abs(target - pageHeight) > 1 {
+                                          DispatchQueue.main.async { pageHeight = target }
+                                      }
+                                  })
                         .id(canvasID)
                         .frame(height: pageHeight)
                         // Pause canvas input while an item is selected, so dragging/

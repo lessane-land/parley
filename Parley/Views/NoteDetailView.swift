@@ -959,10 +959,16 @@ struct NoteDetailView: View {
                 if seedSegments.isEmpty, !note.transcript.isEmpty {
                     seedSegments = [TranscriptSegment(text: note.transcript)]
                 }
+                #if os(macOS)
+                let captureSystem = themeManager.captureSystemAudio
+                #else
+                let captureSystem = false
+                #endif
                 await transcription.start(
                     seed: note.transcript,
                     seedSegments: seedSegments,
-                    preferredLanguage: themeManager.transcriptionLanguage
+                    preferredLanguage: themeManager.transcriptionLanguage,
+                    captureSystemAudio: captureSystem
                 )
             }
         }

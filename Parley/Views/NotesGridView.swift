@@ -89,8 +89,19 @@ struct NoteCard: View {
         if let start = note.startDate {
             items.append(("clock", start.formatted(date: .omitted, time: .shortened)))
         }
-        if !note.transcript.isEmpty { items.append(("waveform", "Recorded")) }
-        if note.summaryData != nil { items.append(("sparkles", "Summary")) }
+        // Recording: show its length when we can derive it, else just "Rec".
+        if let duration = recordingDuration {
+            items.append(("waveform", duration))
+        } else if !note.transcript.isEmpty {
+            items.append(("waveform", "Rec"))
+        }
+        // Summary: prefer the action-item count over a generic "Summary" badge.
+        let actions = actionItemCount
+        if actions > 0 {
+            items.append(("checklist", "\(actions) to-do\(actions == 1 ? "" : "s")"))
+        } else if note.summaryData != nil {
+            items.append(("sparkles", "Summary"))
+        }
         if !note.attendees.isEmpty { items.append(("person.2", "\(note.attendees.count)")) }
         if let attachments = note.attachments, !attachments.isEmpty {
             items.append(("paperclip", "\(attachments.count)"))
@@ -98,8 +109,26 @@ struct NoteCard: View {
         return items
     }
 
+    /// Recording length, derived from the first/last finalized segment timestamps
+    /// (we don't store an explicit duration). `mm:ss`, or nil if not derivable.
+    private var recordingDuration: String? {
+        let times = note.transcriptSegments.compactMap(\.at)
+        guard let first = times.min(), let last = times.max(), last > first else { return nil }
+        let seconds = Int(last.timeIntervalSince(first))
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
+    /// How many action items the saved summary holds (0 if none / no summary).
+    private var actionItemCount: Int {
+        guard let data = note.summaryData,
+              let summary = try? JSONDecoder().decode(MeetingSummary.self, from: data) else { return 0 }
+        return summary.actionItems.count
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
+            if note.pinned { pinnedBadge }
+
             HStack(alignment: .top, spacing: 6) {
                 Text(note.title.isEmpty ? "New Note" : note.title)
                     .font(theme.titleFont(18, relativeTo: .headline))
@@ -108,11 +137,6 @@ struct NoteCard: View {
                     .foregroundStyle(theme.ink)
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                if note.pinned {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.accent)
-                }
             }
 
             if !snippet.isEmpty {
@@ -152,20 +176,32 @@ struct NoteCard: View {
                 }
             }
 
-            Text(note.createdAt, format: .dateTime.month().day().hour().minute())
+            Text(note.createdAt.formatted(.relative(presentation: .named)))
                 .font(theme.monoFont(10.5, relativeTo: .caption2))
                 .foregroundStyle(theme.inkFaint)
         }
         .padding(16)
         .frame(height: 192, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .moodCard(theme)
-        .overlay {
-            // Pinned notes read differently in the dashboard.
-            if note.pinned {
-                RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
-                    .strokeBorder(theme.accent, lineWidth: 2)
-            }
+        // Pinned cards fill with the mood's accent tint and take the "selected"
+        // border. Because `moodCard` already encodes each mood's signature shape +
+        // shadow (paper's soft round, swiss's square hairline, neubrutalist's hard
+        // offset shadow + lime tint, terminal's dark tint), a pinned card reads
+        // distinctly *per mood* — exactly the dashboard's per-mood look.
+        .moodCard(theme, fill: note.pinned ? theme.accentTint : nil, selected: note.pinned)
+    }
+
+    /// The "Pinned" marker — an accent pill so it stands out on the tinted card.
+    private var pinnedBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "pin.fill").font(.system(size: 8))
+            Text("Pinned")
+                .font(theme.monoFont(9, relativeTo: .caption2))
+                .tracking(0.6)
+                .textCase(.uppercase)
         }
+        .foregroundStyle(theme.paper)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(theme.accent, in: Capsule())
     }
 }

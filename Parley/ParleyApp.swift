@@ -28,6 +28,9 @@ struct ParleyApp: App {
     /// Reports CloudKit sync activity to the UI.
     @State private var syncMonitor: SyncMonitor
 
+    /// Lets the macOS menu-bar item ask the main window to start a new recording.
+    @State private var recordLauncher = RecordLauncher()
+
     init() {
         // Register the bundled fonts before any view renders, so custom faces
         // are available on first paint. Then build the shared theme state.
@@ -73,6 +76,7 @@ struct ParleyApp: App {
                 .environment(themeManager)
                 .environment(eventKit)
                 .environment(syncMonitor)
+                .environment(recordLauncher)
                 // Tint (selection, controls) follows the mood's accent…
                 .tint(themeManager.theme.accent)
                 // …and the whole window goes light/dark to match the mood.
@@ -92,8 +96,31 @@ struct ParleyApp: App {
         // strip above the content. Settings is the in-window slide-over (opened
         // from the toolbar), so there's no separate `Settings` window.
         .windowToolbarStyle(.unifiedCompact)
+
+        // A menu-bar item so a meeting can be captured without hunting for the
+        // window: click it and "New Recording" creates a note and starts recording.
+        MenuBarExtra("Parley", systemImage: "waveform") {
+            Button("New Recording") {
+                recordLauncher.requestNewRecording()
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+            Divider()
+            Button("Open Parley") { NSApp.activate(ignoringOtherApps: true) }
+            Button("Quit Parley") { NSApplication.shared.terminate(nil) }
+        }
         #endif
     }
+}
+
+/// A tiny app-level signal so the macOS menu-bar item can ask the main window to
+/// start a new recording. The menu bar lives in its own scene and can't reach the
+/// note list's navigation state directly, so it bumps `requestTick`; `NoteListView`
+/// observes the change and runs its normal "create note + record" flow.
+@Observable
+final class RecordLauncher {
+    private(set) var requestTick = 0
+    func requestNewRecording() { requestTick += 1 }
 }
 
 /// Switches the app icon to match the current mood.

@@ -2,6 +2,9 @@ import Foundation
 @preconcurrency import AVFoundation
 import Speech
 import SwiftData
+#if os(macOS)
+@preconcurrency import ScreenCaptureKit   // system-audio capture (the meeting's far side)
+#endif
 #if canImport(FluidAudio)
 import FluidAudio   // on-device speaker diarization (Core ML / ANE). Add via SPM.
 #endif
@@ -79,6 +82,11 @@ final class TranscriptionService {
     // `identifySpeakers()` can use it. Harmless when FluidAudio isn't linked.
     private var diarAudioURL: URL?
     private var diarSessionStart: Date?
+
+    #if os(macOS)
+    /// Captures the Mac's system audio (the meeting's far side) alongside the mic.
+    private var systemAudio: SystemAudioCapture?
+    #endif
     // The diarizer's Core ML models are cached inside `DiarizationEngine` (a
     // background actor), so the heavy work never runs on the main thread.
 
@@ -87,7 +95,8 @@ final class TranscriptionService {
     /// Begin a session, seeding with any transcript already on the note so we
     /// append rather than overwrite. `preferredLanguage` is a language code
     /// ("es") to force, or `nil` for Automatic.
-    func start(seed: String, seedSegments: [TranscriptSegment] = [], preferredLanguage: String? = nil) async {
+    func start(seed: String, seedSegments: [TranscriptSegment] = [], preferredLanguage: String? = nil,
+               captureSystemAudio: Bool = false) async {
         guard state == .idle || isError else { return }
         finalizedText = seed
         finalizedSegments = seedSegments
@@ -157,6 +166,15 @@ final class TranscriptionService {
             try await analyzer.start(inputSequence: stream)
             try startEngine(convertingTo: analyzerFormat)
 
+            #if os(macOS)
+            // Add the Mac's system audio (the other participants) to the same
+            // analyzer stream. Best-effort: if Screen Recording permission is
+            // denied or capture fails, the mic transcript still works.
+            if captureSystemAudio {
+                await startSystemAudio(convertingTo: analyzerFormat)
+            }
+            #endif
+
             startedAt = Date()
             diarSessionStart = startedAt
             state = .recording
@@ -171,6 +189,11 @@ final class TranscriptionService {
     func stop() async {
         guard state == .recording || state == .finishing else { return }
         state = .finishing
+
+        #if os(macOS)
+        await systemAudio?.stop()
+        systemAudio = nil
+        #endif
 
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
@@ -248,6 +271,32 @@ final class TranscriptionService {
         engine.prepare()
         try engine.start()
     }
+
+    #if os(macOS)
+    /// Start capturing system audio and feed it into the same analyzer stream as
+    /// the mic. Both sources convert to `analyzerFormat` before yielding. (We feed
+    /// two sources into one stream rather than mixing in the engine; in a meeting
+    /// only one side usually talks at a time, so the transcript stays coherent and
+    /// diarization separates the speakers afterward.)
+    private func startSystemAudio(convertingTo analyzerFormat: AVAudioFormat?) async {
+        let continuation = self.continuation
+        let converter = BufferConverter()
+        let capture = SystemAudioCapture { buffer in
+            guard let continuation else { return }
+            if let analyzerFormat, let converted = try? converter.convert(buffer, to: analyzerFormat) {
+                continuation.yield(AnalyzerInput(buffer: converted))
+            } else {
+                continuation.yield(AnalyzerInput(buffer: buffer))
+            }
+        }
+        do {
+            try await capture.start()
+            systemAudio = capture
+        } catch {
+            print("Parley.systemAudio › capture unavailable (mic still recording): \(error)")
+        }
+    }
+    #endif
 
     // MARK: Helpers
 
@@ -588,6 +637,73 @@ private extension TranscriptionService {
         #endif
     }
 }
+
+#if os(macOS)
+/// Captures the Mac's **system audio** (what you hear from the meeting app) using
+/// ScreenCaptureKit and delivers it as PCM buffers. Paired with the mic, this lets
+/// the transcript include the *other* participants — the core of a Mac meeting
+/// companion.
+///
+/// Requires the user's **Screen Recording** permission (prompted on first use). A
+/// tiny video stream is technically required by ScreenCaptureKit even for
+/// audio-only; it's configured minimally and ignored.
+final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegate {
+    private var stream: SCStream?
+    private let onBuffer: (AVAudioPCMBuffer) -> Void
+    private let queue = DispatchQueue(label: "parley.systemaudio")
+
+    init(onBuffer: @escaping (AVAudioPCMBuffer) -> Void) {
+        self.onBuffer = onBuffer
+    }
+
+    func start() async throws {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        guard let display = content.displays.first else {
+            throw NSError(domain: "Parley.SystemAudio", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "No display available for audio capture."])
+        }
+        let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
+        let config = SCStreamConfiguration()
+        config.capturesAudio = true
+        config.excludesCurrentProcessAudio = true   // don't capture our own output (no feedback)
+        config.sampleRate = 48_000
+        config.channelCount = 2
+        // A video stream is required even for audio-only capture; keep it minimal.
+        config.width = 2
+        config.height = 2
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 6)
+
+        let stream = SCStream(filter: filter, configuration: config, delegate: self)
+        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: queue)
+        try await stream.startCapture()
+        self.stream = stream
+    }
+
+    func stop() async {
+        try? await stream?.stopCapture()
+        stream = nil
+    }
+
+    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard type == .audio, sampleBuffer.isValid,
+              let pcm = Self.pcmBuffer(from: sampleBuffer) else { return }
+        onBuffer(pcm)
+    }
+
+    /// Convert a CoreMedia audio sample buffer into an `AVAudioPCMBuffer`.
+    private static func pcmBuffer(from sampleBuffer: CMSampleBuffer) -> AVAudioPCMBuffer? {
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription),
+              let format = AVAudioFormat(streamDescription: asbd) else { return nil }
+        let frames = AVAudioFrameCount(CMSampleBufferGetNumSamples(sampleBuffer))
+        guard frames > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return nil }
+        buffer.frameLength = frames
+        let status = CMSampleBufferCopyPCMDataIntoAudioBufferList(
+            sampleBuffer, at: 0, frameCount: Int32(frames), into: buffer.mutableAudioBufferList)
+        return status == noErr ? buffer : nil
+    }
+}
+#endif
 
 /// Converts an audio buffer from the engine's input format to the format the
 /// analyzer wants. Reused across taps; rebuilt only when a format changes.

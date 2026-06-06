@@ -40,6 +40,11 @@ final class ThemeManager {
     /// Whether to recognize enrolled voices and auto-label them across meetings.
     var recognizeSpeakers: Bool { didSet { UserDefaults.standard.set(recognizeSpeakers, forKey: Self.recognizeSpeakersKey) } }
 
+    /// macOS only: also capture system audio (the meeting's far side) when
+    /// recording, so the transcript includes the other participants. Needs Screen
+    /// Recording permission.
+    var captureSystemAudio: Bool { didSet { UserDefaults.standard.set(captureSystemAudio, forKey: Self.captureSystemAudioKey) } }
+
     var density: Density { didSet { UserDefaults.standard.set(density.rawValue, forKey: Self.densityKey) } }
 
     /// Preferred transcription language as a language code ("es"), or `nil` for
@@ -122,6 +127,7 @@ final class ThemeManager {
     private static let warmthKey = "parley.warmth"
     private static let handwritingKey = "parley.handwriting"
     private static let recognizeSpeakersKey = "parley.recognizeSpeakers"
+    private static let captureSystemAudioKey = "parley.captureSystemAudio"
     private static let densityKey = "parley.density"
     private static let languageKey = "parley.transcriptionLanguage"
     private static let layoutSwappedKey = "parley.layoutSwapped"
@@ -149,6 +155,7 @@ final class ThemeManager {
         warmth = d.object(forKey: Self.warmthKey) as? Double ?? 38
         handwriting = d.object(forKey: Self.handwritingKey) as? Bool ?? true
         recognizeSpeakers = d.object(forKey: Self.recognizeSpeakersKey) as? Bool ?? true
+        captureSystemAudio = d.object(forKey: Self.captureSystemAudioKey) as? Bool ?? true
         density = Density(rawValue: d.string(forKey: Self.densityKey) ?? "") ?? .regular
         transcriptionLanguage = d.string(forKey: Self.languageKey)
         layoutSwapped = d.object(forKey: Self.layoutSwappedKey) as? Bool ?? false

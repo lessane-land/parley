@@ -171,7 +171,13 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func transcriptionSection(_ manager: ThemeManager) -> some View {
+        @Bindable var manager = manager
         sectionHeader("Transcription")
+        #if os(macOS)
+        toggleRow("Capture system audio",
+                  desc: "Also transcribe the meeting's other participants (what plays through your speakers/headphones), not just your mic. Asks for Screen Recording permission the first time.",
+                  isOn: $manager.captureSystemAudio)
+        #endif
         valueRow("Language") {
             Picker("Language", selection: Binding(
                 get: { manager.transcriptionLanguage ?? "auto" },

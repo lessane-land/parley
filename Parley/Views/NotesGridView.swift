@@ -106,10 +106,10 @@ struct NotesGridView: View {
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 15))
-                .foregroundStyle(theme.inkSoft)
+                .foregroundStyle(theme.accent)
                 .padding(8)
-                .background(theme.paperRaised, in: shape)
-                .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+                .background(theme.accentTint, in: shape)
+                .overlay(shape.strokeBorder(theme.accentLine, lineWidth: theme.borderWidth))
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
@@ -398,6 +398,9 @@ private struct NotesBoardView: View {
             }
             .frame(width: boardWidth, height: boardHeight, alignment: .topLeading)
         }
+        // While moving/resizing a card, the board itself doesn't scroll — that's
+        // what stops the drag-vs-scroll fight. Scrolling resumes on empty space.
+        .scrollDisabled(dragID != nil || resizeID != nil)
     }
 
     // MARK: Layout math
@@ -439,31 +442,40 @@ private struct NotesBoardView: View {
     private func boardCard(_ note: Note, index: Int) -> some View {
         let p = origin(note, index)
         let s = cardSize(note)
-        return ZStack(alignment: .bottomTrailing) {
-            Button { onOpen(note) } label: {
-                NoteCard(theme: theme, mood: mood, note: note, size: size, hero: false, fill: true)
-                    .frame(width: s.width, height: s.height)
+        let dragging = dragID == note.id || resizeID == note.id
+        return NoteCard(theme: theme, mood: mood, note: note, size: size, hero: false, fill: true)
+            .frame(width: s.width, height: s.height)
+            // A clearer, bigger corner grip with a generous hit area.
+            .overlay(alignment: .bottomTrailing) { resizeGrip(note) }
+            // Lift the card slightly while being manipulated (clear feedback).
+            .shadow(color: .black.opacity(dragging ? 0.18 : 0), radius: dragging ? 10 : 0, y: dragging ? 5 : 0)
+            .contentShape(Rectangle())
+            .offset(x: p.x, y: p.y)
+            // Tap opens; a drag (high-priority, so it beats the board scroll) moves.
+            .onTapGesture { onOpen(note) }
+            .highPriorityGesture(moveGesture(note, index))
+            .contextMenu {
+                Button { onTogglePin(note) } label: {
+                    Label(note.pinned ? "Unpin" : "Pin", systemImage: note.pinned ? "pin.slash" : "pin")
+                }
+                Button(role: .destructive) { onDelete(note) } label: {
+                    Label("Delete", systemImage: "trash")
+                }
             }
-            .buttonStyle(.plain)
+    }
 
-            Circle().fill(theme.accent).frame(width: 26, height: 26)
-                .overlay(Image(systemName: "arrow.down.right.and.arrow.up.left")
-                    .font(.system(size: 10, weight: .bold)).foregroundStyle(.white))
-                .padding(6)
-                .highPriorityGesture(resizeGesture(note))
-        }
-        .frame(width: s.width, height: s.height, alignment: .bottomTrailing)
-        .offset(x: p.x, y: p.y)
-        // High-priority so a drag moves the card (a tap still opens it).
-        .highPriorityGesture(moveGesture(note, index))
-        .contextMenu {
-            Button { onTogglePin(note) } label: {
-                Label(note.pinned ? "Unpin" : "Pin", systemImage: note.pinned ? "pin.slash" : "pin")
-            }
-            Button(role: .destructive) { onDelete(note) } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
+    /// The corner resize grip — large, with a padded hit area and its own
+    /// high-priority gesture so it wins over the move.
+    private func resizeGrip(_ note: Note) -> some View {
+        Circle()
+            .fill(theme.accent)
+            .frame(width: 30, height: 30)
+            .overlay(Image(systemName: "arrow.down.right.and.arrow.up.left")
+                .font(.system(size: 12, weight: .bold)).foregroundStyle(.white))
+            .overlay(Circle().strokeBorder(.white.opacity(0.7), lineWidth: 1.5))
+            .padding(10)                       // enlarges the touch target
+            .contentShape(Rectangle())
+            .highPriorityGesture(resizeGesture(note))
     }
 
     private func moveGesture(_ note: Note, _ index: Int) -> some Gesture {
@@ -472,8 +484,11 @@ private struct NotesBoardView: View {
             .onEnded { v in
                 let baseX = note.boardX.map { CGFloat($0) } ?? defaultPos(index).x
                 let baseY = note.boardY.map { CGFloat($0) } ?? defaultPos(index).y
-                note.boardX = Double(max(0, baseX + v.translation.width))
-                note.boardY = Double(max(0, baseY + v.translation.height))
+                // Light grid-snapping on drop so cards line up tidily (less overlap).
+                withAnimation(.snappy(duration: 0.18)) {
+                    note.boardX = Double(snap(max(0, baseX + v.translation.width), step: cellW + gap))
+                    note.boardY = Double(snap(max(0, baseY + v.translation.height), step: cellH + gap))
+                }
                 dragID = nil; dragOffset = .zero
             }
     }
@@ -484,9 +499,25 @@ private struct NotesBoardView: View {
             .onEnded { v in
                 let baseW = note.boardW.map { CGFloat($0) } ?? cellW
                 let baseH = note.boardH.map { CGFloat($0) } ?? cellH
-                note.boardW = Double(max(160, baseW + v.translation.width))
-                note.boardH = Double(max(120, baseH + v.translation.height))
+                // Snap size to the same grid steps, so cards stay on the tidy grid.
+                withAnimation(.snappy(duration: 0.18)) {
+                    note.boardW = Double(snapStep(max(160, baseW + v.translation.width), step: cellW + gap, base: cellW))
+                    note.boardH = Double(snapStep(max(120, baseH + v.translation.height), step: cellH + gap, base: cellH))
+                }
                 resizeID = nil; resizeOffset = .zero
             }
+    }
+
+    /// Snap a position to `margin + n·step`.
+    private func snap(_ value: CGFloat, step: CGFloat) -> CGFloat {
+        let s = max(1, step)
+        return margin + max(0, ((value - margin) / s).rounded()) * s
+    }
+
+    /// Snap a *size* so a card spans whole grid cells: `base + n·step` (n ≥ 0).
+    private func snapStep(_ value: CGFloat, step: CGFloat, base: CGFloat) -> CGFloat {
+        let s = max(1, step)
+        let extra = max(0, ((value - base) / s).rounded()) * s
+        return base + extra
     }
 }

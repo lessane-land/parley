@@ -11,7 +11,6 @@
 		000000000000000000000019 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000018 /* Preview Assets.xcassets */; };
 		00000000000000000000001D /* ParleyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000001C /* ParleyApp.swift */; };
 		00000000000000000000001F /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000001E /* Note.swift */; };
-		0000000000000000000000F2 /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F1 /* Tag.swift */; };
 		000000000000000000000021 /* AppFonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000020 /* AppFonts.swift */; };
 		000000000000000000000023 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000022 /* Color+Hex.swift */; };
 		000000000000000000000025 /* Density.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000024 /* Density.swift */; };
@@ -20,7 +19,6 @@
 		00000000000000000000002B /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000002A /* ThemeManager.swift */; };
 		00000000000000000000002D /* ThemeShadowModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000002C /* ThemeShadowModifier.swift */; };
 		00000000000000000000002F /* NoteDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000002E /* NoteDetailView.swift */; };
-		0000000000000000000000F4 /* NotesGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F3 /* NotesGridView.swift */; };
 		000000000000000000000031 /* NoteListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000030 /* NoteListView.swift */; };
 		000000000000000000000033 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000032 /* SettingsView.swift */; };
 		000000000000000000000035 /* Archivo-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000034 /* Archivo-Bold.ttf */; };
@@ -34,6 +32,17 @@
 		000000000000000000000045 /* Newsreader-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000044 /* Newsreader-SemiBold.ttf */; };
 		000000000000000000000047 /* SpaceGrotesk-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000046 /* SpaceGrotesk-Medium.ttf */; };
 		000000000000000000000049 /* SpaceGrotesk-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000048 /* SpaceGrotesk-Regular.ttf */; };
+		0000000000000000000000A2 /* DrawingCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A1 /* DrawingCanvas.swift */; };
+		0000000000000000000000B2 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000B1 /* TranscriptionService.swift */; };
+		0000000000000000000000B4 /* TranscriptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000B3 /* TranscriptPanel.swift */; };
+		0000000000000000000000C2 /* EventKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C1 /* EventKitService.swift */; };
+		0000000000000000000000C4 /* TodayMeetingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C3 /* TodayMeetingsSheet.swift */; };
+		0000000000000000000000C6 /* ActionItemsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C5 /* ActionItemsSheet.swift */; };
+		0000000000000000000000D2 /* SummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000D1 /* SummaryService.swift */; };
+		0000000000000000000000D4 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000D3 /* SummaryView.swift */; };
+		0000000000000000000000E2 /* SyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000E1 /* SyncMonitor.swift */; };
+		0000000000000000000000F2 /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F1 /* Tag.swift */; };
+		0000000000000000000000F4 /* NotesGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F3 /* NotesGridView.swift */; };
 		000000000000000000000508 /* Fraunces-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000500 /* Fraunces-Regular.ttf */; };
 		000000000000000000000509 /* Fraunces-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000501 /* Fraunces-SemiBold.ttf */; };
 		00000000000000000000050A /* SourceSerif4-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000502 /* SourceSerif4-Regular.ttf */; };
@@ -42,15 +51,7 @@
 		00000000000000000000050D /* Inter-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000505 /* Inter-Bold.ttf */; };
 		00000000000000000000050E /* Spectral-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000506 /* Spectral-Regular.ttf */; };
 		00000000000000000000050F /* Spectral-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000507 /* Spectral-SemiBold.ttf */; };
-		0000000000000000000000A2 /* DrawingCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000A1 /* DrawingCanvas.swift */; };
-		0000000000000000000000B2 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000B1 /* TranscriptionService.swift */; };
-		0000000000000000000000B4 /* TranscriptPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000B3 /* TranscriptPanel.swift */; };
-		0000000000000000000000C2 /* EventKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C1 /* EventKitService.swift */; };
-		0000000000000000000000C4 /* TodayMeetingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C3 /* TodayMeetingsSheet.swift */; };
-		0000000000000000000000C6 /* ActionItemsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C5 /* ActionItemsSheet.swift */; };
-		0000000000000000000000D2 /* SummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000D1 /* SummaryService.swift */; };
-		0000000000000000000000E2 /* SyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000E1 /* SyncMonitor.swift */; };
-		0000000000000000000000D4 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000D3 /* SummaryView.swift */; };
+		023B09602FD33F0200C09394 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 023B095F2FD33F0200C09394 /* FluidAudio */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,7 +63,6 @@
 		00000000000000000000001B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		00000000000000000000001C /* ParleyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParleyApp.swift; sourceTree = "<group>"; };
 		00000000000000000000001E /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
-		0000000000000000000000F1 /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
 		000000000000000000000020 /* AppFonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFonts.swift; sourceTree = "<group>"; };
 		000000000000000000000022 /* Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		000000000000000000000024 /* Density.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Density.swift; sourceTree = "<group>"; };
@@ -71,7 +71,6 @@
 		00000000000000000000002A /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		00000000000000000000002C /* ThemeShadowModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeShadowModifier.swift; sourceTree = "<group>"; };
 		00000000000000000000002E /* NoteDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteDetailView.swift; sourceTree = "<group>"; };
-		0000000000000000000000F3 /* NotesGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesGridView.swift; sourceTree = "<group>"; };
 		000000000000000000000030 /* NoteListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteListView.swift; sourceTree = "<group>"; };
 		000000000000000000000032 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		000000000000000000000034 /* Archivo-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Archivo-Bold.ttf"; sourceTree = "<group>"; };
@@ -85,6 +84,17 @@
 		000000000000000000000044 /* Newsreader-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Newsreader-SemiBold.ttf"; sourceTree = "<group>"; };
 		000000000000000000000046 /* SpaceGrotesk-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SpaceGrotesk-Medium.ttf"; sourceTree = "<group>"; };
 		000000000000000000000048 /* SpaceGrotesk-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SpaceGrotesk-Regular.ttf"; sourceTree = "<group>"; };
+		0000000000000000000000A1 /* DrawingCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingCanvas.swift; sourceTree = "<group>"; };
+		0000000000000000000000B1 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
+		0000000000000000000000B3 /* TranscriptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptPanel.swift; sourceTree = "<group>"; };
+		0000000000000000000000C1 /* EventKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitService.swift; sourceTree = "<group>"; };
+		0000000000000000000000C3 /* TodayMeetingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayMeetingsSheet.swift; sourceTree = "<group>"; };
+		0000000000000000000000C5 /* ActionItemsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionItemsSheet.swift; sourceTree = "<group>"; };
+		0000000000000000000000D1 /* SummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryService.swift; sourceTree = "<group>"; };
+		0000000000000000000000D3 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
+		0000000000000000000000E1 /* SyncMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMonitor.swift; sourceTree = "<group>"; };
+		0000000000000000000000F1 /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
+		0000000000000000000000F3 /* NotesGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesGridView.swift; sourceTree = "<group>"; };
 		000000000000000000000500 /* Fraunces-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-Regular.ttf"; sourceTree = "<group>"; };
 		000000000000000000000501 /* Fraunces-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Fraunces-SemiBold.ttf"; sourceTree = "<group>"; };
 		000000000000000000000502 /* SourceSerif4-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSerif4-Regular.ttf"; sourceTree = "<group>"; };
@@ -93,15 +103,6 @@
 		000000000000000000000505 /* Inter-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Bold.ttf"; sourceTree = "<group>"; };
 		000000000000000000000506 /* Spectral-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Spectral-Regular.ttf"; sourceTree = "<group>"; };
 		000000000000000000000507 /* Spectral-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Spectral-SemiBold.ttf"; sourceTree = "<group>"; };
-		0000000000000000000000A1 /* DrawingCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingCanvas.swift; sourceTree = "<group>"; };
-		0000000000000000000000B1 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
-		0000000000000000000000B3 /* TranscriptPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptPanel.swift; sourceTree = "<group>"; };
-		0000000000000000000000C1 /* EventKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitService.swift; sourceTree = "<group>"; };
-		0000000000000000000000C3 /* TodayMeetingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayMeetingsSheet.swift; sourceTree = "<group>"; };
-		0000000000000000000000C5 /* ActionItemsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionItemsSheet.swift; sourceTree = "<group>"; };
-		0000000000000000000000D1 /* SummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryService.swift; sourceTree = "<group>"; };
-		0000000000000000000000E1 /* SyncMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMonitor.swift; sourceTree = "<group>"; };
-		0000000000000000000000D3 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -109,6 +110,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				023B09602FD33F0200C09394 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -261,7 +263,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2600;
-				LastUpgradeCheck = 2600;
+				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					00000000000000000000000A = {
 						CreatedOnToolsVersion = 26.0;
@@ -277,6 +279,9 @@
 				Base,
 			);
 			mainGroup = 000000000000000000000002;
+			packageReferences = (
+				023B095E2FD33F0200C09394 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+			);
 			productRefGroup = 000000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -385,7 +390,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 56HTY9G299;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -407,6 +414,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -446,7 +454,9 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 56HTY9G299;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -461,6 +471,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
 			name = Release;
@@ -477,8 +488,8 @@
 				CODE_SIGN_ENTITLEMENTS = Parley/Parley.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Parley/Preview Content\"";
-				DEVELOPMENT_TEAM = 56HTY9G299;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -526,8 +537,8 @@
 				CODE_SIGN_ENTITLEMENTS = Parley/Parley.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Parley/Preview Content\"";
-				DEVELOPMENT_TEAM = 56HTY9G299;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -585,6 +596,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		023B095E2FD33F0200C09394 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		023B095F2FD33F0200C09394 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 023B095E2FD33F0200C09394 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 000000000000000000000001 /* Project object */;
 }

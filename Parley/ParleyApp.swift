@@ -91,14 +91,19 @@ struct ParleyApp: App {
         // Inject the (CloudKit-backed) container; views read it via `@Query`
         // and `@Environment(\.modelContext)`.
         .modelContainer(modelContainer)
-        #if os(macOS)
         // Merge the toolbar into the title bar so there's no tall, empty title
         // strip above the content. Settings is the in-window slide-over (opened
         // from the toolbar), so there's no separate `Settings` window.
+        // NOTE: this is a *postfix* `#if` (a conditional modifier on WindowGroup),
+        // so it can only contain `.modifier` lines — a new scene can't live here.
+        #if os(macOS)
         .windowToolbarStyle(.unifiedCompact)
+        #endif
 
         // A menu-bar item so a meeting can be captured without hunting for the
         // window: click it and "New Recording" creates a note and starts recording.
+        // This is a separate `#if` because it introduces a *new scene*, not a modifier.
+        #if os(macOS)
         MenuBarExtra("Parley", systemImage: "waveform") {
             Button("New Recording") {
                 recordLauncher.requestNewRecording()

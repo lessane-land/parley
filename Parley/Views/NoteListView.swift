@@ -609,22 +609,53 @@ private struct SyncStatusChip: View {
     }
 }
 
-/// A swatch grid for picking a tag's color — visible, tappable circles (works on
-/// both iOS and macOS, unlike the old text submenu where macOS rendered no color).
+/// A color picker for a tag: the **current mood's** palette first (so tags match
+/// the look you're in), a curated extra row, and a full custom `ColorPicker`.
+/// Visible, tappable swatches that work on both iOS and macOS.
 private struct TagColorSheet: View {
     let tag: Tag
     let theme: Theme
+    @Environment(ThemeManager.self) private var themeManager
     @Environment(\.dismiss) private var dismiss
 
-    private let columns = [GridItem(.adaptive(minimum: 56), spacing: 16)]
+    private let columns = [GridItem(.adaptive(minimum: 54), spacing: 14)]
+
+    /// The active mood's accent options (+ highlight, if it has one).
+    private var moodColors: [String] {
+        let cfg = themeManager.mood.config
+        return cfg.accents + (cfg.highlights ?? [])
+    }
+
+    /// A broader curated set drawn from *every* mood's accents, minus the mood
+    /// ones already shown, so there's variety without clashing.
+    private var moreColors: [String] {
+        let moodSet = Set(moodColors.map { $0.uppercased() })
+        var seen = moodSet
+        var result: [String] = []
+        for mood in Mood.allCases {
+            for hex in mood.config.accents {
+                let key = hex.uppercased()
+                if seen.insert(key).inserted { result.append(hex) }
+            }
+        }
+        return result
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(Array(Tag.palette.enumerated()), id: \.offset) { _, hex in
-                        swatch(hex)
+                VStack(alignment: .leading, spacing: 18) {
+                    swatchSection("\(themeManager.mood.name) colors", moodColors)
+                    swatchSection("More", moreColors)
+
+                    Divider().overlay(theme.edge)
+
+                    ColorPicker(selection: customBinding, supportsOpacity: false) {
+                        Text("Custom color")
+                            .font(theme.bodyFont(13).weight(.semibold))
+                            .foregroundStyle(theme.ink)
                     }
+                    .padding(.horizontal, 2)
                 }
                 .padding(20)
             }
@@ -638,26 +669,49 @@ private struct TagColorSheet: View {
             }
         }
         #if os(macOS)
-        .frame(minWidth: 320, minHeight: 260)
+        .frame(minWidth: 340, minHeight: 320)
         #endif
     }
 
+    /// Two-way bridge between the stored hex and SwiftUI's `Color` for the picker.
+    private var customBinding: Binding<Color> {
+        Binding(
+            get: { Color(hex: tag.colorHex) },
+            set: { if let hex = $0.toHex() { tag.colorHex = hex } }
+        )
+    }
+
+    private func swatchSection(_ title: String, _ colors: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title.uppercased())
+                .font(theme.monoFont(10))
+                .tracking(1.4)
+                .foregroundStyle(theme.inkFaint)
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                ForEach(Array(colors.enumerated()), id: \.offset) { _, hex in
+                    swatch(hex)
+                }
+            }
+        }
+    }
+
     private func swatch(_ hex: String) -> some View {
-        let selected = hex == tag.colorHex
+        let selected = hex.uppercased() == tag.colorHex.uppercased()
+        // Contrast the checkmark against the swatch so it reads on light colors too.
+        let mark: Color = PK.isLight(hex) ? .black : .white
         return Button {
             tag.colorHex = hex
-            dismiss()
         } label: {
             Circle()
                 .fill(Color(hex: hex))
-                .frame(width: 50, height: 50)
+                .frame(width: 48, height: 48)
                 .overlay(Circle().strokeBorder(selected ? theme.ink : theme.edge,
                                                lineWidth: selected ? 3 : 1))
                 .overlay {
                     if selected {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(mark)
                     }
                 }
         }

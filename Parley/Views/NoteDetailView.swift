@@ -748,12 +748,15 @@ struct NoteDetailView: View {
         !showsHandwriting || penMode == .type
     }
 
-    /// Canvas items are movable on iPad (where handwriting/pencil is available).
+    /// Canvas items are movable/resizable on iPad (where the pencil canvas is) and
+    /// on macOS (where there's no pencil but you can still drag/resize a pasted pic
+    /// with the cursor). Previously macOS returned false, so the handles showed but
+    /// did nothing — that's why "resize isn't doing anything" on the Mac.
     private var itemsInteractive: Bool {
         #if os(iOS)
         return showsHandwriting
         #else
-        return false
+        return true
         #endif
     }
 
@@ -1452,7 +1455,9 @@ private struct CanvasItemsLayer: View {
             // page coords − scroll offset, so the item scrolls with the ink.
             .offset(x: o.x - pad - scrollOffset.x, y: o.y - pad - scrollOffset.y)
             .onTapGesture { selectedID = item.id }
-            .highPriorityGesture(moveGesture(item))
+            // Move is a normal gesture so the resize handle's *high-priority* gesture
+            // wins when you grab the corner (otherwise the whole item just moved).
+            .gesture(moveGesture(item))
     }
 
     @ViewBuilder

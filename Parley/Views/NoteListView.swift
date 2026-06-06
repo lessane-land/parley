@@ -8,7 +8,6 @@ struct NoteListView: View {
     @Environment(ThemeManager.self) private var themeManager
     @Environment(EventKitService.self) private var eventKit
     @Environment(SyncMonitor.self) private var syncMonitor
-    @Environment(RecordLauncher.self) private var recordLauncher
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var hSize
@@ -108,8 +107,6 @@ struct NoteListView: View {
                 }
         }
         .tint(theme.accent)
-        // The macOS menu-bar "New Recording" bumps this; start the normal flow.
-        .onChange(of: recordLauncher.requestTick) { _, _ in createAndRecord() }
         .alert("Rename Tag", isPresented: Binding(
             get: { editingTag != nil },
             set: { if !$0 { editingTag = nil } }
@@ -726,5 +723,5 @@ private struct TagColorSheet: View {
         .environment(ThemeManager())
         .environment(EventKitService())
         .environment(SyncMonitor(cloudEnabled: false))
-        .environment(RecordLauncher())
+        .environment(RecordingCoordinator())
 }

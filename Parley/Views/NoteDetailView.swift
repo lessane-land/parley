@@ -203,7 +203,12 @@ struct NoteDetailView: View {
             newTagName: $newTagName,
             editingSpeakerID: $editingSpeakerID,
             speakerDraft: $speakerDraft,
-            onClear: { note.drawing = nil; canvasID = UUID() },
+            onClear: {
+                note.drawing = nil
+                note.canvasItems = []   // also remove inserted images + shapes
+                selectedItemID = nil
+                canvasID = UUID()
+            },
             onDelete: { deleteNote() },
             onCreateTag: { createTag() },
             onSaveSpeaker: { saveSpeakerName() }
@@ -696,7 +701,9 @@ struct NoteDetailView: View {
                               recognizeShapes: true,
                               onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) })
                     .id(canvasID)
-                    .allowsHitTesting(penMode == .draw)
+                    // Pause canvas input while a shape/image is selected, so dragging
+                    // and resizing it isn't fought over by the PencilKit scroll view.
+                    .allowsHitTesting(penMode == .draw && selectedItemID == nil)
             } else if let data = note.drawing {
                 // iPhone (no live canvas): show the handwriting read-only.
                 DrawingImageView(data: data).allowsHitTesting(false)
@@ -753,7 +760,7 @@ struct NoteDetailView: View {
                     Label("Clear", systemImage: "eraser").font(.caption)
                 }
                 .tint(theme.accent)
-                .disabled(note.drawing == nil)
+                .disabled(note.drawing == nil && note.canvasItems.isEmpty)
             }
         }
     }
@@ -1163,11 +1170,11 @@ private struct NoteDialogs: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .confirmationDialog("Clear handwriting?", isPresented: $showClearDrawing, titleVisibility: .visible) {
+            .confirmationDialog("Clear drawing?", isPresented: $showClearDrawing, titleVisibility: .visible) {
                 Button("Clear", role: .destructive) { onClear() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This removes the Pencil strokes on this note. Your typed text is kept.")
+                Text("This removes the Pencil strokes, shapes, and inserted images on this note. Your typed text is kept.")
             }
             .confirmationDialog("Delete this note?", isPresented: $showDeleteNote, titleVisibility: .visible) {
                 Button("Delete Note", role: .destructive) { onDelete() }
@@ -1312,6 +1319,14 @@ private struct CanvasItemsLayer: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            // While an item is selected, a full-area catcher takes taps on empty
+            // space to deselect — and, paired with the canvas being disabled during
+            // selection, it stops those taps from drawing underneath.
+            if selectedID != nil {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { selectedID = nil }
+            }
             ForEach(items) { item in itemView(item) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -1333,12 +1348,30 @@ private struct CanvasItemsLayer: View {
         let s = size(of: item)
         let o = origin(of: item)
         let selected = active && selectedID == item.id
-        return content(item, size: s)
-            .overlay { if selected { chrome(item, size: s) } }
-            .offset(x: o.x, y: o.y)
-            .contentShape(Rectangle())
-            .onTapGesture { selectedID = item.id }
-            .gesture(moveGesture(item))   // gated by the layer's allowsHitTesting(active)
+        // When selected, pad the interactive frame so the corner handles sit
+        // *inside* the hittable area. Previously they hung half outside the item's
+        // frame and were nearly impossible to grab — which is why resizing "didn't
+        // work". `pad` is 0 when unselected so the halo never blocks drawing nearby.
+        let pad: CGFloat = selected ? 22 : 0
+        return ZStack {
+            // A clear layer fixes the ZStack's size (and thus the coordinate space
+            // that `.position` resolves against) to the padded frame.
+            Color.clear
+                .frame(width: s.width + pad * 2, height: s.height + pad * 2)
+            content(item, size: s)
+                .frame(width: s.width, height: s.height)
+            if selected {
+                Rectangle()
+                    .strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                    .frame(width: s.width, height: s.height)
+                deleteHandle(item).position(x: pad, y: pad)
+                resizeHandle(item).position(x: pad + s.width, y: pad + s.height)
+            }
+        }
+        .contentShape(Rectangle())
+        .offset(x: o.x - pad, y: o.y - pad)
+        .onTapGesture { selectedID = item.id }
+        .highPriorityGesture(moveGesture(item))
     }
 
     @ViewBuilder
@@ -1370,29 +1403,29 @@ private struct CanvasItemsLayer: View {
         }
     }
 
-    private func chrome(_ item: CanvasItem, size: CGSize) -> some View {
-        ZStack(alignment: .topLeading) {
-            Rectangle().strokeBorder(theme.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
-            // Delete (top-left)
-            Button {
-                items.removeAll { $0.id == item.id }
-                selectedID = nil
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 20))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, theme.rec)
-            }
-            .buttonStyle(.plain)
-            .offset(x: -10, y: -10)
-            // Resize (bottom-right)
-            Circle().fill(theme.accent)
-                .frame(width: 22, height: 22)
-                .overlay(Image(systemName: "arrow.down.right.and.arrow.up.left")
-                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
-                .offset(x: size.width - 11, y: size.height - 11)
-                .highPriorityGesture(resizeGesture(item))
+    /// Delete control — shown at the content's top-left corner (inside the padded
+    /// hit frame so it's easy to tap).
+    private func deleteHandle(_ item: CanvasItem) -> some View {
+        Button {
+            items.removeAll { $0.id == item.id }
+            selectedID = nil
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 24))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, theme.rec)
         }
+        .buttonStyle(.plain)
+    }
+
+    /// Resize control — at the content's bottom-right corner. A big, fully-hittable
+    /// target with a high-priority drag so it beats the move gesture.
+    private func resizeHandle(_ item: CanvasItem) -> some View {
+        Circle().fill(theme.accent)
+            .frame(width: 28, height: 28)
+            .overlay(Image(systemName: "arrow.down.right.and.arrow.up.left")
+                .font(.system(size: 11, weight: .bold)).foregroundStyle(.white))
+            .highPriorityGesture(resizeGesture(item))
     }
 
     private func moveGesture(_ item: CanvasItem) -> some Gesture {

@@ -183,12 +183,11 @@ struct NoteCard: View {
         .padding(16)
         .frame(height: 192, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Pinned cards fill with the mood's accent tint and take the "selected"
-        // border. Because `moodCard` already encodes each mood's signature shape +
-        // shadow (paper's soft round, swiss's square hairline, neubrutalist's hard
-        // offset shadow + lime tint, terminal's dark tint), a pinned card reads
-        // distinctly *per mood* — exactly the dashboard's per-mood look.
-        .moodCard(theme, fill: note.pinned ? theme.accentTint : nil, selected: note.pinned)
+        // Pinned cards keep the mood's *own* surface (white for swiss/neubrutalist,
+        // cream for paper, dark for terminal) and signal "pinned" with the accent
+        // border + the PINNED pill — NOT by flooding the card with the accent tint
+        // (which, for neubrutalist, is the lime pop color and looked wrong).
+        .moodCard(theme, selected: note.pinned)
     }
 
     /// The "Pinned" marker — an accent pill so it stands out on the tinted card.

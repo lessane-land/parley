@@ -226,8 +226,9 @@ final class TranscriptionService {
         // output-bearing category — pairing it with the input-only `.record`
         // makes setCategory throw paramErr (OSStatus -50). `.playAndRecord` is
         // the right category for live capture (and what the sample uses).
-        // `.allowBluetooth` lets a paired headset/mic be the input source.
-        try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetooth, .defaultToSpeaker])
+        // `.allowBluetoothHFP` lets a paired headset/mic be the input source
+        // (the modern spelling of the deprecated `.allowBluetooth`).
+        try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .defaultToSpeaker])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         #endif
 

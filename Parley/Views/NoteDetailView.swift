@@ -697,9 +697,7 @@ struct NoteDetailView: View {
 
             #if os(iOS)
             if showsHandwriting {
-                DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw,
-                              recognizeShapes: true,
-                              onRecognizeShape: { kind, rect in addRecognizedShape(kind, rect) })
+                DrawingCanvas(data: $note.drawing, inkColor: theme.ink, isActive: penMode == .draw)
                     .id(canvasID)
                     // Pause canvas input while a shape/image is selected, so dragging
                     // and resizing it isn't fought over by the PencilKit scroll view.
@@ -801,29 +799,47 @@ struct NoteDetailView: View {
         .buttonStyle(.plain)
     }
 
-    /// Insert an image into the page (it's then draggable on the canvas). Shapes
-    /// aren't inserted from a button anymore — draw one freehand and it snaps to a
-    /// clean, movable/resizable shape (see `ShapeRecognizer`).
+    /// Insert or paste an image onto the page (it's then draggable/resizable).
+    /// Shapes aren't inserted from a button — draw one and Apple's Auto-Refine
+    /// Handwriting snaps it into clean ink (toggle it in the tool picker's "…").
     private var insertPalette: some View {
-        Button { showCanvasPhoto = true } label: {
-            Label("Add image", systemImage: "photo").labelStyle(.iconOnly)
+        HStack(spacing: 14) {
+            Button { showCanvasPhoto = true } label: {
+                Label("Add image", systemImage: "photo").labelStyle(.iconOnly)
+            }
+            // Paste a copied image straight onto the canvas.
+            PasteButton(supportedContentTypes: [.image]) { providers in
+                Task { await pasteImages(providers) }
+            }
+            .labelStyle(.iconOnly)
+            .buttonBorderShape(.capsule)
         }
         .font(.system(size: 15))
         .tint(theme.accent)
     }
 
-    // MARK: Canvas items (images + shapes)
+    // MARK: Canvas items (images)
 
-    /// Turn a recognized freehand shape into a clean, movable `CanvasItem` placed
-    /// where it was drawn.
-    private func addRecognizedShape(_ kind: CanvasItem.Kind, _ rect: CGRect) {
-        let hex = themeManager.accentHex ?? themeManager.mood.config.accentDefault
-        let item = CanvasItem(kind: kind,
-                              x: max(0, Double(rect.minX)), y: max(0, Double(rect.minY)),
-                              width: max(40, Double(rect.width)), height: max(40, Double(rect.height)),
-                              colorHex: hex)
-        note.canvasItems = note.canvasItems + [item]
-        selectedItemID = item.id
+    /// Insert pasted image(s) as movable canvas items.
+    private func pasteImages(_ providers: [NSItemProvider]) async {
+        for provider in providers {
+            guard let data = await loadImageData(provider),
+                  let small = AttachmentSupport.downscaled(data, maxDimension: 1000) else { continue }
+            let item = CanvasItem(kind: .image, x: 40, y: 40, width: 220, height: 165, imageData: small)
+            note.canvasItems = note.canvasItems + [item]
+            selectedItemID = item.id
+        }
+    }
+
+    /// Pull image bytes out of a pasteboard item provider (first conforming type).
+    private func loadImageData(_ provider: NSItemProvider) async -> Data? {
+        let type = provider.registeredTypeIdentifiers.first { UTType($0)?.conforms(to: .image) == true }
+            ?? UTType.image.identifier
+        return await withCheckedContinuation { (cont: CheckedContinuation<Data?, Never>) in
+            provider.loadDataRepresentation(forTypeIdentifier: type) { data, _ in
+                cont.resume(returning: data)
+            }
+        }
     }
 
     private func addCanvasImage(_ pick: PhotosPickerItem) async {
@@ -1262,8 +1278,8 @@ enum HandwritingOCR {
                 if !customWords.isEmpty { request.customWords = customWords }
                 do {
                     try VNImageRequestHandler(cgImage: cg, options: [:]).perform([request])
-                    let lines = (request.results as? [VNRecognizedTextObservation])?
-                        .compactMap { $0.topCandidates(1).first?.string } ?? []
+                    let lines = (request.results ?? [])
+                        .compactMap { $0.topCandidates(1).first?.string }
                     cont.resume(returning: lines.joined(separator: "\n"))
                 } catch {
                     cont.resume(returning: "")

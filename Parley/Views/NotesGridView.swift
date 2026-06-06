@@ -106,10 +106,10 @@ struct NotesGridView: View {
         } label: {
             Image(systemName: "slider.horizontal.3")
                 .font(.system(size: 15))
-                .foregroundStyle(theme.inkSoft)
+                .foregroundStyle(theme.accent)
                 .padding(8)
-                .background(theme.paperRaised, in: shape)
-                .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+                .background(theme.accentTint, in: shape)
+                .overlay(shape.strokeBorder(theme.accentLine, lineWidth: theme.borderWidth))
         }
         .menuStyle(.button)
         .buttonStyle(.plain)

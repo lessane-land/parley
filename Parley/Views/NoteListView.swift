@@ -287,6 +287,7 @@ struct NoteListView: View {
     private var grid: some View {
         NotesGridView(
             theme: theme,
+            mood: themeManager.mood,
             title: scopeTitle,
             notes: filteredNotes,
             onOpen: { path.append($0) },

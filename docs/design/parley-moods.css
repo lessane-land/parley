@@ -1,0 +1,203 @@
+/* ============================================================
+   PARLEY — MOODS
+   Each mood is a body class that re-skins every screen by
+   overriding the --pk-* token set (+ a few structural tweaks).
+   Loaded LAST so it wins the cascade. body-scoped vars beat the
+   JS-set html inline vars for all descendant content.
+   ============================================================ */
+
+/* ────────────────────────────────────────────────────────────
+   1 · ENGINEERED TERMINAL — technical, dense, serious
+   Near-black canvas, amber signal, mono transcript, hairline grid.
+   ──────────────────────────────────────────────────────────── */
+body.mood-terminal{
+  --pk-paper:      #0B0E14;
+  --pk-paper-rec:  #141A24;
+  --pk-paper-sink: #0F141C;
+  --pk-edge:       #2A3441;
+
+  --pk-ink:        #E4EAF2;
+  --pk-ink-2:      #C8D2E0;
+  --pk-ink-soft:   #8A97A8;
+  --pk-ink-faint:  #5C6878;
+  --pk-ink-ghost:  #2A3441;
+  --pk-line:       #1F2630;
+  --pk-line-soft:  #161C24;
+
+  --pk-accent:     #FF9F1C;
+  --pk-accent-ink: #FFB84D;
+  --pk-accent-tint:#1C2230;
+  --pk-accent-line:rgba(255,159,28,.34);
+  --pk-rec:        #FF9F1C;
+  --pk-hw-color:   #FFB84D;
+
+  --pk-serif: "Space Grotesk", system-ui, sans-serif;
+  --pk-sans:  "Space Grotesk", system-ui, sans-serif;
+  --pk-tx-font: "IBM Plex Mono", ui-monospace, monospace;
+  --pk-hand:  "Caveat", cursive;
+
+  --pk-radius: 0px;
+  --pk-border-w: 1px;
+  --pk-shadow-card: none;
+  --pk-caret: 1;
+}
+/* hairline grid on every frame (toggleable) */
+body.mood-terminal:not(.grid-off) .pk-frame,
+body.mood-terminal:not(.grid-off) .pk-home,
+body.mood-terminal:not(.grid-off) .pk-sum{
+  background-image:
+    linear-gradient(var(--pk-line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pk-line-soft) 1px, transparent 1px) !important;
+  background-size: 64px 64px, 64px 64px;
+}
+body.mood-terminal .pk-title{ font-weight:500; letter-spacing:.01em; }
+body.mood-terminal .pk-timer{ font-family:"IBM Plex Mono", monospace; letter-spacing:0; }
+body.mood-terminal .pk-rec-label{ letter-spacing:.22em; }
+body.mood-terminal .pk-stop{ background:var(--pk-accent); }
+body.mood-terminal .pk-stop .sq{ background:#0B0E14; }
+body.mood-terminal .pk-tx-time{ font-family:"IBM Plex Mono", monospace; }
+body.mood-terminal .pk-tx-spk{ text-transform:uppercase; letter-spacing:.08em; font-size:10px; }
+body.mood-terminal .pk-tx-line.cur{ border-radius:0; }
+body.mood-terminal .pk-note-line.h,
+body.mood-terminal .pk-sum-lede,
+body.mood-terminal .pk-card h3,
+body.mood-terminal .pk-home-head h1{ letter-spacing:-.01em; }
+/* labels read like field tags */
+body.mood-terminal .pk-notes-h .lbl,
+body.mood-terminal .pk-tx-h .ttl,
+body.mood-terminal .pk-sum-sech{ font-family:"IBM Plex Mono", monospace; letter-spacing:.1em; }
+
+/* ────────────────────────────────────────────────────────────
+   3 · SWISS INTERNATIONAL — stark, gridded, bold
+   Pure white/black, signal red, neo-grotesque, rigid grid.
+   ──────────────────────────────────────────────────────────── */
+body.mood-swiss{
+  --pk-paper:      #FFFFFF;
+  --pk-paper-rec:  #FFFFFF;
+  --pk-paper-sink: #F4F4F4;
+  --pk-edge:       #111111;
+
+  --pk-ink:        #111111;
+  --pk-ink-2:      #1A1A1A;
+  --pk-ink-soft:   #555555;
+  --pk-ink-faint:  #8A8A8A;
+  --pk-ink-ghost:  #C8C8C8;
+  --pk-line:       #111111;
+  --pk-line-soft:  rgba(17,17,17,.12);
+
+  --pk-accent:     #E2231A;
+  --pk-accent-ink: #C01810;
+  --pk-accent-tint:#FBE7E6;
+  --pk-accent-line:rgba(226,35,26,.4);
+  --pk-rec:        #E2231A;
+  --pk-hw-color:   #E2231A;
+
+  --pk-serif: "Archivo", "Inter", sans-serif;
+  --pk-sans:  "Archivo", "Inter", sans-serif;
+  --pk-tx-font: "Archivo", "Inter", sans-serif;
+  --pk-hand:  "Caveat", cursive;
+
+  --pk-radius: 0px;
+  --pk-border-w: 1px;
+  --pk-shadow-card: none;
+  --pk-caret: 0;
+}
+/* heavier, tighter type hierarchy */
+body.mood-swiss .pk-title,
+body.mood-swiss .pk-note-line.h,
+body.mood-swiss .pk-home-head h1,
+body.mood-swiss .pk-card h3,
+body.mood-swiss .pk-sum-lede{ font-weight:700; letter-spacing:-.02em; line-height:1.05; }
+body.mood-swiss .pk-home-head h1{ font-size:38px; text-transform:uppercase; }
+body.mood-swiss .pk-sum-lede{ font-size:24px; line-height:1.25; }
+/* visible column grid on the notes canvas */
+body.mood-swiss .pk-notes{
+  background-image: linear-gradient(90deg, var(--pk-line-soft) 1px, transparent 1px);
+  background-size: calc(100% / 6) 100%;
+}
+body.mood-swiss .pk-notes::before{ background:var(--pk-ink); opacity:1; }
+body.mood-swiss .pk-tx-line.cur{ background:var(--pk-accent-tint); border-radius:0; }
+body.mood-swiss .pk-card{ border:none; border-top:2px solid var(--pk-ink); border-radius:0; box-shadow:none; background:transparent; }
+body.mood-swiss .pk-card:hover{ transform:none; box-shadow:none; }
+body.mood-swiss .pk-card.feature{ border-top:5px solid var(--pk-accent); }
+body.mood-swiss .pk-stop{ border-radius:0; }
+body.mood-swiss .pk-rec{ border-radius:0; }
+body.mood-swiss .pk-btn{ border-radius:0; }
+body.mood-swiss .pk-record-cta{ border-radius:0; }
+body.mood-swiss .pk-source,
+body.mood-swiss .pk-act{ border-radius:0; }
+body.mood-swiss .pk-tx-spk,
+body.mood-swiss .pk-notes-h .lbl,
+body.mood-swiss .pk-tx-h .ttl,
+body.mood-swiss .pk-sum-sech{ text-transform:uppercase; letter-spacing:.06em; }
+
+/* ────────────────────────────────────────────────────────────
+   4 · NEUBRUTALIST — bold, bordered, electric
+   Bone bg, electric blue + lime accent, thick borders, hard shadows.
+   ──────────────────────────────────────────────────────────── */
+body.mood-neubrutalist{
+  --pk-paper:      #F5F3EC;
+  --pk-paper-rec:  #FFFFFF;
+  --pk-paper-sink: #ECEAE0;
+  --pk-edge:       #1A1A1A;
+
+  --pk-ink:        #1A1A1A;
+  --pk-ink-2:      #1A1A1A;
+  --pk-ink-soft:   #44423C;
+  --pk-ink-faint:  #6E6B60;
+  --pk-ink-ghost:  #1A1A1A;
+  --pk-line:       #1A1A1A;
+  --pk-line-soft:  rgba(26,26,26,.16);
+
+  --pk-accent:     #2B4BF2;
+  --pk-accent-ink: #1E36C0;
+  --pk-accent-tint:#D8F000;          /* the single lime highlight */
+  --pk-accent-line:#1A1A1A;
+  --pk-rec:        #2B4BF2;
+  --pk-hw-color:   #2B4BF2;
+
+  --pk-serif: "Archivo", "Space Grotesk", sans-serif;
+  --pk-sans:  "Space Grotesk", system-ui, sans-serif;
+  --pk-tx-font: "Space Grotesk", system-ui, sans-serif;
+  --pk-hand:  "Caveat", cursive;
+
+  --pk-radius: 0px;
+  --pk-border-w: 2px;
+  --pk-shadow-card: 4px 4px 0 #1A1A1A;
+  --pk-caret: 0;
+}
+body.mood-neubrutalist .pk-top{ border-bottom:2px solid #1A1A1A; }
+body.mood-neubrutalist .pk-bottom{ border-top:2px solid #1A1A1A; }
+body.mood-neubrutalist .pk-tx{ border-left:2px solid #1A1A1A; }
+body.mood-neubrutalist .pk-title,
+body.mood-neubrutalist .pk-note-line.h,
+body.mood-neubrutalist .pk-home-head h1,
+body.mood-neubrutalist .pk-card h3,
+body.mood-neubrutalist .pk-sum-lede{ font-family:var(--pk-display, "Archivo Black"), "Archivo", sans-serif; font-weight:800; letter-spacing:-.01em; }
+body.mood-neubrutalist .pk-home-head h1{ font-size:36px; }
+/* the live line is a hard lime block with a black border */
+body.mood-neubrutalist .pk-tx-line.cur{
+  background:var(--pk-accent-tint); border:2px solid #1A1A1A; border-radius:0;
+  box-shadow:3px 3px 0 #1A1A1A; margin-right:4px;
+}
+body.mood-neubrutalist .pk-tx-line.cur::before{ display:none; }
+body.mood-neubrutalist .pk-tx-line.cur .pk-tx-text{ color:#1A1A1A; font-weight:600; }
+/* hard-edged buttons + controls */
+body.mood-neubrutalist .pk-btn{ border:2px solid #1A1A1A; border-radius:0; box-shadow:2px 2px 0 #1A1A1A; font-weight:700; }
+body.mood-neubrutalist .pk-btn-summary{ background:var(--pk-accent); color:#fff; }
+body.mood-neubrutalist .pk-btn-summary .when{ color:rgba(255,255,255,.7); }
+body.mood-neubrutalist .pk-stop{ border-radius:0; border:2px solid #1A1A1A; box-shadow:2px 2px 0 #1A1A1A; }
+body.mood-neubrutalist .pk-rec{ border:2px solid #1A1A1A; border-radius:0; background:var(--pk-accent-tint); }
+body.mood-neubrutalist .pk-rec-label,
+body.mood-neubrutalist .pk-rec .pk-timer{ color:#1A1A1A; }
+body.mood-neubrutalist .pk-record-cta{ border:2px solid #1A1A1A; border-radius:0; box-shadow:4px 4px 0 #1A1A1A; }
+body.mood-neubrutalist .pk-card:hover{ transform:translate(-1px,-1px); box-shadow:6px 6px 0 #1A1A1A; }
+body.mood-neubrutalist .pk-card.feature{ background:var(--pk-accent); color:#fff; }
+body.mood-neubrutalist .pk-card.feature h3,
+body.mood-neubrutalist .pk-card.feature .snip,
+body.mood-neubrutalist .pk-card.feature .ct-date{ color:#fff; }
+body.mood-neubrutalist .pk-brand .mark{ border:2px solid #1A1A1A; border-radius:0; box-shadow:2px 2px 0 #1A1A1A; }
+body.mood-neubrutalist .pk-nav-item.on{ background:var(--pk-accent-tint); }
+body.mood-neubrutalist .pk-sum-top .badge{ background:var(--pk-accent-tint); border:2px solid #1A1A1A; border-radius:0; color:#1A1A1A; }
+body.mood-neubrutalist .pk-decision .mk{ background:var(--pk-accent-tint); border:2px solid #1A1A1A; border-radius:0; color:#1A1A1A; }
+body.mood-neubrutalist .pk-act.done .box{ background:var(--pk-accent); }

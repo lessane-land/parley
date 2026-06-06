@@ -53,9 +53,11 @@ struct NoteListView: View {
                 .navigationTitle("")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                // Unified, paper-colored top bar (no translucent iOS band) so the
-                // iPad top reads like the Mac's merged toolbar — one continuous
-                // canvas rather than a separate chrome strip above the content.
+                // iPad has no top-bar actions anymore (everything's in the rail), so
+                // hide the navigation bar entirely and let the dashboard use the full
+                // height. iPhone keeps its bar (that's where its actions live).
+                .toolbar(isRegular ? .hidden : .visible, for: .navigationBar)
+                // Unified, paper-colored top bar (iPhone) so it reads as one canvas.
                 .toolbarBackground(theme.paper, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
                 .toolbar { homeToolbar }

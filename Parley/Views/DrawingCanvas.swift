@@ -33,8 +33,13 @@ struct DrawingCanvas: UIViewRepresentable {
     var recognizeShapes: Bool = true
 
     /// Called when a stroke was recognized as a shape: its kind and rect in the
-    /// canvas's on-screen coordinates, so the overlay can drop a `CanvasItem` there.
+    /// canvas's *page* (content) coordinates, so the overlay can drop a `CanvasItem`
+    /// that stays anchored to the page as it scrolls.
     var onRecognizeShape: ((CanvasItem.Kind, CGRect) -> Void)? = nil
+
+    /// Reports the canvas's scroll position so the items overlay can scroll *with*
+    /// the ink (otherwise a pasted image/shape stays pinned to the screen).
+    var onScroll: ((CGPoint) -> Void)? = nil
 
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = PKCanvasView()
@@ -163,10 +168,15 @@ struct DrawingCanvas: UIViewRepresentable {
             parent.data = cleaned.dataRepresentation()
             DrawingCanvas.growContent(canvasView)
 
-            // Page → on-screen coords for the overlay layer (which isn't scrolled).
-            let onScreen = pageRect.offsetBy(dx: -canvasView.contentOffset.x,
-                                             dy: -canvasView.contentOffset.y)
-            parent.onRecognizeShape?(kind, onScreen)
+            // Hand back page (content) coords; the overlay anchors to the page and
+            // applies the scroll offset itself.
+            parent.onRecognizeShape?(kind, pageRect)
+        }
+
+        /// PKCanvasViewDelegate refines UIScrollViewDelegate, so this fires as the
+        /// canvas scrolls — we forward the offset so the items overlay tracks it.
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            parent.onScroll?(scrollView.contentOffset)
         }
     }
 }

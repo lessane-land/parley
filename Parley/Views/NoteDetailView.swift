@@ -779,6 +779,11 @@ struct NoteDetailView: View {
     /// iPhone overflow: attach + delete in one ••• menu (keeps the narrow bar tidy).
     private var compactMenu: some View {
         Menu {
+            #if os(iOS)
+            if CameraPicker.isAvailable {
+                Button { showCamera = true } label: { Label("Take Photo", systemImage: "camera") }
+            }
+            #endif
             Button { showPhotoPicker = true } label: { Label("Add Photo", systemImage: "photo") }
             Button { importingFile = true } label: { Label("Add File", systemImage: "doc") }
             Button { showNewEvent = true } label: { Label("New Event", systemImage: "calendar.badge.plus") }

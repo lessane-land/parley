@@ -76,6 +76,11 @@ final class TranscriptionService {
     private var analyzer: SpeechAnalyzer?
     private var continuation: AsyncStream<AnalyzerInput>.Continuation?
     private var resultsTask: Task<Void, Never>?
+    #if os(iOS)
+    /// Observer for audio-session interruptions (calls, Siri) so background
+    /// recording resumes instead of dying silently.
+    private var interruptionObserver: NSObjectProtocol?
+    #endif
 
     // Diarization: the session audio is recorded to a temp file and, on stop,
     // diarized offline to assign speakers. Kept around `stop()` so the post-stop
@@ -208,6 +213,10 @@ final class TranscriptionService {
         }
 
         #if os(iOS)
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+            self.interruptionObserver = nil
+        }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
 
@@ -230,6 +239,7 @@ final class TranscriptionService {
         // (the modern spelling of the deprecated `.allowBluetooth`).
         try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .defaultToSpeaker])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
+        observeInterruptions()
         #endif
 
         let input = engine.inputNode
@@ -272,6 +282,38 @@ final class TranscriptionService {
         engine.prepare()
         try engine.start()
     }
+
+    #if os(iOS)
+    /// Keep recording alive across interruptions (incoming call, Siri): when the
+    /// interruption ends and the system says we may resume, re-activate the
+    /// session and restart the engine — otherwise a backgrounded recording would
+    /// just stop.
+    private func observeInterruptions() {
+        guard interruptionObserver == nil else { return }
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            Task { @MainActor in self?.handleInterruption(note) }
+        }
+    }
+
+    private func handleInterruption(_ note: Notification) {
+        guard state == .recording,
+              let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+        switch type {
+        case .began:
+            break   // the system stopped our audio; we resume on .ended
+        case .ended:
+            let optsRaw = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            guard AVAudioSession.InterruptionOptions(rawValue: optsRaw).contains(.shouldResume) else { return }
+            try? AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
+            try? engine.start()
+        @unknown default:
+            break
+        }
+    }
+    #endif
 
     #if os(macOS)
     /// Start capturing system audio and feed it into the same analyzer stream as

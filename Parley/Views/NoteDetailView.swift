@@ -28,6 +28,18 @@ struct NoteDetailView: View {
     @Environment(ThemeManager.self) private var themeManager
     @Environment(EventKitService.self) private var eventKit
     @Environment(RecordingCoordinator.self) private var recorder
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSize
+    #endif
+
+    /// iPhone-style compact layout (one panel at a time, trimmed toolbar).
+    private var isCompact: Bool {
+        #if os(iOS)
+        return hSize == .compact
+        #else
+        return false
+        #endif
+    }
 
     @Query(sort: \Tag.name) private var allTags: [Tag]
     @Query private var speakerProfiles: [SpeakerProfile]
@@ -143,10 +155,16 @@ struct NoteDetailView: View {
         #endif
         .toolbar {
             ToolbarItem { recordControl }
-            ToolbarItem { attachControl }
-            ToolbarItem { transcriptToggle }
-            ToolbarItem { swapControl }
-            ToolbarItem { noteMenu }
+            if isCompact {
+                // iPhone: keep the bar light — attach/delete live in the ••• menu,
+                // and Notes/Transcript switching is the in-content segmented control.
+                ToolbarItem { compactMenu }
+            } else {
+                ToolbarItem { attachControl }
+                ToolbarItem { transcriptToggle }
+                ToolbarItem { swapControl }
+                ToolbarItem { noteMenu }
+            }
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems, maxSelectionCount: 10, matching: .images)
@@ -538,11 +556,14 @@ struct NoteDetailView: View {
     /// items + Summarize CTAs on the right.
     private var bottomBar: some View {
         HStack(spacing: 12) {
-            Label("Your notes + the transcript merge into a summary", systemImage: "wand.and.stars")
-                .font(theme.bodyFont(12))
-                .foregroundStyle(theme.inkFaint)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            // The hint is just guidance — drop it on a phone so the two CTAs fit.
+            if !isCompact {
+                Label("Your notes + the transcript merge into a summary", systemImage: "wand.and.stars")
+                    .font(theme.bodyFont(12))
+                    .foregroundStyle(theme.inkFaint)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
 
             Spacer(minLength: 8)
 
@@ -570,10 +591,34 @@ struct NoteDetailView: View {
     /// `layoutSwapped` flips which one leads. Side-by-side when wide, stacked otherwise.
     @ViewBuilder
     private func splitContent(wide: Bool) -> some View {
-        if showTranscript {
+        if isCompact {
+            compactContent          // iPhone: one panel at a time + a switch
+        } else if showTranscript {
             splitWithTranscript(wide: wide)
         } else {
-            notesColumn   // transcript collapsed → notes get the whole surface
+            notesColumn             // transcript collapsed → notes get the whole surface
+        }
+    }
+
+    /// iPhone: show Notes or Transcript full-width, switched by a segmented control
+    /// (a tiny side-by-side split is unusable on a phone). The control only appears
+    /// once there's a transcript to switch to.
+    @ViewBuilder
+    private var compactContent: some View {
+        let hasTranscript = !note.transcript.isEmpty || transcription.isRecording || backgroundRecordingThisNote
+        VStack(spacing: 10) {
+            if hasTranscript {
+                Picker("View", selection: $showTranscript) {
+                    Text("Notes").tag(false)
+                    Text("Transcript").tag(true)
+                }
+                .pickerStyle(.segmented)
+            }
+            if showTranscript && hasTranscript {
+                transcriptPanel
+            } else {
+                notesColumn
+            }
         }
     }
 
@@ -653,6 +698,20 @@ struct NoteDetailView: View {
     /// within the detail (no need to go back to the list) and pops back.
     private var noteMenu: some View {
         Menu {
+            Button(role: .destructive) { showDeleteNote = true } label: {
+                Label("Delete Note", systemImage: "trash")
+            }
+        } label: {
+            Label("More", systemImage: "ellipsis.circle")
+        }
+    }
+
+    /// iPhone overflow: attach + delete in one ••• menu (keeps the narrow bar tidy).
+    private var compactMenu: some View {
+        Menu {
+            Button { showPhotoPicker = true } label: { Label("Add Photo", systemImage: "photo") }
+            Button { importingFile = true } label: { Label("Add File", systemImage: "doc") }
+            Divider()
             Button(role: .destructive) { showDeleteNote = true } label: {
                 Label("Delete Note", systemImage: "trash")
             }
@@ -742,13 +801,13 @@ struct NoteDetailView: View {
                         // resizing it isn't fought over by the canvas.
                         .allowsHitTesting(penMode == .draw && selectedItemID == nil)
                 } else if let data = note.drawing {
-                    DrawingImageView(data: data).frame(height: pageHeight).allowsHitTesting(false)
+                    DrawingImageView(data: data).frame(maxWidth: .infinity, maxHeight: 600).allowsHitTesting(false)
                 }
                 #else
                 // macOS has no PencilKit input, but it can still *render* the synced
                 // strokes — so handwriting drawn on iPad is visible on the Mac.
                 if let data = note.drawing {
-                    DrawingImageView(data: data).frame(height: pageHeight).allowsHitTesting(false)
+                    DrawingImageView(data: data).frame(maxWidth: .infinity, maxHeight: 600).allowsHitTesting(false)
                 }
                 #endif
 
@@ -758,9 +817,9 @@ struct NoteDetailView: View {
                     active: itemsInteractive,
                     theme: theme
                 )
-                .frame(height: pageHeight, alignment: .topLeading)
+                .frame(height: surfaceHeight, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, minHeight: pageHeight, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: surfaceHeight, alignment: .topLeading)
             .background(
                 GeometryReader { geo in
                     Color.clear.preference(key: NotesScrollKey.self,
@@ -776,6 +835,11 @@ struct NoteDetailView: View {
             Rectangle().fill(theme.accentLine).frame(width: 1)
         }
     }
+
+    /// The note page's height: a tall fixed page only when there's a live Pencil
+    /// canvas (iPad), so handwriting has room and everything scrolls together.
+    /// Elsewhere (iPhone/Mac) it's content-sized, so there's no empty scroll.
+    private var surfaceHeight: CGFloat? { showsHandwriting ? pageHeight : nil }
 
     /// Typed layer accepts touches unless we're drawing on iPad.
     private var typedActive: Bool {

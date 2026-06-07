@@ -325,11 +325,16 @@ private struct CardSurface: ViewModifier {
     func body(content: Content) -> some View {
         switch mood {
         case .swiss:
-            content.overlay(alignment: .top) {
-                Rectangle()
-                    .fill(feature ? theme.accent : theme.ink)
-                    .frame(height: feature ? 5 : 2)
-            }
+            // Subtle surface (fill + hairline) so cards read as distinct, while
+            // keeping the Swiss top rule (2px ink / 5px accent on a feature).
+            content
+                .background(theme.paperRaised)
+                .overlay(Rectangle().strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(feature ? theme.accent : theme.ink)
+                        .frame(height: feature ? 5 : 2)
+                }
         default:
             let shape = RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
             let fill: Color = (mood == .neubrutalist && feature) ? theme.accent : theme.paperRaised

@@ -211,10 +211,12 @@ struct NoteListView: View {
                     monthCalendar
                 } else {
                     grid
-                    if usesSidePanels && showingAsk {
-                        askResizeHandle
-                        chatColumn.transition(.move(edge: .trailing))
-                    }
+                }
+                // Ask Parley rides as an inline right column (macOS) over *either*
+                // the grid or the calendar, so it works from the calendar too.
+                if usesSidePanels && showingAsk {
+                    askResizeHandle
+                    chatColumn.transition(.move(edge: .trailing))
                 }
             }
             // When the rail floats (iPad), the margins around it show the mood's

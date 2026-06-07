@@ -916,6 +916,7 @@ private struct DayPanel: View {
 
     /// The quick-note jot field.
     @State private var jot = ""
+    @FocusState private var jotFocused: Bool
     /// Per-event prep: which cards are expanded, and the result/loading state.
     @State private var expanded: Set<String> = []
     @State private var prep: [String: PrepState] = [:]
@@ -948,7 +949,7 @@ private struct DayPanel: View {
                     ForEach(reminders) { r in reminderRow(r) }
                 }
 
-                section(notes.isEmpty ? "Quick note" : "Notes")
+                section("Quick note")
                 ForEach(notes) { note in noteRow(note) }
                 jotField
                 footer
@@ -991,17 +992,24 @@ private struct DayPanel: View {
                 .textFieldStyle(.plain)
                 .font(theme.bodyFont(13))
                 .foregroundStyle(theme.ink)
-                .padding(.horizontal, 12).padding(.vertical, 10)
+                .padding(.horizontal, 13)
+                .frame(height: 44)
+                .frame(maxWidth: .infinity)
                 .background(theme.paperRaised, in: shape)
-                .overlay(shape.strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
+                // Focus ring like the design (border → accent line on focus).
+                .overlay(shape.strokeBorder(jotFocused ? theme.accentLine : theme.edge,
+                                            lineWidth: max(1, theme.borderWidth)))
+                .focused($jotFocused)
+                .submitLabel(.done)
                 .onSubmit(submitJot)
             Button(action: submitJot) {
                 Image(systemName: "plus").font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(theme.paper)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .moodCard(theme, fill: theme.accent)
+            .opacity(jot.trimmingCharacters(in: .whitespaces).isEmpty ? 0.55 : 1)
             .disabled(jot.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.top, 6)
@@ -1207,9 +1215,8 @@ private struct DayPanel: View {
         }
     }
 
-    /// A day's note. Typed notes read as the design's lime "quick note" box;
-    /// recordings read as a plain white card with a waveform — so the panel isn't
-    /// a wall of lime. Tapping opens the note.
+    /// A day's note in the design's lime "quick note" box, with a pencil (typed) /
+    /// waveform (recording) tack. Tapping opens the note.
     private func noteRow(_ note: Note) -> some View {
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
         let isRecording = !note.transcript.isEmpty
@@ -1219,12 +1226,12 @@ private struct DayPanel: View {
                 Image(systemName: isRecording ? "waveform" : "pencil")
                     .font(.system(size: 12)).foregroundStyle(theme.accent).padding(.top, 1)
                 Text(title)
-                    .font(theme.bodyFont(13)).foregroundStyle(isRecording ? theme.ink : theme.ink2)
+                    .font(theme.bodyFont(13)).foregroundStyle(theme.ink2)
                     .frame(maxWidth: .infinity, alignment: .leading).lineLimit(2)
             }
             .padding(.horizontal, 13).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isRecording ? theme.paperRaised : theme.accentTint, in: shape)
+            .background(theme.accentTint, in: shape)
             .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
         }
         .buttonStyle(.plain)

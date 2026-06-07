@@ -38,6 +38,8 @@ struct NoteListView: View {
     /// Width of the macOS "Ask Parley" side column (drag the divider to resize).
     @State private var askWidth: CGFloat = 380
     @State private var askDragBase: CGFloat?
+    /// Ask Parley expanded to fill the content area (rail stays aside).
+    @State private var askExpanded = false
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
 
@@ -205,18 +207,23 @@ struct NoteListView: View {
                     rail.frame(width: 268)
                     verticalDivider
                 }
-                if showingMonthCalendar {
-                    // The calendar takes the main pane, keeping the rail (sidebar)
-                    // and bringing its own day panel — the design's 3-pane layout.
-                    monthCalendar
+                if usesSidePanels && showingAsk && askExpanded {
+                    // Ask Parley expanded to fill the content area (rail stays).
+                    chatColumn.frame(maxWidth: .infinity)
                 } else {
-                    grid
-                }
-                // Ask Parley rides as an inline right column (macOS) over *either*
-                // the grid or the calendar, so it works from the calendar too.
-                if usesSidePanels && showingAsk {
-                    askResizeHandle
-                    chatColumn.transition(.move(edge: .trailing))
+                    if showingMonthCalendar {
+                        // The calendar takes the main pane, keeping the rail and
+                        // its own day panel — the design's 3-pane layout.
+                        monthCalendar
+                    } else {
+                        grid
+                    }
+                    // Ask Parley as an inline right column (macOS) over *either* the
+                    // grid or the calendar, so it works from the calendar too.
+                    if usesSidePanels && showingAsk {
+                        askResizeHandle
+                        chatColumn.frame(width: askWidth).transition(.move(edge: .trailing))
+                    }
                 }
             }
             // When the rail floats (iPad), the margins around it show the mood's
@@ -258,14 +265,19 @@ struct NoteListView: View {
         Rectangle().fill(theme.line).frame(width: theme.borderWidth)
     }
 
-    /// Ask Parley as an inline right column (iPad/Mac), resizable on Mac.
+    /// Ask Parley as an inline right column (iPad/Mac), resizable on Mac, with an
+    /// expand control to fill the content area (rail stays aside).
     private var chatColumn: some View {
         VStack(spacing: 0) {
-            panelHeader("Ask Parley") { withAnimation(.snappy) { showingAsk = false } }
+            panelHeader("Ask Parley",
+                        expanded: askExpanded,
+                        onExpand: { withAnimation(.snappy) { askExpanded.toggle() } }) {
+                withAnimation(.snappy) { showingAsk = false; askExpanded = false }
+            }
             ChatView(theme: theme)
         }
-        .frame(width: askWidth)
         .background(theme.paperSunk)
+        .overlay(alignment: .leading) { if askExpanded { verticalDivider } }
     }
 
     /// Draggable divider to set the Ask column's width (drag left = wider).
@@ -313,15 +325,29 @@ struct NoteListView: View {
         }
     }
 
-    /// A panel header (title + close) for the side panels.
-    private func panelHeader(_ title: String, close: @escaping () -> Void) -> some View {
-        HStack {
+    /// A panel header (title + optional expand + close) for the side panels.
+    private func panelHeader(_ title: String,
+                             expanded: Bool? = nil,
+                             onExpand: (() -> Void)? = nil,
+                             close: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
             Text(title)
                 .font(theme.titleFont(20, relativeTo: .title3))
                 .tracking(theme.titleTracking)
                 .textCase(theme.titleUppercase ? .uppercase : nil)
                 .foregroundStyle(theme.ink)
             Spacer()
+            if let expanded, let onExpand {
+                Button(action: onExpand) {
+                    Image(systemName: expanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(theme.inkSoft)
+                        .frame(width: 30, height: 30)
+                        .background(theme.paperSunk, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(expanded ? "Collapse" : "Expand")
+            }
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .semibold))
@@ -409,7 +435,9 @@ struct NoteListView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     navRow("All Notes", "tray.full", count: notes.count, target: .all)
                     navRow("Recent", "clock", count: recentCount, target: .recent)
-                    actionRow("Ask Parley", "sparkles", active: showingAsk) { withAnimation(.snappy) { showingAsk.toggle() } }
+                    actionRow("Ask Parley", "sparkles", active: showingAsk) {
+                        withAnimation(.snappy) { showingAsk.toggle(); if !showingAsk { askExpanded = false } }
+                    }
                     actionRow("Calendar", "calendar", active: showingMonthCalendar) { openCalendar() }
                     actionRow("Reminders", "checklist") { openReminders() }
 

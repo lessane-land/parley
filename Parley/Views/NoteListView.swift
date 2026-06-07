@@ -26,6 +26,7 @@ struct NoteListView: View {
 
     @State private var showingSettings = false
     @State private var showingToday = false
+    @State private var showingMonthCalendar = false
     @State private var showingAsk = false
 
     /// Tag rename: the tag being renamed + draft text.
@@ -92,6 +93,12 @@ struct NoteListView: View {
                     TagColorSheet(tag: tag, theme: theme)
                         .presentationDragIndicator(.visible)
                 }
+                // The big month calendar (iPad/Mac): full screen on iPad, a window on Mac.
+                #if os(iOS)
+                .fullScreenCover(isPresented: $showingMonthCalendar) { monthCalendar }
+                #else
+                .sheet(isPresented: $showingMonthCalendar) { monthCalendar }
+                #endif
                 .sheet(isPresented: $showingReminders) {
                     RemindersSheet(
                         theme: theme,
@@ -602,12 +609,30 @@ struct NoteListView: View {
     }
 
     private func openCalendar() {
+        // iPad/Mac get the big month grid; iPhone gets the agenda sheet.
+        if isRegular {
+            showingMonthCalendar = true
+            return
+        }
         showingToday = true
         loadingMeetings = true
         Task {
             meetings = await eventKit.upcomingMeetings()
             loadingMeetings = false
         }
+    }
+
+    /// The month-grid calendar (iPad/Mac), wired to open meetings/notes + add events.
+    private var monthCalendar: some View {
+        MonthCalendarView(
+            theme: theme,
+            notes: notes,
+            access: eventKit.calendarAccess,
+            onOpenMeeting: { meeting in showingMonthCalendar = false; openMeeting(meeting) },
+            onOpenNote: { note in showingMonthCalendar = false; path.append(note) },
+            loadMeetings: { start, end in await eventKit.meetings(from: start, to: end) },
+            onAddEvent: { draft in _ = await eventKit.addEvent(draft) }
+        )
     }
 
     private func openReminders() {

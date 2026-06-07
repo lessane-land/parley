@@ -73,6 +73,16 @@ final class EventKitService {
         }
     }
 
+    /// Timed meetings in an arbitrary date range (for the month calendar grid).
+    func meetings(from start: Date, to end: Date) async -> [Meeting] {
+        guard await ensureCalendarAccess() else { return [] }
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        return store.events(matching: predicate)
+            .filter { !$0.isAllDay }
+            .sorted { $0.startDate < $1.startDate }
+            .map(Meeting.init)
+    }
+
     // MARK: Reminders
 
     /// The title of the dedicated reminders list Parley owns. Action items the app

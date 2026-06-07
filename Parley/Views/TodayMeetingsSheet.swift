@@ -337,11 +337,6 @@ struct MonthCalendarView: View {
     private let weekHourHeight: CGFloat = 46
     private let dayHourHeight: CGFloat = 58
 
-    /// Shape for the accent (New event) buttons — square for Swiss/Neubrutalist.
-    private var accentButtonShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9)
-    }
-
     var body: some View {
         GeometryReader { geo in
             // The day panel rides alongside when there's room (always on Mac and
@@ -430,13 +425,11 @@ struct MonthCalendarView: View {
             Button { showingNewEvent = true } label: {
                 Label("New event", systemImage: "plus")
                     .font(theme.bodyFont(13).weight(.semibold))
+                    .foregroundStyle(theme.paper)
+                    .padding(.horizontal, 14).padding(.vertical, 9)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(theme.paper)
-            .padding(.horizontal, 14).padding(.vertical, 9)
-            .background(theme.accent, in: accentButtonShape)
-            .overlay(accentButtonShape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
-            .themeShadow(theme.shadow)
+            .moodCard(theme, fill: theme.accent)
             .fixedSize()
         }
         .padding(.horizontal, 22).padding(.top, 18).padding(.bottom, 14)
@@ -672,11 +665,8 @@ struct MonthCalendarView: View {
             .foregroundStyle(theme.accentInk)
             .padding(.horizontal, 7).padding(.vertical, 4)
             .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
-            .background(theme.accentTint)
             .overlay(alignment: .leading) { Rectangle().fill(theme.accent).frame(width: 3) }
-            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 6))
-            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 6)
-                .strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
+            .moodCard(theme, fill: theme.accentTint)
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 4)
@@ -705,13 +695,8 @@ struct MonthCalendarView: View {
             .foregroundStyle(fg)
             .padding(.horizontal, 7).padding(.vertical, 4)
             .frame(maxWidth: .infinity, minHeight: h, alignment: .topLeading)
-            .background(bg)
             .overlay(alignment: .leading) { Rectangle().fill(rail).frame(width: 3) }
-            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 6))
-            // Mood card edge (Neubrutalist gets its black border + hard shadow).
-            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 6)
-                .strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
-            .themeShadow(theme.shadow)
+            .moodCard(theme, fill: bg)   // app's card treatment: clean border + shadow
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 4)
@@ -953,7 +938,6 @@ private struct DayPanel: View {
                 section(notes.isEmpty ? "Quick note" : "Notes")
                 ForEach(notes) { note in noteRow(note) }
                 jotField
-                newNoteButton
                 footer
             }
             .padding(18)
@@ -973,18 +957,15 @@ private struct DayPanel: View {
     }
 
     private var newEventButton: some View {
-        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
-        return Button(action: onNewEvent) {
+        Button(action: onNewEvent) {
             Label("New event", systemImage: "plus")
                 .font(theme.bodyFont(13).weight(.semibold))
+                .foregroundStyle(theme.paper)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(theme.paper)
-        .background(theme.accent, in: shape)
-        .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
-        .themeShadow(theme.shadow)
+        .moodCard(theme, fill: theme.accent)
         .padding(.bottom, 16)
     }
 
@@ -1005,11 +986,9 @@ private struct DayPanel: View {
                 Image(systemName: "plus").font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(theme.paper)
                     .frame(width: 40, height: 40)
-                    .background(theme.accent, in: shape)
-                    .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
-                    .themeShadow(theme.shadow)
             }
             .buttonStyle(.plain)
+            .moodCard(theme, fill: theme.accent)
             .disabled(jot.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.top, 6)
@@ -1020,16 +999,6 @@ private struct DayPanel: View {
         guard !text.isEmpty else { return }
         onJotNote(text)
         jot = ""
-    }
-
-    private var newNoteButton: some View {
-        Button(action: onNewNote) {
-            Label("New note", systemImage: "square.and.pencil")
-                .font(theme.bodyFont(12.5).weight(.semibold))
-                .foregroundStyle(theme.accentInk)
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 8)
     }
 
     private func section(_ title: String) -> some View {
@@ -1057,10 +1026,7 @@ private struct DayPanel: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.paperRaised)
-        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 11))
-        .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 11)
-            .strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
+        .moodCard(theme, fill: theme.paperRaised)
         .padding(.bottom, 9)
     }
 
@@ -1099,18 +1065,21 @@ private struct DayPanel: View {
     @ViewBuilder
     private func prepArea(_ ev: Meeting) -> some View {
         let isOpen = expanded.contains(ev.id)
-        VStack(alignment: .leading, spacing: 8) {
+        let chip = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 7)
+        VStack(alignment: .leading, spacing: 9) {
             Divider().overlay(theme.line)
+            // A small accent "magic" chip — the on-device prep affordance.
             Button { togglePrep(ev) } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles").font(.system(size: 11))
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles").font(.system(size: 10))
                     Text(isOpen ? "Hide prep" : "Prep with Parley")
-                        .font(theme.bodyFont(11.5).weight(.semibold))
-                    Spacer(minLength: 0)
-                    Image(systemName: isOpen ? "chevron.up" : "chevron.down").font(.system(size: 9))
+                        .font(theme.bodyFont(11).weight(.semibold))
                 }
                 .foregroundStyle(theme.accentInk)
-                .contentShape(Rectangle())
+                .padding(.horizontal, 9).padding(.vertical, 5)
+                .background(theme.accentTint, in: chip)
+                .overlay(chip.strokeBorder(theme.accentLine, lineWidth: max(1, theme.borderWidth)))
+                .contentShape(chip)
             }
             .buttonStyle(.plain)
 
@@ -1225,21 +1194,24 @@ private struct DayPanel: View {
         }
     }
 
-    /// A day's note in the design's "quick note" style: an accent-tinted card with
-    /// a pencil tack (waveform for recordings). Tapping opens it.
+    /// A day's note. Typed notes read as the design's lime "quick note" box;
+    /// recordings read as a plain white card with a waveform — so the panel isn't
+    /// a wall of lime. Tapping opens the note.
     private func noteRow(_ note: Note) -> some View {
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
+        let isRecording = !note.transcript.isEmpty
+        let title = note.title.isEmpty ? (isRecording ? "Recording" : "Quick note") : note.title
         return Button { onOpenNote(note) } label: {
             HStack(alignment: .top, spacing: 9) {
-                Image(systemName: note.transcript.isEmpty ? "pencil" : "waveform")
+                Image(systemName: isRecording ? "waveform" : "pencil")
                     .font(.system(size: 12)).foregroundStyle(theme.accent).padding(.top, 1)
-                Text(note.title.isEmpty ? "New Note" : note.title)
-                    .font(theme.bodyFont(13)).foregroundStyle(theme.ink2)
+                Text(title)
+                    .font(theme.bodyFont(13)).foregroundStyle(isRecording ? theme.ink : theme.ink2)
                     .frame(maxWidth: .infinity, alignment: .leading).lineLimit(2)
             }
             .padding(.horizontal, 13).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.accentTint, in: shape)
+            .background(isRecording ? theme.paperRaised : theme.accentTint, in: shape)
             .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
         }
         .buttonStyle(.plain)

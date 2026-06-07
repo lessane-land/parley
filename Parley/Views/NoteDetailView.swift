@@ -1818,9 +1818,25 @@ struct RichTextEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         let parent: RichTextEditor
         weak var textView: UITextView?
+        private var saveWork: DispatchWorkItem?
         init(_ parent: RichTextEditor) { self.parent = parent }
 
-        func textViewDidChange(_ tv: UITextView) { push(tv) }
+        // Debounce persistence: RTF-encoding + a SwiftData write on every keystroke
+        // is what made typing janky. Save ~0.4s after the user pauses (and on blur).
+        func textViewDidChange(_ tv: UITextView) {
+            saveWork?.cancel()
+            let work = DispatchWorkItem { [weak self, weak tv] in
+                guard let self, let tv else { return }
+                self.push(tv)
+            }
+            saveWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+        }
+
+        func textViewDidEndEditing(_ tv: UITextView) {
+            saveWork?.cancel()
+            push(tv)
+        }
 
         /// Persist the current content as RTF + plain text.
         func push(_ tv: UITextView) {
@@ -1866,18 +1882,21 @@ struct RichTextEditor: UIViewRepresentable {
                 tv.typingAttributes[.font] = font(current, toggling: trait)
                 return
             }
-            let mutable = NSMutableAttributedString(attributedString: tv.attributedText)
-            // Turn the trait off only if *every* character already has it.
+            // Edit the text storage in place (keeps the selection; no jank from
+            // swapping the whole attributedText).
+            let ts = tv.textStorage
             var allOn = true
-            mutable.enumerateAttribute(.font, in: range) { value, _, _ in
+            ts.enumerateAttribute(.font, in: range) { value, _, _ in
                 let f = (value as? UIFont) ?? bodyFont
                 if !f.fontDescriptor.symbolicTraits.contains(trait) { allOn = false }
             }
-            mutable.enumerateAttribute(.font, in: range) { value, sub, _ in
+            ts.beginEditing()
+            ts.enumerateAttribute(.font, in: range) { value, sub, _ in
                 let f = (value as? UIFont) ?? bodyFont
-                mutable.addAttribute(.font, value: font(f, set: trait, on: !allOn), range: sub)
+                ts.addAttribute(.font, value: font(f, set: trait, on: !allOn), range: sub)
             }
-            applyMutated(mutable, to: tv, keeping: range)
+            ts.endEditing()
+            tv.selectedRange = range
         }
 
         private func font(_ f: UIFont, toggling trait: UIFontDescriptor.SymbolicTraits) -> UIFont {
@@ -1898,11 +1917,14 @@ struct RichTextEditor: UIViewRepresentable {
                 tv.typingAttributes[.font] = headerFont(bodyFont)
                 return
             }
-            let mutable = NSMutableAttributedString(attributedString: tv.attributedText)
-            let first = (mutable.attribute(.font, at: paraRange.location, effectiveRange: nil) as? UIFont)
+            let ts = tv.textStorage
+            let sel = tv.selectedRange
+            let first = (ts.attribute(.font, at: paraRange.location, effectiveRange: nil) as? UIFont)
             let isHeader = (first?.pointSize ?? bodyFont.pointSize) >= bodyFont.pointSize * 1.4
-            mutable.addAttribute(.font, value: isHeader ? bodyFont : headerFont(bodyFont), range: paraRange)
-            applyMutated(mutable, to: tv, keeping: tv.selectedRange)
+            ts.beginEditing()
+            ts.addAttribute(.font, value: isHeader ? bodyFont : headerFont(bodyFont), range: paraRange)
+            ts.endEditing()
+            tv.selectedRange = sel
         }
         private func headerFont(_ bodyFont: UIFont) -> UIFont {
             let size = bodyFont.pointSize * 1.5
@@ -1915,7 +1937,6 @@ struct RichTextEditor: UIViewRepresentable {
         private func toggleBullet(tv: UITextView, bodyFont: UIFont, textColor: UIColor) {
             let ns = tv.text as NSString
             let paraRange = ns.paragraphRange(for: tv.selectedRange)
-            let mutable = NSMutableAttributedString(attributedString: tv.attributedText)
             // Walk each line in the paragraph range, toggling a leading "• ".
             let block = ns.substring(with: paraRange)
             let lines = block.components(separatedBy: "\n")
@@ -1933,17 +1954,11 @@ struct RichTextEditor: UIViewRepresentable {
             }
             let replacement = NSAttributedString(string: rebuilt,
                                                  attributes: [.font: bodyFont, .foregroundColor: textColor])
-            mutable.replaceCharacters(in: paraRange, with: replacement)
-            applyMutated(mutable, to: tv, keeping: NSRange(location: paraRange.location, length: 0))
-        }
-
-        // MARK: Commit
-
-        private func applyMutated(_ mutable: NSMutableAttributedString, to tv: UITextView, keeping range: NSRange) {
-            tv.attributedText = mutable
-            let safe = NSRange(location: min(range.location, mutable.length),
-                               length: min(range.length, max(0, mutable.length - range.location)))
-            tv.selectedRange = safe
+            let ts = tv.textStorage
+            ts.beginEditing()
+            ts.replaceCharacters(in: paraRange, with: replacement)
+            ts.endEditing()
+            tv.selectedRange = NSRange(location: min(paraRange.location + rebuilt.utf16.count, ts.length), length: 0)
         }
     }
 }
@@ -2081,10 +2096,28 @@ struct RichTextEditor: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         let parent: RichTextEditor
+        private var saveWork: DispatchWorkItem?
         init(_ parent: RichTextEditor) { self.parent = parent }
 
+        // Debounce: RTF-encode + SwiftData write ~0.4s after a pause, not per key.
         func textDidChange(_ notification: Notification) {
-            guard let tv = notification.object as? NSTextView, let ts = tv.textStorage else { return }
+            guard let tv = notification.object as? NSTextView else { return }
+            saveWork?.cancel()
+            let work = DispatchWorkItem { [weak self, weak tv] in
+                guard let self, let tv else { return }
+                self.push(tv)
+            }
+            saveWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            saveWork?.cancel()
+            if let tv = notification.object as? NSTextView { push(tv) }
+        }
+
+        private func push(_ tv: NSTextView) {
+            guard let ts = tv.textStorage else { return }
             let rtf = ts.rtf(from: NSRange(location: 0, length: ts.length),
                              documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
             parent.onChange(ts.length == 0 ? nil : rtf, ts.string)

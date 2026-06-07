@@ -1177,16 +1177,17 @@ struct NoteDetailView: View {
     private func applyInitialFace() {
         // Base notes/transcript layout first.
         showTranscript = !note.transcript.isEmpty || backgroundRecordingThisNote
+        // Lead with the wrap-up whenever one exists (notes/transcript a tap back
+        // away); otherwise use the remembered view or the smart default.
+        if note.summaryData != nil {
+            showingSummary = true
+            return
+        }
         let face = UserDefaults.standard.string(forKey: faceKey) ?? smartDefaultFace
         switch face {
-        case "summary":
-            if note.summaryData != nil { showingSummary = true }   // push the summary
-        case "transcript":
-            showTranscript = true
-        case "notes":
-            showTranscript = false
-        default:
-            break
+        case "transcript": showTranscript = true
+        case "notes": showTranscript = false
+        default: break
         }
     }
 
@@ -1313,8 +1314,11 @@ struct NoteDetailView: View {
     /// Settings ▸ AI ▸ Auto-summarize is on — so it's ready when the user opens it.
     private func autoSummarizeIfEnabled() async {
         guard themeManager.autoSummarize, !note.transcript.isEmpty else { return }
+        let speakers = Set(note.transcriptSegments.compactMap(\.speaker).filter { !$0.isEmpty })
+        let isMeeting = speakers.count >= 2 || note.attendees.count >= 2
         let result = await summaryService.summarize(
             notes: await combinedNotesText(), transcript: note.transcript, attendees: note.attendees,
+            isMeeting: isMeeting,
             tone: themeManager.summaryTone,
             includeDecisions: themeManager.extractDecisions,
             includeActionItems: themeManager.extractActionItems,

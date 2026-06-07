@@ -302,6 +302,9 @@ struct MonthCalendarView: View {
     var onAddEvent: (EventDraft) async -> Void
     /// Create a fresh note dated to a given day (the day panel's "New note").
     var onCreateNote: ((Date) -> Void)? = nil
+    /// Jot a quick note for a day — created in place (no navigation), so it shows
+    /// up on the calendar immediately (the day panel's "Quick note").
+    var onJotNote: ((Date, String) -> Void)? = nil
     /// Load incomplete reminders due in a window (across all the user's lists).
     var loadReminders: (Date, Date) async -> [ReminderItem] = { _, _ in [] }
     /// Mark a reminder complete / incomplete.
@@ -328,9 +331,12 @@ struct MonthCalendarView: View {
     private let cal = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
 
-    /// Visible time window for the week/day grids.
-    private let dayStartHour = 8
-    private let dayEndHour = 20
+    /// The week/day grids cover the whole day and scroll; they open scrolled to
+    /// the morning (or just before the first event), so nothing is ever cut off.
+    private let dayStartHour = 0
+    private let dayEndHour = 24
+    private let weekHourHeight: CGFloat = 46
+    private let dayHourHeight: CGFloat = 58
 
     var body: some View {
         GeometryReader { geo in
@@ -351,6 +357,7 @@ struct MonthCalendarView: View {
                              onNewEvent: { showingNewEvent = true },
                              onOpenMeeting: onOpenMeeting, onOpenNote: onOpenNote,
                              onNewNote: { onCreateNote?(selected) },
+                             onJotNote: { text in onJotNote?(selected, text) },
                              onToggleReminder: { id, done in
                                  await onToggleReminder(id, done)
                                  await reloadReminders()
@@ -549,34 +556,39 @@ struct MonthCalendarView: View {
             }
             .padding(.trailing, 14)
             Divider().overlay(theme.line)
-            // Fill the remaining height like the design: the hour rows stretch to
-            // fit the pane (scrolls only if it gets very short).
-            GeometryReader { geo in
-                let hourH = max(38, geo.size.height / CGFloat(dayEndHour - dayStartHour))
+            ScrollViewReader { proxy in
                 ScrollView {
                     HStack(alignment: .top, spacing: 0) {
-                        timeGutter(hourHeight: hourH)
-                        ForEach(days, id: \.self) { d in timeColumn(d, hourHeight: hourH) }
+                        timeGutter(hourHeight: weekHourHeight)
+                        ForEach(days, id: \.self) { d in timeColumn(d, hourHeight: weekHourHeight) }
                     }
                     .padding(.trailing, 14)
                 }
+                .onAppear { proxy.scrollTo("h-\(defaultScrollHour)", anchor: .top) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var dayGrid: some View {
-        GeometryReader { geo in
-            let hourH = max(52, geo.size.height / CGFloat(dayEndHour - dayStartHour))
+        ScrollViewReader { proxy in
             ScrollView {
                 HStack(alignment: .top, spacing: 0) {
-                    timeGutter(hourHeight: hourH)
-                    timeColumn(selected, hourHeight: hourH)
+                    timeGutter(hourHeight: dayHourHeight)
+                    timeColumn(selected, hourHeight: dayHourHeight)
                 }
                 .padding(.trailing, 16)
             }
+            .onAppear { proxy.scrollTo("h-\(defaultScrollHour)", anchor: .top) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// Open the timeline scrolled to ~1h before the earliest event in view (else
+    /// 7am), so the morning is visible without hiding an early meeting.
+    private var defaultScrollHour: Int {
+        let hours = meetings.map { cal.component(.hour, from: $0.start) }
+        return max(0, (hours.min() ?? 8) - 1)
     }
 
     private func weekHeaderCell(_ d: Date) -> some View {
@@ -613,6 +625,7 @@ struct MonthCalendarView: View {
                     .padding(.trailing, 9)
                     .frame(height: hourHeight, alignment: .top)
                     .offset(y: -6)
+                    .id("h-\(h)")
             }
         }
         .frame(width: 58)
@@ -629,10 +642,40 @@ struct MonthCalendarView: View {
                 }
             }
             ForEach(eventsOn(day)) { ev in eventBlock(ev, hourHeight: hourHeight) }
+            ForEach(notesOn(day)) { note in noteBlock(note, hourHeight: hourHeight) }
         }
         .frame(maxWidth: .infinity, minHeight: total, alignment: .topLeading)
         .background(isSel ? theme.paperSunk : .clear)   // selected column shaded (design)
         .overlay(alignment: .leading) { Divider().overlay(theme.line.opacity(0.5)) }
+    }
+
+    /// A note placed on the timeline at the time it was made (or its meeting time),
+    /// so notes are directly visible in week/day — pencil for typed, waveform for
+    /// recorded. Tapping opens the note.
+    private func noteBlock(_ note: Note, hourHeight: CGFloat) -> some View {
+        let when = note.startDate ?? note.createdAt
+        let pxPerMin = hourHeight / 60
+        let top = CGFloat(minutesFromDayStart(when)) * pxPerMin
+        return Button { onOpenNote(note) } label: {
+            HStack(spacing: 5) {
+                Image(systemName: note.transcript.isEmpty ? "pencil" : "waveform")
+                    .font(.system(size: 10))
+                Text(note.title.isEmpty ? "New Note" : note.title)
+                    .font(theme.bodyFont(11.5).weight(.semibold)).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(theme.accentInk)
+            .padding(.horizontal, 7).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+            .background(theme.accentTint)
+            .overlay(alignment: .leading) { Rectangle().fill(theme.accent).frame(width: 3) }
+            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 6))
+            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 6)
+                .strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 4)
+        .offset(y: top)
     }
 
     private func eventBlock(_ ev: Meeting, hourHeight: CGFloat) -> some View {
@@ -727,10 +770,10 @@ struct MonthCalendarView: View {
         let m = cal.component(.minute, from: date)
         return max(0, (h - dayStartHour) * 60 + m)
     }
+    /// Hour label that follows the system's 12/24-hour setting ("8 AM" or "20").
     private func hourLabel(_ h: Int) -> String {
-        let ap = h < 12 ? "am" : "pm"
-        let hr = h % 12 == 0 ? 12 : h % 12
-        return "\(hr)\(ap)"
+        let date = cal.date(from: DateComponents(year: 2000, month: 1, day: 1, hour: h)) ?? Date()
+        return date.formatted(.dateTime.hour())
     }
     private func timeText(_ d: Date) -> String {
         d.formatted(.dateTime.hour().minute())
@@ -856,12 +899,15 @@ private struct DayPanel: View {
     var onOpenMeeting: (Meeting) -> Void
     var onOpenNote: (Note) -> Void
     var onNewNote: () -> Void
+    var onJotNote: (String) -> Void
     var onToggleReminder: (String, Bool) async -> Void
     var onAddReminder: (ReminderDraft) async -> Void
     var generatePrep: (Meeting, [Note], [String]) async -> MeetingPrep?
 
     private let cal = Calendar.current
 
+    /// The quick-note jot field.
+    @State private var jot = ""
     /// Per-event prep: which cards are expanded, and the result/loading state.
     @State private var expanded: Set<String> = []
     @State private var prep: [String: PrepState] = [:]
@@ -899,13 +945,9 @@ private struct DayPanel: View {
                     ForEach(reminders) { r in reminderRow(r) }
                 }
 
-                section("Notes")
-                if notes.isEmpty {
-                    Text("No notes on this day.")
-                        .font(theme.bodyFont(13)).italic().foregroundStyle(theme.inkFaint)
-                        .padding(.bottom, 8)
-                }
+                section(notes.isEmpty ? "Quick note" : "Notes")
                 ForEach(notes) { note in noteRow(note) }
+                jotField
                 newNoteButton
                 footer
             }
@@ -938,6 +980,38 @@ private struct DayPanel: View {
         .padding(.bottom, 16)
     }
 
+    /// The design's quick-note jotter: type a line and it becomes a note for this
+    /// day, in place (the calendar updates immediately).
+    private var jotField: some View {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
+        return HStack(spacing: 8) {
+            TextField("Jot a note for \(day.formatted(.dateTime.month(.abbreviated).day()))…", text: $jot)
+                .textFieldStyle(.plain)
+                .font(theme.bodyFont(13))
+                .foregroundStyle(theme.ink)
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .background(theme.paperRaised, in: shape)
+                .overlay(shape.strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
+                .onSubmit(submitJot)
+            Button(action: submitJot) {
+                Image(systemName: "plus").font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(theme.paper)
+                    .frame(width: 40, height: 40)
+                    .background(theme.accent, in: shape)
+            }
+            .buttonStyle(.plain)
+            .disabled(jot.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(.top, 6)
+    }
+
+    private func submitJot() {
+        let text = jot.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        onJotNote(text)
+        jot = ""
+    }
+
     private var newNoteButton: some View {
         Button(action: onNewNote) {
             Label("New note", systemImage: "square.and.pencil")
@@ -945,7 +1019,7 @@ private struct DayPanel: View {
                 .foregroundStyle(theme.accentInk)
         }
         .buttonStyle(.plain)
-        .padding(.top, 4)
+        .padding(.top, 8)
     }
 
     private func section(_ title: String) -> some View {

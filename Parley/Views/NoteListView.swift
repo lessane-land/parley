@@ -645,6 +645,16 @@ struct NoteListView: View {
         path.append(note)
     }
 
+    /// Quick-jot a note for a day from the calendar's day panel: created in place
+    /// (no navigation) so it appears on the calendar right away. We anchor it to
+    /// midday so it lands inside the visible timeline rather than at midnight.
+    private func jotNote(on day: Date, text: String) {
+        let cal = Calendar.current
+        let when = cal.date(bySettingHour: 12, minute: 0, second: 0, of: day) ?? day
+        let note = Note(title: text, startDate: when)
+        context.insert(note)
+    }
+
     private func createAndRecord() {
         let note = Note(title: "New recording")
         context.insert(note)
@@ -679,6 +689,7 @@ struct NoteListView: View {
             loadMeetings: { start, end in await eventKit.meetings(from: start, to: end) },
             onAddEvent: { draft in _ = await eventKit.addEvent(draft) },
             onCreateNote: { day in createNote(on: day) },
+            onJotNote: { day, text in jotNote(on: day, text: text) },
             loadReminders: { start, end in await eventKit.reminders(from: start, to: end) },
             onToggleReminder: { id, done in await eventKit.setReminderCompleted(id: id, completed: done) },
             onAddReminder: { draft in _ = await eventKit.addReminders([draft]) },

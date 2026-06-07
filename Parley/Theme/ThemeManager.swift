@@ -202,11 +202,12 @@ enum SummaryTone: String, CaseIterable, Identifiable {
 /// Dashboard note-card size. Drives the grid's column width and each card's height
 /// so the user can make cards smaller or larger.
 enum CardSize: String, CaseIterable, Identifiable {
-    case compact, regular, large
+    case dense, compact, regular, large
     var id: String { rawValue }
 
     var name: String {
         switch self {
+        case .dense:   "Dense"
         case .compact: "Small"
         case .regular: "Medium"
         case .large:   "Large"
@@ -216,15 +217,18 @@ enum CardSize: String, CaseIterable, Identifiable {
     /// SF Symbol for the size control.
     var icon: String {
         switch self {
+        case .dense:   "square.grid.4x3.fill"
         case .compact: "square.grid.3x3"
         case .regular: "square.grid.2x2"
         case .large:   "square"
         }
     }
 
-    /// Minimum grid column width (adaptive columns).
+    /// Minimum grid column width (adaptive columns). 150 packs two columns on a
+    /// phone — handy when you have hundreds of notes.
     var columnMin: CGFloat {
         switch self {
+        case .dense:   150
         case .compact: 190
         case .regular: 240
         case .large:   300
@@ -234,6 +238,7 @@ enum CardSize: String, CaseIterable, Identifiable {
     /// Standard card height.
     var cardHeight: CGFloat {
         switch self {
+        case .dense:   120
         case .compact: 150
         case .regular: 188
         case .large:   240
@@ -243,9 +248,13 @@ enum CardSize: String, CaseIterable, Identifiable {
     /// Pinned ("feature") card height — a bit taller.
     var featureHeight: CGFloat {
         switch self {
+        case .dense:   150
         case .compact: 170
         case .regular: 210
         case .large:   270
         }
     }
+
+    /// At the densest size the card drops its snippet to stay readable.
+    var showsSnippet: Bool { self != .dense }
 }

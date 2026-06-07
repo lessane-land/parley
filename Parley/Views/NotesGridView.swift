@@ -12,6 +12,17 @@ struct NotesGridView: View {
     let onTogglePin: (Note) -> Void
 
     @Environment(ThemeManager.self) private var themeManager
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSize
+    #endif
+
+    private var isCompact: Bool {
+        #if os(iOS)
+        return hSize == .compact
+        #else
+        return false
+        #endif
+    }
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: themeManager.cardSize.columnMin), spacing: 14)]
@@ -24,7 +35,7 @@ struct NotesGridView: View {
     var body: some View {
         @Bindable var manager = themeManager
         return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: isCompact ? 12 : 16) {
                 dashboardHeader(manager)
 
                 if notes.isEmpty {
@@ -47,7 +58,7 @@ struct NotesGridView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(isCompact ? 16 : 20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .moodPaper(theme)
@@ -58,7 +69,7 @@ struct NotesGridView: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(theme.titleFont(30, relativeTo: .largeTitle))
+                    .font(theme.titleFont(isCompact ? 24 : 30, relativeTo: .largeTitle))
                     .tracking(theme.titleTracking)
                     .textCase(theme.titleUppercase ? .uppercase : nil)
                     .foregroundStyle(theme.ink)

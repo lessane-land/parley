@@ -42,6 +42,7 @@
 		0000000000000000000000D2 /* SummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000D1 /* SummaryService.swift */; };
 		0000000000000000000000D4 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000D3 /* SummaryView.swift */; };
 		0000000000000000000000E2 /* SyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000E1 /* SyncMonitor.swift */; };
+		000000000000000000000702 /* RecordingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000701 /* RecordingActivity.swift */; };
 		0000000000000000000000F2 /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F1 /* Tag.swift */; };
 		0000000000000000000000F4 /* NotesGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F3 /* NotesGridView.swift */; };
 		0000000000000000000000FB /* MeetingPrepService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000FA /* MeetingPrepService.swift */; };
@@ -96,6 +97,7 @@
 		0000000000000000000000D1 /* SummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryService.swift; sourceTree = "<group>"; };
 		0000000000000000000000D3 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		0000000000000000000000E1 /* SyncMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMonitor.swift; sourceTree = "<group>"; };
+		000000000000000000000701 /* RecordingActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingActivity.swift; sourceTree = "<group>"; };
 		0000000000000000000000F1 /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
 		0000000000000000000000F3 /* NotesGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesGridView.swift; sourceTree = "<group>"; };
 		0000000000000000000000FA /* MeetingPrepService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPrepService.swift; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				00000000000000000000001C /* ParleyApp.swift */,
+				000000000000000000000701 /* RecordingActivity.swift */,
 				000000000000000000000005 /* Models */,
 				000000000000000000000006 /* Views */,
 				0000000000000000000000B0 /* Services */,
@@ -336,6 +339,7 @@
 			files = (
 				00000000000000000000001D /* ParleyApp.swift in Sources */,
 				00000000000000000000001F /* Note.swift in Sources */,
+				000000000000000000000702 /* RecordingActivity.swift in Sources */,
 				0000000000000000000000F2 /* Tag.swift in Sources */,
 				000000000000000000000021 /* AppFonts.swift in Sources */,
 				000000000000000000000023 /* Color+Hex.swift in Sources */,
@@ -501,6 +505,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";
@@ -552,6 +557,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";

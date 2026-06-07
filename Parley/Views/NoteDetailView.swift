@@ -1373,7 +1373,8 @@ struct NoteDetailView: View {
                     seed: note.transcript,
                     seedSegments: seedSegments,
                     preferredLanguage: themeManager.transcriptionLanguage,
-                    captureSystemAudio: captureSystem
+                    captureSystemAudio: captureSystem,
+                    noteTitle: note.title
                 )
             }
         }

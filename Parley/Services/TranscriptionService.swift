@@ -2,6 +2,9 @@ import Foundation
 @preconcurrency import AVFoundation
 import Speech
 import SwiftData
+#if canImport(ActivityKit)
+import ActivityKit   // Live Activity: Lock Screen + Dynamic Island recording indicator
+#endif
 #if os(macOS)
 @preconcurrency import ScreenCaptureKit   // system-audio capture (the meeting's far side)
 #endif
@@ -81,6 +84,9 @@ final class TranscriptionService {
     /// recording resumes instead of dying silently.
     private var interruptionObserver: NSObjectProtocol?
     #endif
+    #if canImport(ActivityKit) && os(iOS)
+    private var liveActivity: Activity<RecordingActivityAttributes>?
+    #endif
 
     // Diarization: the session audio is recorded to a temp file and, on stop,
     // diarized offline to assign speakers. Kept around `stop()` so the post-stop
@@ -101,7 +107,7 @@ final class TranscriptionService {
     /// append rather than overwrite. `preferredLanguage` is a language code
     /// ("es") to force, or `nil` for Automatic.
     func start(seed: String, seedSegments: [TranscriptSegment] = [], preferredLanguage: String? = nil,
-               captureSystemAudio: Bool = false) async {
+               captureSystemAudio: Bool = false, noteTitle: String = "") async {
         guard state == .idle || isError else { return }
         finalizedText = seed
         finalizedSegments = seedSegments
@@ -183,6 +189,9 @@ final class TranscriptionService {
             startedAt = Date()
             diarSessionStart = startedAt
             state = .recording
+            #if canImport(ActivityKit) && os(iOS)
+            startLiveActivity(title: noteTitle, at: startedAt ?? Date())
+            #endif
         } catch {
             state = .unavailable(error.localizedDescription)
             await teardown()
@@ -218,6 +227,9 @@ final class TranscriptionService {
             self.interruptionObserver = nil
         }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
+        #if canImport(ActivityKit) && os(iOS)
+        endLiveActivity()
         #endif
 
         await teardown()
@@ -312,6 +324,24 @@ final class TranscriptionService {
         @unknown default:
             break
         }
+    }
+    #endif
+
+    #if canImport(ActivityKit) && os(iOS)
+    /// Start a Live Activity so the recording shows on the Lock Screen and in the
+    /// Dynamic Island while the app is backgrounded. No-op if the user disabled
+    /// Live Activities or the widget extension isn't present yet.
+    private func startLiveActivity(title: String, at start: Date) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let attrs = RecordingActivityAttributes(noteTitle: title.isEmpty ? "New recording" : title, startedAt: start)
+        let content = ActivityContent(state: .init(status: "Recording"), staleDate: nil)
+        liveActivity = try? Activity.request(attributes: attrs, content: content)
+    }
+
+    private func endLiveActivity() {
+        let act = liveActivity
+        liveActivity = nil
+        Task { await act?.end(nil, dismissalPolicy: .immediate) }
     }
     #endif
 

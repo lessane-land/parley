@@ -287,7 +287,9 @@ struct NoteListView: View {
             Rectangle().fill(Color.clear).frame(width: 12).contentShape(Rectangle())
         }
         .gesture(
-            DragGesture(minimumDistance: 1)
+            // Measure in GLOBAL space: the handle moves as the width changes, so a
+            // local translation would shift under the gesture and jitter.
+            DragGesture(minimumDistance: 1, coordinateSpace: .global)
                 .onChanged { value in
                     let base = askDragBase ?? askWidth
                     askDragBase = base

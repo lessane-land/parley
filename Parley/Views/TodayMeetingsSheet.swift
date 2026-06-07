@@ -541,18 +541,23 @@ struct MonthCalendarView: View {
         .background(bg, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 5))
     }
 
-    /// A note in a month cell — pencil (typed) / waveform (recording) + title, on a
-    /// soft accent tint so it reads distinctly from events.
+    /// A note in a month cell — built exactly like the design's chip (time prefix +
+    /// title + a trailing glyph), on the accent tint so notes read like Parley's
+    /// own content. Mirrors `monthChip` so the two are visually consistent.
     private func monthNoteChip(_ note: Note) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: note.transcript.isEmpty ? "pencil" : "waveform")
-                .font(.system(size: 8)).foregroundStyle(theme.accent)
+        let when = note.startDate ?? note.createdAt
+        return HStack(spacing: 5) {
+            Text(when, format: .dateTime.hour().minute())
+                .font(theme.monoFont(9.5)).foregroundStyle(theme.accent)
             Text(note.title.isEmpty ? "Note" : note.title)
-                .font(theme.bodyFont(11)).foregroundStyle(theme.ink2).lineLimit(1)
+                .font(theme.bodyFont(11)).lineLimit(1)
+            Image(systemName: note.transcript.isEmpty ? "pencil" : "waveform")
+                .font(.system(size: 8)).opacity(0.6)
         }
+        .foregroundStyle(theme.accentInk)
         .padding(.horizontal, 6).padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.accentTint.opacity(0.6), in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 5))
+        .background(theme.accentTint, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 5))
     }
 
     // MARK: Week / Day time grids

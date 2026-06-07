@@ -113,6 +113,9 @@ struct NoteDetailView: View {
 
     /// Delete-this-note confirmation.
     @State private var showDeleteNote = false
+    /// Create a new event / reminder from this note.
+    @State private var showNewEvent = false
+    @State private var showNewReminder = false
 
     private var theme: Theme { themeManager.theme }
     private var density: Density { themeManager.density }
@@ -174,6 +177,18 @@ struct NoteDetailView: View {
         }
         .fileImporter(isPresented: $importingFile, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
+        }
+        // Create a new event / reminder straight from the note (prefilled with its
+        // title) — not only via the summary.
+        .sheet(isPresented: $showNewEvent) {
+            NewEventSheet(theme: theme, day: note.startDate ?? Date(), prefillTitle: note.title) { draft in
+                await createEvent(draft)
+            }
+        }
+        .sheet(isPresented: $showNewReminder) {
+            NewReminderSheet(theme: theme, prefillTitle: note.title) { draft in
+                _ = await eventKit.addReminders([draft])
+            }
         }
         .sheet(item: $activeSheet) { which in
             switch which {
@@ -575,7 +590,7 @@ struct NoteDetailView: View {
             .tint(theme.accent)
 
             Button { showingSummary = true } label: {
-                Label("Summarize", systemImage: "sparkles")
+                Label("Wrap-up", systemImage: "sparkles")
                     .font(.subheadline.weight(.semibold))
             }
             .buttonStyle(.borderedProminent)
@@ -698,8 +713,11 @@ struct NoteDetailView: View {
     /// within the detail (no need to go back to the list) and pops back.
     private var noteMenu: some View {
         Menu {
-            Button { addNoteToCalendar() } label: {
-                Label("Add to Calendar", systemImage: "calendar.badge.plus")
+            Button { showNewEvent = true } label: {
+                Label("New Event", systemImage: "calendar.badge.plus")
+            }
+            Button { showNewReminder = true } label: {
+                Label("New Reminder", systemImage: "checklist")
             }
             Divider()
             Button(role: .destructive) { showDeleteNote = true } label: {
@@ -715,7 +733,8 @@ struct NoteDetailView: View {
         Menu {
             Button { showPhotoPicker = true } label: { Label("Add Photo", systemImage: "photo") }
             Button { importingFile = true } label: { Label("Add File", systemImage: "doc") }
-            Button { addNoteToCalendar() } label: { Label("Add to Calendar", systemImage: "calendar.badge.plus") }
+            Button { showNewEvent = true } label: { Label("New Event", systemImage: "calendar.badge.plus") }
+            Button { showNewReminder = true } label: { Label("New Reminder", systemImage: "checklist") }
             Divider()
             Button(role: .destructive) { showDeleteNote = true } label: {
                 Label("Delete Note", systemImage: "trash")
@@ -725,19 +744,11 @@ struct NoteDetailView: View {
         }
     }
 
-    /// Create a calendar event from this note (its time if it has one, else the next
-    /// hour) and link it back so we don't duplicate it.
-    private func addNoteToCalendar() {
-        let start = note.startDate ?? Date().addingTimeInterval(3600)
-        let end = note.endDate ?? start.addingTimeInterval(3600)
-        let title = note.title.isEmpty ? "New event" : note.title
-        Task {
-            if let meeting = await eventKit.addEvent(
-                EventDraft(title: title, start: start, end: end,
-                           notes: note.body.isEmpty ? nil : note.body)) {
-                note.calendarEventID = meeting.id
-                if note.startDate == nil { note.startDate = meeting.start; note.endDate = meeting.end }
-            }
+    /// Save the event the user composed and link it back to the note.
+    private func createEvent(_ draft: EventDraft) async {
+        if let meeting = await eventKit.addEvent(draft) {
+            note.calendarEventID = meeting.id
+            if note.startDate == nil { note.startDate = meeting.start; note.endDate = meeting.end }
         }
     }
 

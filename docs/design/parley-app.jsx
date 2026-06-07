@@ -165,6 +165,7 @@ function PkRoot() {
 
         <DCSection id="companions" title="Companion screens" subtitle="Where the live screen lives — before and after the meeting. Home now carries the on-device “Ask Parley” chat; Settings slides in from the right.">
           <DCArtboard id="home" label="Home · All notes + Ask Parley" width={1194} height={834}><PkHome /></DCArtboard>
+          <DCArtboard id="calendar" label="Calendar · Month / Week / Day" width={1194} height={834}><PkCalendar /></DCArtboard>
           <DCArtboard id="summary" label="Post-meeting summary" width={1194} height={834}><PkSummary /></DCArtboard>
           <DCArtboard id="settings" label="Settings · slide-over" width={1194} height={834}><PkSettingsScene /></DCArtboard>
         </DCSection>

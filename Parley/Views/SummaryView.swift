@@ -35,7 +35,7 @@ struct SummaryView: View {
     var body: some View {
         content
             .background(theme.paperSunk)
-            .navigationTitle("Summary")
+            .navigationTitle("Wrap-up")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -66,13 +66,13 @@ struct SummaryView: View {
             centered {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text("Summarizing on device…")
+                    Text("Wrapping up on device…")
                         .font(theme.bodyFont(14))
                         .foregroundStyle(theme.inkSoft)
                 }
             }
         case .unavailable(let reason):
-            message("Summary unavailable", reason, "sparkles.slash")
+            message("Wrap-up unavailable", reason, "sparkles.slash")
         case .idle:
             if let summary {
                 summaryBody(summary)
@@ -88,13 +88,13 @@ struct SummaryView: View {
             Text("Granola magic")
                 .font(theme.titleFont(20, relativeTo: .title3))
                 .foregroundStyle(theme.ink)
-            Text("Merge your notes and the transcript into a structured summary — decisions, action items, and open questions — entirely on device.")
+            Text("Merge your notes and the transcript into a structured wrap-up — decisions, action items, and open questions — entirely on device.")
                 .font(theme.bodyFont(14))
                 .foregroundStyle(theme.inkSoft)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 320)
             Button { Task { await generate() } } label: {
-                Label("Generate summary", systemImage: "sparkles")
+                Label("Generate wrap-up", systemImage: "sparkles")
                     .font(.headline)
                     .padding(.horizontal, 18).padding(.vertical, 10)
             }
@@ -142,7 +142,7 @@ struct SummaryView: View {
             }
             .font(theme.monoFont(11))
             .foregroundStyle(theme.inkFaint)
-            Label("Summarized on device", systemImage: "sparkles")
+            Label("Wrapped up on device", systemImage: "sparkles")
                 .font(theme.monoFont(10, relativeTo: .caption2))
                 .foregroundStyle(theme.accentInk)
                 .padding(.horizontal, 9).padding(.vertical, 4)
@@ -156,7 +156,7 @@ struct SummaryView: View {
     private func docColumn(_ summary: MeetingSummary) -> some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Summary", systemImage: "sparkles")
+                Label("Wrap-up", systemImage: "sparkles")
                     .font(theme.monoFont(11)).tracking(1.4).foregroundStyle(theme.accentInk)
                 if !summary.overview.isEmpty {
                     Text(summary.overview)
@@ -413,7 +413,7 @@ struct SummaryView: View {
     }
 
     private func shareText(_ summary: MeetingSummary) -> String {
-        var lines: [String] = [note.title.isEmpty ? "Summary" : note.title, ""]
+        var lines: [String] = [note.title.isEmpty ? "Wrap-up" : note.title, ""]
         if !summary.overview.isEmpty { lines.append(summary.overview); lines.append("") }
         if !summary.decisions.isEmpty {
             lines.append("DECISIONS")
@@ -531,7 +531,7 @@ struct ChatView: View {
     @State private var input = ""
     @State private var didStart = false
 
-    private let suggestions = ["Open action items", "What's still undecided?", "Summarize this week"]
+    private let suggestions = ["Open action items", "What's still undecided?", "Wrap up this week"]
 
     var body: some View {
         VStack(spacing: 0) {

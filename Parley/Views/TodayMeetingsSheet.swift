@@ -74,8 +74,11 @@ struct CalendarSheet: View {
     let access: EventKitService.Access
     let isLoading: Bool
     let onPick: (Meeting) -> Void
+    /// Create a calendar event (nil hides the + button).
+    var onAddEvent: ((EventDraft) async -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @State private var showingNewEvent = false
 
     private struct DayGroup: Identifiable {
         let id: Date
@@ -97,7 +100,16 @@ struct CalendarSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 #endif
                 .toolbar {
+                    if onAddEvent != nil {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button { showingNewEvent = true } label: { Image(systemName: "plus") }
+                                .accessibilityLabel("New Event")
+                        }
+                    }
                     ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                }
+                .sheet(isPresented: $showingNewEvent) {
+                    NewEventSheet(theme: theme) { draft in await onAddEvent?(draft) }
                 }
         }
     }
@@ -185,5 +197,59 @@ private struct MeetingRow: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .moodCard(theme)
+    }
+}
+
+/// A small form to create a calendar event (title + start/end). Used by the
+/// Calendar sheet's "+" button.
+private struct NewEventSheet: View {
+    let theme: Theme
+    var onSave: (EventDraft) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var start = NewEventSheet.nextHour()
+    @State private var end = NewEventSheet.nextHour().addingTimeInterval(3600)
+    @State private var saving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Title", text: $title)
+                DatePicker("Starts", selection: $start)
+                DatePicker("Ends", selection: $end, in: start...)
+            }
+            .formStyle(.grouped)
+            .tint(theme.accent)
+            .navigationTitle("New Event")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        saving = true
+                        let draft = EventDraft(title: title, start: start,
+                                               end: max(end, start.addingTimeInterval(900)))
+                        Task { await onSave(draft); dismiss() }
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || saving)
+                }
+            }
+            .onChange(of: start) { _, newStart in
+                if end <= newStart { end = newStart.addingTimeInterval(3600) }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 380, minHeight: 240)
+        #endif
+    }
+
+    /// The next whole hour — a sensible default start.
+    static func nextHour() -> Date {
+        let cal = Calendar.current
+        let soon = Date().addingTimeInterval(3600)
+        return cal.date(from: cal.dateComponents([.year, .month, .day, .hour], from: soon)) ?? soon
     }
 }

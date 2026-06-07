@@ -80,7 +80,11 @@ struct NoteListView: View {
                         meetings: meetings,
                         access: eventKit.calendarAccess,
                         isLoading: loadingMeetings,
-                        onPick: openMeeting
+                        onPick: openMeeting,
+                        onAddEvent: { draft in
+                            _ = await eventKit.addEvent(draft)
+                            meetings = await eventKit.upcomingMeetings()
+                        }
                     )
                     .presentationDragIndicator(.visible)
                 }

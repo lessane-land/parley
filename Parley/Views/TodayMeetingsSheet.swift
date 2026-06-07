@@ -202,19 +202,21 @@ private struct MeetingRow: View {
 
 /// A small form to create a calendar event (title + start/end). Used by the
 /// Calendar sheet's "+" button.
-private struct NewEventSheet: View {
+struct NewEventSheet: View {
     let theme: Theme
     var onSave: (EventDraft) async -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
+    @State private var title: String
     @State private var start: Date
     @State private var end: Date
     @State private var saving = false
 
-    init(theme: Theme, day: Date = Date(), onSave: @escaping (EventDraft) async -> Void) {
+    init(theme: Theme, day: Date = Date(), prefillTitle: String = "",
+         onSave: @escaping (EventDraft) async -> Void) {
         self.theme = theme
         self.onSave = onSave
+        _title = State(initialValue: prefillTitle)
         let base = NewEventSheet.startTime(on: day)
         _start = State(initialValue: base)
         _end = State(initialValue: base.addingTimeInterval(3600))
@@ -484,5 +486,53 @@ struct MonthCalendarView: View {
     static func startOfMonth(_ date: Date) -> Date {
         let cal = Calendar.current
         return cal.date(from: cal.dateComponents([.year, .month], from: date)) ?? date
+    }
+}
+
+/// A small form to create a reminder (title + optional due date). Used from a note.
+struct NewReminderSheet: View {
+    let theme: Theme
+    var onSave: (ReminderDraft) async -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var hasDue = false
+    @State private var due = NewEventSheet.nextHour()
+    @State private var saving = false
+
+    init(theme: Theme, prefillTitle: String = "", onSave: @escaping (ReminderDraft) async -> Void) {
+        self.theme = theme
+        self.onSave = onSave
+        _title = State(initialValue: prefillTitle)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Reminder", text: $title)
+                Toggle("Due date", isOn: $hasDue.animation())
+                if hasDue { DatePicker("Due", selection: $due) }
+            }
+            .formStyle(.grouped)
+            .tint(theme.accent)
+            .navigationTitle("New Reminder")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        saving = true
+                        let draft = ReminderDraft(title: title, due: hasDue ? due : nil)
+                        Task { await onSave(draft); dismiss() }
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || saving)
+                }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 360, minHeight: 200)
+        #endif
     }
 }

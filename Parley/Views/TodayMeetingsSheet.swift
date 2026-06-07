@@ -473,12 +473,8 @@ struct MonthCalendarView: View {
         let isToday = cal.isDateInToday(day)
         let isSelected = cal.isDate(day, inSameDayAs: selected)
         let evs = eventsOn(day)
-        let nts = notesOn(day)
+        let hasNote = !notesOn(day).isEmpty
         let hasReminder = !remindersOn(day).isEmpty
-        let maxChips = 3
-        let shownEvents = Array(evs.prefix(maxChips))
-        let shownNotes = Array(nts.prefix(max(0, maxChips - shownEvents.count)))
-        let overflow = (evs.count + nts.count) - (shownEvents.count + shownNotes.count)
         return Button { pickDay(day) } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
@@ -493,11 +489,16 @@ struct MonthCalendarView: View {
                         Image(systemName: "checklist").font(.system(size: 10))
                             .foregroundStyle(theme.rec.opacity(0.8))
                     }
+                    // Standalone notes read as a pencil flag (the design's noteflag);
+                    // the notes themselves live in the day panel.
+                    if hasNote {
+                        Image(systemName: "pencil").font(.system(size: 10))
+                            .foregroundStyle(theme.accent.opacity(0.7))
+                    }
                 }
-                ForEach(shownEvents) { ev in monthChip(ev) }
-                ForEach(shownNotes) { note in monthNoteChip(note) }
-                if overflow > 0 {
-                    Text("+\(overflow) more")
+                ForEach(evs.prefix(3)) { ev in monthChip(ev) }
+                if evs.count > 3 {
+                    Text("+\(evs.count - 3) more")
                         .font(theme.monoFont(10)).foregroundStyle(theme.inkFaint)
                         .padding(.leading, 6)
                 }
@@ -535,24 +536,10 @@ struct MonthCalendarView: View {
         .background(bg, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 5))
     }
 
-    /// A note shown in a month cell — a pencil glyph + title, muted vs. events.
-    private func monthNoteChip(_ note: Note) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: note.transcript.isEmpty ? "pencil" : "waveform")
-                .font(.system(size: 8)).foregroundStyle(theme.accent.opacity(0.8))
-            Text(note.title.isEmpty ? "New Note" : note.title)
-                .font(theme.bodyFont(11)).foregroundStyle(theme.ink2).lineLimit(1)
-        }
-        .padding(.horizontal, 6).padding(.vertical, 2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.paperSunk, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 5))
-    }
-
     // MARK: Week / Day time grids
 
     private var weekGrid: some View {
         let days = weekDays
-        let anyNotes = days.contains { !notesOn($0).isEmpty }
         return VStack(spacing: 0) {
             // weekday header row, aligned to the columns (leading time gutter).
             HStack(spacing: 0) {
@@ -560,16 +547,6 @@ struct MonthCalendarView: View {
                 ForEach(days, id: \.self) { d in weekHeaderCell(d) }
             }
             .padding(.trailing, 14)
-            // All-day notes strip: standalone notes have no time, so they ride above
-            // the hour grid (like an all-day row), one column per day.
-            if anyNotes {
-                Divider().overlay(theme.line)
-                HStack(alignment: .top, spacing: 0) {
-                    notesGutter
-                    ForEach(days, id: \.self) { d in dayNotesStrip(d) }
-                }
-                .padding(.trailing, 14)
-            }
             Divider().overlay(theme.line)
             ScrollView {
                 HStack(alignment: .top, spacing: 0) {
@@ -585,64 +562,14 @@ struct MonthCalendarView: View {
     }
 
     private var dayGrid: some View {
-        let nts = notesOn(selected)
-        return VStack(spacing: 0) {
-            if !nts.isEmpty {
-                HStack(alignment: .top, spacing: 0) {
-                    notesGutter
-                    VStack(spacing: 4) {
-                        ForEach(nts) { note in noteChipButton(note) }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                }
-                .padding(.trailing, 16)
-                Divider().overlay(theme.line)
+        ScrollView {
+            HStack(alignment: .top, spacing: 0) {
+                timeGutter(hourHeight: 64)
+                timeColumn(selected, hourHeight: 64)
             }
-            ScrollView {
-                HStack(alignment: .top, spacing: 0) {
-                    timeGutter(hourHeight: 64)
-                    timeColumn(selected, hourHeight: 64)
-                }
-                .padding(.trailing, 16)
-            }
+            .padding(.trailing, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    /// The leading label for the all-day notes strip (aligns with the time gutter).
-    private var notesGutter: some View {
-        Text("NOTES")
-            .font(theme.monoFont(8)).tracking(0.5).foregroundStyle(theme.inkFaint)
-            .frame(width: 58, alignment: .trailing)
-            .padding(.trailing, 9).padding(.top, 10)
-    }
-
-    /// A day's standalone notes, stacked, for the week strip.
-    private func dayNotesStrip(_ d: Date) -> some View {
-        VStack(spacing: 3) {
-            ForEach(notesOn(d).prefix(3)) { note in noteChipButton(note) }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 4).padding(.vertical, 6)
-        .overlay(alignment: .leading) { Divider().overlay(theme.line.opacity(0.5)) }
-    }
-
-    /// A tappable note chip used in the week/day all-day strips.
-    private func noteChipButton(_ note: Note) -> some View {
-        Button { onOpenNote(note) } label: {
-            HStack(spacing: 5) {
-                Image(systemName: note.transcript.isEmpty ? "pencil" : "waveform")
-                    .font(.system(size: 9)).foregroundStyle(theme.accent)
-                Text(note.title.isEmpty ? "New Note" : note.title)
-                    .font(theme.bodyFont(11.5)).foregroundStyle(theme.ink).lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 7).padding(.vertical, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.accentTint, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 6))
-        }
-        .buttonStyle(.plain)
     }
 
     private func weekHeaderCell(_ d: Date) -> some View {

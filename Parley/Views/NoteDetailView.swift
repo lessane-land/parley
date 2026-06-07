@@ -364,7 +364,8 @@ struct NoteDetailView: View {
             // Attached to the strip (not the top-level body) so it never competes
             // with the action-items sheet for presentation.
             .sheet(item: $previewAttachment) { attachment in
-                AttachmentPreviewSheet(theme: theme, attachment: attachment)
+                AttachmentPreviewSheet(theme: theme, attachment: attachment,
+                                       languages: ocrLanguages, customWords: note.attendees)
             }
         }
     }
@@ -1127,26 +1128,25 @@ struct NoteDetailView: View {
             }
         }
         #else
-        // macOS edits plain text (rich editing is iOS for now); editing here drops
-        // any stale rich version so the plain text stays the source of truth.
-        TextEditor(text: Binding(
-            get: { note.body },
-            set: { note.body = $0; note.bodyRich = nil }
-        ))
-            .font(theme.bodyFont(density.bodySize))
-            .foregroundStyle(theme.ink2)
-            .lineSpacing(density.lineSpacing)
-            .scrollContentBackground(.hidden)
-            .overlay(alignment: .topLeading) {
-                if note.body.isEmpty && typedActive {
-                    Text("Start typing your notes…")
-                        .font(theme.bodyFont(density.bodySize))
-                        .foregroundStyle(theme.inkFaint)
-                        .padding(.top, 8)
-                        .padding(.leading, 5)
-                        .allowsHitTesting(false)
-                }
+        RichTextEditor(
+            initialRTF: note.bodyRich,
+            initialPlain: note.body,
+            fontSize: density.bodySize,
+            textColor: NSColor(theme.ink2),
+            tintColor: NSColor(theme.accent),
+            onChange: { rtf, plain in
+                note.bodyRich = rtf
+                note.body = plain
             }
+        )
+        .overlay(alignment: .topLeading) {
+            if note.body.isEmpty && typedActive {
+                Text("Start typing your notes…  ⌘B bold · ⌘I italic · Format ▸ Lists")
+                    .font(theme.bodyFont(density.bodySize))
+                    .foregroundStyle(theme.inkFaint)
+                    .allowsHitTesting(false)
+            }
+        }
         #endif
     }
 
@@ -1743,6 +1743,11 @@ struct RichTextEditor: UIViewRepresentable {
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
         tv.allowsEditingTextAttributes = true
+        // The note page is one big ScrollView, so the editor must grow to its
+        // content (its own scrolling off) — otherwise it collapses to nothing.
+        tv.isScrollEnabled = false
+        tv.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        tv.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         tv.tintColor = tintColor
         tv.font = bodyFont
         tv.textColor = textColor
@@ -1899,6 +1904,84 @@ struct RichTextEditor: UIViewRepresentable {
             let safe = NSRange(location: min(range.location, mutable.length),
                                length: min(range.length, max(0, mutable.length - range.location)))
             tv.selectedRange = safe
+        }
+    }
+}
+#endif
+
+#if os(macOS)
+import AppKit
+
+/// An `NSTextView` that grows with its content (so it lives inside the page's
+/// SwiftUI ScrollView). Formatting uses AppKit's native rich-text editing: ⌘B / ⌘I,
+/// the Format ▸ Font and Format ▸ Text ▸ Lists menus.
+final class GrowingTextView: NSTextView {
+    override var intrinsicContentSize: NSSize {
+        guard let lm = layoutManager, let tc = textContainer else { return super.intrinsicContentSize }
+        lm.ensureLayout(for: tc)
+        return NSSize(width: NSView.noIntrinsicMetric, height: lm.usedRect(for: tc).height)
+    }
+    override func didChangeText() {
+        super.didChangeText()
+        invalidateIntrinsicContentSize()
+    }
+}
+
+/// Rich text editor for macOS — same RTF persistence as iOS, native AppKit
+/// formatting controls.
+struct RichTextEditor: NSViewRepresentable {
+    let initialRTF: Data?
+    let initialPlain: String
+    let fontSize: CGFloat
+    let textColor: NSColor
+    let tintColor: NSColor
+    var onChange: (Data?, String) -> Void
+
+    func makeNSView(context: Context) -> GrowingTextView {
+        let tv = GrowingTextView()
+        tv.delegate = context.coordinator
+        tv.isRichText = true
+        tv.allowsUndo = true
+        tv.drawsBackground = false
+        tv.isEditable = true
+        tv.isSelectable = true
+        tv.font = .systemFont(ofSize: fontSize)
+        tv.textColor = textColor
+        tv.insertionPointColor = tintColor
+        tv.textContainerInset = .zero
+        tv.textContainer?.lineFragmentPadding = 0
+        tv.isVerticallyResizable = true
+        tv.isHorizontallyResizable = false
+        tv.textContainer?.widthTracksTextView = true
+        tv.autoresizingMask = [.width]
+        if let initialRTF,
+           let ns = try? NSMutableAttributedString(
+               data: initialRTF,
+               options: [.documentType: NSAttributedString.DocumentType.rtf],
+               documentAttributes: nil) {
+            ns.addAttribute(.foregroundColor, value: textColor,
+                            range: NSRange(location: 0, length: ns.length))
+            tv.textStorage?.setAttributedString(ns)
+        } else {
+            tv.string = initialPlain
+        }
+        tv.typingAttributes = [.font: NSFont.systemFont(ofSize: fontSize), .foregroundColor: textColor]
+        return tv
+    }
+
+    func updateNSView(_ tv: GrowingTextView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        let parent: RichTextEditor
+        init(_ parent: RichTextEditor) { self.parent = parent }
+
+        func textDidChange(_ notification: Notification) {
+            guard let tv = notification.object as? NSTextView, let ts = tv.textStorage else { return }
+            let rtf = ts.rtf(from: NSRange(location: 0, length: ts.length),
+                             documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+            parent.onChange(ts.length == 0 ? nil : rtf, ts.string)
         }
     }
 }
@@ -2162,10 +2245,13 @@ enum AttachmentSupport {
 /// dependency, so it builds the same on iOS, iPadOS, and macOS.
 private struct AttachmentPreviewSheet: View {
     let theme: Theme
-    let attachment: Attachment
+    @Bindable var attachment: Attachment
+    var languages: [String] = []
+    var customWords: [String] = []
 
     @Environment(\.dismiss) private var dismiss
     @State private var shareURL: URL?
+    @State private var recognizing = false
 
     var body: some View {
         NavigationStack {
@@ -2201,13 +2287,20 @@ private struct AttachmentPreviewSheet: View {
         if let data = attachment.data,
            AttachmentSupport.isImage(attachment),
            let image = AttachmentSupport.image(from: data) {
-            // Fit to the window — rendering at the photo's full native size in an
-            // unbounded scroll view overflows CoreGraphics (blank image).
-            image
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ScrollView {
+                VStack(spacing: 16) {
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                    recognizedTextSection
+                }
                 .padding(12)
+            }
+            .task(id: attachment.id) {
+                // Recognize on open if we don't have text yet.
+                if (attachment.ocrText ?? "").isEmpty { await recognize(data) }
+            }
         } else {
             VStack(spacing: 14) {
                 Image(systemName: AttachmentSupport.icon(attachment))
@@ -2232,6 +2325,58 @@ private struct AttachmentPreviewSheet: View {
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// Recognized text from the image: shown so it's actually usable — copy it, or
+    /// re-run recognition. Folds into the wrap-up automatically regardless.
+    @ViewBuilder
+    private var recognizedTextSection: some View {
+        let text = attachment.ocrText ?? ""
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Recognized text", systemImage: "text.viewfinder")
+                    .font(theme.monoFont(11)).tracking(1).foregroundStyle(theme.inkSoft)
+                Spacer()
+                if recognizing {
+                    ProgressView().controlSize(.small)
+                } else if !text.isEmpty {
+                    Button {
+                        #if canImport(UIKit)
+                        UIPasteboard.general.string = text
+                        #elseif canImport(AppKit)
+                        NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
+                        #endif
+                    } label: { Label("Copy", systemImage: "doc.on.doc") }
+                        .font(theme.bodyFont(12))
+                }
+                Button {
+                    if let data = attachment.data { Task { await recognize(data) } }
+                } label: { Label("Re-scan", systemImage: "arrow.clockwise") }
+                    .font(theme.bodyFont(12))
+                    .disabled(recognizing)
+            }
+            if text.isEmpty {
+                Text(recognizing ? "Reading the page…" : "No text found yet.")
+                    .font(theme.bodyFont(13)).italic().foregroundStyle(theme.inkFaint)
+            } else {
+                Text(text)
+                    .font(theme.bodyFont(14)).foregroundStyle(theme.ink)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.paperRaised, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10))
+        .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
+            .strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+    }
+
+    private func recognize(_ data: Data) async {
+        recognizing = true
+        let text = await HandwritingOCR.recognizeImage(data, languages: languages, customWords: customWords)
+        attachment.ocrText = text
+        recognizing = false
     }
 }
 

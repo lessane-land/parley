@@ -102,6 +102,9 @@ struct NoteDetailView: View {
     /// Whether the transcript panel is shown. Collapsing it gives notes the full
     /// surface; a toolbar button (and the panel's chevron) toggle it.
     @State private var showTranscript = true
+    /// Whether the notes panel is shown (iPad/Mac). Lets you collapse notes to
+    /// focus the transcript, mirroring the transcript toggle.
+    @State private var showNotes = true
 
     /// Attachments: the photo picker / file importer presentation flags, the
     /// pending photo selections, and the attachment currently being previewed.
@@ -170,8 +173,9 @@ struct NoteDetailView: View {
                 ToolbarItem { compactMenu }
             } else {
                 ToolbarItem { attachControl }
+                if hasTranscript { ToolbarItem { notesToggle } }
                 ToolbarItem { transcriptToggle }
-                ToolbarItem { swapControl }
+                if showTranscript && showNotes { ToolbarItem { swapControl } }
                 ToolbarItem { noteMenu }
             }
         }
@@ -222,10 +226,13 @@ struct NoteDetailView: View {
                 note: note,
                 service: summaryService,
                 onAddReminders: { await eventKit.addReminders($0) },
-                onOpenNotes: { showingSummary = false },
+                onOpenNotes: {
+                    showingSummary = false
+                    withAnimation(.snappy) { showNotes = true; showTranscript = false }
+                },
                 onOpenTranscript: {
                     showingSummary = false
-                    withAnimation(.snappy) { showTranscript = true }
+                    withAnimation(.snappy) { showTranscript = true; showNotes = false }
                 }
             )
         }
@@ -658,11 +665,19 @@ struct NoteDetailView: View {
     private func splitContent(wide: Bool) -> some View {
         if isCompact {
             compactContent          // iPhone: one panel at a time + a switch
-        } else if showTranscript {
+        } else if showTranscript && showNotes {
             splitWithTranscript(wide: wide)
+        } else if showTranscript {
+            transcriptPanel         // notes collapsed → transcript gets the whole surface
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             notesColumn             // transcript collapsed → notes get the whole surface
         }
+    }
+
+    /// Whether this note has (or is getting) a transcript — gates the focus toggles.
+    private var hasTranscript: Bool {
+        !note.transcript.isEmpty || transcription.isRecording || backgroundRecordingThisNote
     }
 
     /// iPhone: show Notes or Transcript full-width, switched by a segmented control
@@ -817,11 +832,24 @@ struct NoteDetailView: View {
 
     /// Collapse / show the transcript panel.
     private var transcriptToggle: some View {
-        Button { withAnimation(.snappy) { showTranscript.toggle() } } label: {
+        Button {
+            withAnimation(.snappy) { showTranscript.toggle(); if !showTranscript { showNotes = true } }
+        } label: {
             Label(showTranscript ? "Hide transcript" : "Show transcript",
                   systemImage: showTranscript ? "captions.bubble.fill" : "captions.bubble")
         }
         .accessibilityLabel(showTranscript ? "Hide transcript" : "Show transcript")
+    }
+
+    /// Mirror of the transcript toggle: collapse notes to focus a long transcript.
+    private var notesToggle: some View {
+        Button {
+            withAnimation(.snappy) { showNotes.toggle(); if !showNotes { showTranscript = true } }
+        } label: {
+            Label(showNotes ? "Hide notes" : "Show notes",
+                  systemImage: showNotes ? "doc.plaintext.fill" : "doc.plaintext")
+        }
+        .accessibilityLabel(showNotes ? "Hide notes" : "Show notes")
     }
 
     /// De-duplicate strings (order-preserving, case-insensitive, drops blanks).

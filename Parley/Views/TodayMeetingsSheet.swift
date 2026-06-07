@@ -938,7 +938,6 @@ private struct DayPanel: View {
                 section(notes.isEmpty ? "Quick note" : "Notes")
                 ForEach(notes) { note in noteRow(note) }
                 jotField
-                newNoteButton
                 footer
             }
             .padding(18)
@@ -1000,16 +999,6 @@ private struct DayPanel: View {
         guard !text.isEmpty else { return }
         onJotNote(text)
         jot = ""
-    }
-
-    private var newNoteButton: some View {
-        Button(action: onNewNote) {
-            Label("New note", systemImage: "square.and.pencil")
-                .font(theme.bodyFont(12.5).weight(.semibold))
-                .foregroundStyle(theme.accentInk)
-        }
-        .buttonStyle(.plain)
-        .padding(.top, 8)
     }
 
     private func section(_ title: String) -> some View {
@@ -1076,18 +1065,21 @@ private struct DayPanel: View {
     @ViewBuilder
     private func prepArea(_ ev: Meeting) -> some View {
         let isOpen = expanded.contains(ev.id)
-        VStack(alignment: .leading, spacing: 8) {
+        let chip = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 7)
+        VStack(alignment: .leading, spacing: 9) {
             Divider().overlay(theme.line)
+            // A small accent "magic" chip — the on-device prep affordance.
             Button { togglePrep(ev) } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles").font(.system(size: 11))
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles").font(.system(size: 10))
                     Text(isOpen ? "Hide prep" : "Prep with Parley")
-                        .font(theme.bodyFont(11.5).weight(.semibold))
-                    Spacer(minLength: 0)
-                    Image(systemName: isOpen ? "chevron.up" : "chevron.down").font(.system(size: 9))
+                        .font(theme.bodyFont(11).weight(.semibold))
                 }
                 .foregroundStyle(theme.accentInk)
-                .contentShape(Rectangle())
+                .padding(.horizontal, 9).padding(.vertical, 5)
+                .background(theme.accentTint, in: chip)
+                .overlay(chip.strokeBorder(theme.accentLine, lineWidth: max(1, theme.borderWidth)))
+                .contentShape(chip)
             }
             .buttonStyle(.plain)
 

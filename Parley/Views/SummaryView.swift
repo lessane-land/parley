@@ -634,6 +634,7 @@ struct SummaryView: View {
 
     private func persist() {
         note.summaryData = try? JSONEncoder().encode(summary)
+        note.summaryText = summary?.plainText ?? ""   // keep the search index fresh
     }
 
     // MARK: Add / remove items (edit mode)

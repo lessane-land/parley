@@ -1358,7 +1358,10 @@ struct NoteDetailView: View {
             includeOpenQuestions: themeManager.extractOpenQuestions,
             includeKeyQuotes: themeManager.extractKeyQuotes
         )
-        if let result { note.summaryData = try? JSONEncoder().encode(result) }
+        if let result {
+            note.summaryData = try? JSONEncoder().encode(result)
+            note.summaryText = result.plainText
+        }
     }
 
     /// The user's notes for summarization: typed body + any recognized handwriting.

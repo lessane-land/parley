@@ -634,9 +634,26 @@ struct NoteListView: View {
 
     private func matchesSearch(_ note: Note) -> Bool {
         guard !searchText.isEmpty else { return true }
-        return note.title.localizedCaseInsensitiveContains(searchText)
-            || note.body.localizedCaseInsensitiveContains(searchText)
-            || note.transcript.localizedCaseInsensitiveContains(searchText)
+        let q = searchText
+        if note.title.localizedCaseInsensitiveContains(q)
+            || note.body.localizedCaseInsensitiveContains(q)
+            || note.transcript.localizedCaseInsensitiveContains(q)
+            || note.summaryText.localizedCaseInsensitiveContains(q)            // the clean wrap-up
+            || note.attendees.contains(where: { $0.localizedCaseInsensitiveContains(q) })
+            || (note.tags ?? []).contains(where: { $0.name.localizedCaseInsensitiveContains(q) }) {
+            return true
+        }
+        // Text recognized from attached photos/scans (the notebook page).
+        if (note.attachments ?? []).contains(where: { ($0.ocrText ?? "").localizedCaseInsensitiveContains(q) }) {
+            return true
+        }
+        // Backfill: wrap-ups saved before the search index existed.
+        if note.summaryText.isEmpty, let data = note.summaryData,
+           let s = try? JSONDecoder().decode(MeetingSummary.self, from: data),
+           s.plainText.localizedCaseInsensitiveContains(q) {
+            return true
+        }
+        return false
     }
 
     private func matchesScope(_ note: Note) -> Bool {

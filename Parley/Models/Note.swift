@@ -66,6 +66,10 @@ final class Note {
     /// Optional → lightweight migration.
     var summaryData: Data?
 
+    /// Plain-text mirror of the wrap-up, kept so search can index the clean
+    /// version (overview, decisions, actions, questions). Default "" → CloudKit-safe.
+    var summaryText: String = ""
+
     /// Structured transcript — `[TranscriptSegment]` encoded as JSON — carrying a
     /// per-line timestamp and an optional (manually-assigned) speaker. This is an
     /// *additive* mirror of `transcript` (the flat text stays the source of truth

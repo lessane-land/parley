@@ -31,6 +31,19 @@ struct MeetingSummary: Codable, Equatable {
     }
 }
 
+extension MeetingSummary {
+    /// A flat, plain-text rendering of the whole wrap-up — used to index it for
+    /// search so the clean version is findable later.
+    var plainText: String {
+        var parts: [String] = [overview]
+        parts += decisions.map { [$0.text, $0.rationale].joined(separator: " ") }
+        parts += actionItems.map { [$0.title, $0.owner].joined(separator: " ") }
+        parts += openQuestions
+        parts += keyQuotes.map { [$0.text, $0.speaker].joined(separator: " ") }
+        return parts.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.joined(separator: "\n")
+    }
+}
+
 /// One action item: the generated task + owner + due, plus the user's checkbox.
 /// `due` is the model's free-text hint ("Thu"); `dueDate` is a real date the user
 /// sets by hand, which is what gets written to Reminders. Both optional, so old

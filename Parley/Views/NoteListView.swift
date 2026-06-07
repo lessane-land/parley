@@ -322,8 +322,7 @@ struct NoteListView: View {
             notes: filteredNotes,
             onOpen: { path.append($0) },
             onDelete: deleteNote,
-            onTogglePin: { note in withAnimation(.snappy) { note.pinned.toggle() } },
-            allowsBoard: isRegular   // freeform board on iPad/Mac, not iPhone
+            onTogglePin: { note in withAnimation(.snappy) { note.pinned.toggle() } }
         )
     }
 

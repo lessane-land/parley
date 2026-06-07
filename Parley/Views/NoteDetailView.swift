@@ -181,6 +181,13 @@ struct NoteDetailView: View {
                 }
             )
         }
+        // Remember the view in use, so the note reopens where you left it.
+        .onChange(of: showingSummary) { _, now in
+            rememberFace(now ? "summary" : (showTranscript ? "transcript" : "notes"))
+        }
+        .onChange(of: showTranscript) { _, now in
+            if !showingSummary { rememberFace(now ? "transcript" : "notes") }
+        }
         // Persist confirmed transcript text + segments as they stream in.
         .onChange(of: transcription.finalizedText) { _, newValue in
             note.transcript = newValue
@@ -228,14 +235,11 @@ struct NoteDetailView: View {
             }
             // Merge any duplicate enrolled voices that synced in from another device.
             SpeakerProfile.dedupe(speakerProfiles, in: context)
-            // A fresh note (no transcript yet) opens with the transcript hidden —
-            // it's revealed when a recording starts. Notes that already have a
-            // transcript open with it shown.
+            // Open to the right "face": the view you last had on this note, or a
+            // smart default (summary → transcript → notes) the first time.
             if !didConfigureTranscript {
                 didConfigureTranscript = true
-                // Show the transcript if there's text, or if this note is being
-                // recorded in the background (so its live text is visible).
-                showTranscript = !note.transcript.isEmpty || backgroundRecordingThisNote
+                applyInitialFace()
             }
             // Never start a local session for a note already recording in the
             // background — the menu-bar recorder owns it.
@@ -981,6 +985,42 @@ struct NoteDetailView: View {
     /// instead of starting a second, local one.
     private var backgroundRecordingThisNote: Bool {
         recorder.activeNoteID == note.persistentModelID
+    }
+
+    // MARK: Opening "face" (which view a note shows on open)
+
+    /// Per-note, per-device memory of the last view ("summary" / "transcript" /
+    /// "notes"). Stored in UserDefaults (a UI preference, not synced content).
+    private var faceKey: String { "parley.noteFace.\(note.id.uuidString)" }
+
+    /// The smart default the first time a note is opened: the summary is the payoff
+    /// once it exists; otherwise the transcript if recorded; otherwise just notes.
+    private var smartDefaultFace: String {
+        if note.summaryData != nil { return "summary" }
+        if !note.transcript.isEmpty || backgroundRecordingThisNote { return "transcript" }
+        return "notes"
+    }
+
+    /// Apply the remembered view (or the smart default) when the note opens.
+    private func applyInitialFace() {
+        // Base notes/transcript layout first.
+        showTranscript = !note.transcript.isEmpty || backgroundRecordingThisNote
+        let face = UserDefaults.standard.string(forKey: faceKey) ?? smartDefaultFace
+        switch face {
+        case "summary":
+            if note.summaryData != nil { showingSummary = true }   // push the summary
+        case "transcript":
+            showTranscript = true
+        case "notes":
+            showTranscript = false
+        default:
+            break
+        }
+    }
+
+    /// Remember the view the user is currently looking at, for next open.
+    private func rememberFace(_ face: String) {
+        UserDefaults.standard.set(face, forKey: faceKey)
     }
 
     @ViewBuilder

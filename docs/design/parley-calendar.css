@@ -1,0 +1,149 @@
+/* ============================================================
+   PARLEY — CALENDAR  (month / week / day) + day panel
+   Sidebar always aside. Built on --pk-* tokens → themes per mood.
+   ============================================================ */
+.pk-cal-screen{ width:100%; height:100%; display:flex; background:var(--pk-paper); color:var(--pk-ink); font-family:var(--pk-sans); overflow:hidden; }
+
+/* ---- main column ---- */
+.pk-cal-main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+.pk-cal-head{ flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:22px 26px 16px; border-bottom:1px solid var(--pk-line); }
+.pk-cal-head-l{ display:flex; align-items:center; gap:18px; min-width:0; }
+.pk-cal-title{ font-family:var(--pk-serif); font-size:27px; font-weight:600; letter-spacing:-.015em; margin:0; color:var(--pk-ink); white-space:nowrap; }
+body.mood-neubrutalist .pk-cal-title{ font-family:var(--pk-display,"Archivo Black"); font-weight:800; }
+body.mood-swiss .pk-cal-title{ font-weight:700; text-transform:uppercase; }
+.pk-cal-nav{ display:flex; align-items:center; gap:4px; }
+.pk-cal-today{
+  font-family:var(--pk-sans); font-size:12.5px; font-weight:600; color:var(--pk-ink-soft);
+  background:transparent; border:var(--pk-border-w) solid var(--pk-edge); border-radius:8px;
+  padding:7px 14px; cursor:pointer; transition:all .13s;
+}
+.pk-cal-today:hover{ border-color:var(--pk-accent-line); color:var(--pk-accent-ink); }
+body.mood-swiss .pk-cal-today, body.mood-neubrutalist .pk-cal-today{ border-radius:0; }
+
+.pk-cal-head-r{ display:flex; align-items:center; gap:12px; flex:0 0 auto; }
+.pk-cal-views button{ text-transform:none; }
+.pk-cal-add{ white-space:nowrap; }
+
+.pk-cal-stage{ flex:1 1 auto; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
+
+/* ============ MONTH ============ */
+.pk-cal-month{ flex:1 1 auto; display:flex; flex-direction:column; min-height:0; padding:0 14px 14px; }
+.pk-cal-dow{ display:grid; grid-template-columns:repeat(7,1fr); padding:10px 0 8px; }
+.pk-cal-dowc{ font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--pk-ink-faint); text-align:left; padding-left:10px; }
+.pk-cal-grid{ flex:1 1 auto; display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:1fr; gap:1px; background:var(--pk-line); border:1px solid var(--pk-line); border-radius:var(--pk-radius); overflow:hidden; }
+body.mood-swiss .pk-cal-grid, body.mood-neubrutalist .pk-cal-grid{ border-radius:0; }
+body.mood-neubrutalist .pk-cal-grid{ gap:2px; background:#1A1A1A; border:2px solid #1A1A1A; }
+
+.pk-cal-cell{ background:var(--pk-paper-rec); padding:6px 7px 4px; display:flex; flex-direction:column; gap:3px; cursor:pointer; overflow:hidden; transition:background .12s; min-width:0; }
+.pk-cal-cell:hover{ background:var(--pk-paper-sink); }
+.pk-cal-cell.out{ background:var(--pk-paper-sink); }
+.pk-cal-cell.out .pk-cal-daynum{ color:var(--pk-ink-ghost); }
+.pk-cal-cell.sel{ box-shadow:inset 0 0 0 2px var(--pk-accent); }
+.pk-cal-daynum-row{ display:flex; align-items:center; justify-content:space-between; }
+.pk-cal-daynum{ font-size:13px; font-weight:600; color:var(--pk-ink-2); width:24px; height:24px; display:flex; align-items:center; justify-content:center; }
+.pk-cal-daynum.today{ background:var(--pk-accent); color:#fff; border-radius:50%; }
+body.mood-swiss .pk-cal-daynum.today, body.mood-neubrutalist .pk-cal-daynum.today{ border-radius:0; }
+body.mood-neubrutalist .pk-cal-daynum.today{ color:var(--pk-highlight,#D8F000); }
+.pk-cal-noteflag{ color:var(--pk-accent); opacity:.7; }
+
+.pk-cal-evs{ display:flex; flex-direction:column; gap:2px; overflow:hidden; }
+.pk-cal-chip{ display:flex; align-items:center; gap:5px; padding:2px 6px; border-radius:5px; font-size:11px; font-weight:500; color:var(--pk-ink); background:var(--pk-paper-sink); min-width:0; }
+.pk-cal-chip .tk{ font-size:10px; font-weight:600; color:var(--pk-ink-faint); flex:0 0 auto; font-variant-numeric:tabular-nums; }
+.pk-cal-chip .ct{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.pk-cal-chip.k-product{ background:var(--pk-accent-tint); color:var(--pk-accent-ink); }
+.pk-cal-chip.k-product .tk{ color:var(--pk-accent); }
+.pk-cal-chip.k-personal{ background:color-mix(in srgb, var(--pk-rec) 12%, transparent); color:var(--pk-ink-2); }
+.pk-cal-chip.live{ background:var(--pk-accent); color:#fff; }
+.pk-cal-chip.live .ct{ color:#fff; }
+body.mood-neubrutalist .pk-cal-chip.live{ color:#fff; }
+body.mood-neubrutalist .pk-cal-chip{ border-radius:0; }
+body.mood-swiss .pk-cal-chip{ border-radius:0; }
+.pk-cal-more{ font-size:10.5px; font-weight:600; color:var(--pk-ink-faint); padding:1px 6px; }
+
+/* ============ WEEK / DAY time grids ============ */
+.pk-cal-week, .pk-cal-day{ flex:1 1 auto; display:flex; flex-direction:column; min-height:0; }
+.pk-cal-gutter{ flex:0 0 58px; width:58px; }
+.pk-cal-weekhead{ flex:0 0 auto; display:flex; border-bottom:1px solid var(--pk-line); padding-right:14px; }
+.pk-cal-wh{ flex:1 1 0; display:flex; flex-direction:column; align-items:center; gap:2px; padding:9px 0; cursor:pointer; border-left:1px solid var(--pk-line-soft); }
+.pk-cal-wh:hover{ background:var(--pk-paper-sink); }
+.pk-cal-wh.sel{ background:var(--pk-accent-tint); }
+.pk-cal-wh .wd{ font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--pk-ink-faint); }
+.pk-cal-wh .dn{ font-size:18px; font-weight:600; color:var(--pk-ink); width:30px; height:30px; display:flex; align-items:center; justify-content:center; }
+.pk-cal-wh .dn.today{ background:var(--pk-accent); color:#fff; border-radius:50%; }
+body.mood-swiss .pk-cal-wh .dn.today, body.mood-neubrutalist .pk-cal-wh .dn.today{ border-radius:0; }
+
+.pk-cal-weekbody{ flex:1 1 auto; display:flex; overflow:hidden; padding-right:14px; position:relative; }
+.pk-cal-weekbody .pk-cal-gutter{ display:flex; flex-direction:column; }
+.pk-cal-hr{ flex:1 1 0; position:relative; }
+.pk-cal-hr span{ position:absolute; top:-7px; right:9px; font-size:10.5px; font-weight:500; color:var(--pk-ink-faint); font-variant-numeric:tabular-nums; }
+.pk-cal-hr.tall{ min-height:66px; }
+
+.pk-cal-col{ flex:1 1 0; position:relative; border-left:1px solid var(--pk-line-soft); display:flex; flex-direction:column; }
+.pk-cal-col.today{ background:color-mix(in srgb, var(--pk-accent) 4%, transparent); }
+.pk-cal-col.wide{ flex:1 1 auto; }
+.pk-cal-slot{ flex:1 1 0; border-top:1px solid var(--pk-line-soft); min-height:34px; }
+.pk-cal-slot.tall{ min-height:66px; }
+
+.pk-cal-block{ position:absolute; left:5px; right:5px; border-radius:7px; padding:5px 8px; overflow:hidden; cursor:pointer;
+  background:var(--pk-paper-sink); border-left:3px solid var(--pk-ink-ghost); box-shadow:var(--pk-shadow-card); }
+.pk-cal-block .bt{ display:flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:var(--pk-ink); line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pk-cal-block .bm{ display:flex; align-items:center; gap:5px; font-size:10.5px; color:var(--pk-ink-soft); margin-top:2px; font-variant-numeric:tabular-nums; }
+.pk-cal-block .lk{ display:inline-flex; opacity:.6; }
+.pk-cal-block.k-product{ background:var(--pk-accent-tint); border-left-color:var(--pk-accent); }
+.pk-cal-block.k-personal{ background:color-mix(in srgb, var(--pk-rec) 13%, transparent); border-left-color:var(--pk-rec); }
+.pk-cal-block.live{ background:var(--pk-accent); border-left-color:var(--pk-accent); }
+.pk-cal-block.live .bt, .pk-cal-block.live .bm{ color:#fff; }
+body.mood-swiss .pk-cal-block, body.mood-neubrutalist .pk-cal-block{ border-radius:0; }
+body.mood-neubrutalist .pk-cal-block{ border:2px solid #1A1A1A; border-left-width:4px; box-shadow:2px 2px 0 #1A1A1A; }
+
+/* ============ DAY PANEL (right rail) ============ */
+.pk-cal-panel{ flex:0 0 318px; min-width:0; display:flex; flex-direction:column; background:var(--pk-paper-sink); border-left:1px solid var(--pk-line); padding:20px 18px 16px; overflow:hidden; }
+body.mood-neubrutalist .pk-cal-panel{ border-left:2px solid #1A1A1A; }
+.pk-cal-panel-head{ flex:0 0 auto; margin-bottom:14px; }
+.pk-cal-panel-dow{ font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--pk-accent); }
+.pk-cal-panel-date{ font-family:var(--pk-serif); font-size:24px; font-weight:600; letter-spacing:-.01em; color:var(--pk-ink); margin-top:2px; }
+body.mood-neubrutalist .pk-cal-panel-date{ font-family:var(--pk-display,"Archivo Black"); font-weight:800; }
+
+.pk-cal-newev{ display:flex; align-items:center; justify-content:center; gap:8px; width:100%; height:40px; margin-bottom:18px;
+  font-family:var(--pk-sans); font-size:13px; font-weight:600; color:#fff; background:var(--pk-accent); border:none; border-radius:10px; cursor:pointer; }
+.pk-cal-newev .pl{ display:inline-flex; }
+body.mood-swiss .pk-cal-newev, body.mood-neubrutalist .pk-cal-newev{ border-radius:0; }
+body.mood-neubrutalist .pk-cal-newev{ border:2px solid #1A1A1A; box-shadow:3px 3px 0 #1A1A1A; }
+
+.pk-cal-panel-sec{ font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--pk-ink-faint); margin:6px 0 11px; }
+.pk-cal-panel-list{ flex:1 1 auto; overflow:hidden; display:flex; flex-direction:column; gap:9px; margin-bottom:6px; }
+.pk-cal-empty{ font-size:13px; color:var(--pk-ink-faint); font-style:italic; padding:4px 0; }
+
+.pk-cal-item{ display:flex; gap:0; background:var(--pk-paper-rec); border:var(--pk-border-w) solid var(--pk-edge); border-radius:11px; overflow:hidden; box-shadow:var(--pk-shadow-card); }
+body.mood-swiss .pk-cal-item, body.mood-neubrutalist .pk-cal-item{ border-radius:0; }
+.pk-cal-item .rail{ flex:0 0 4px; background:var(--pk-ink-ghost); }
+.pk-cal-item.k-product .rail{ background:var(--pk-accent); }
+.pk-cal-item.k-personal .rail{ background:var(--pk-rec); }
+.pk-cal-item .bd{ flex:1 1 auto; min-width:0; padding:11px 13px; }
+.pk-cal-item .t1{ display:flex; align-items:center; gap:6px; font-size:14px; font-weight:600; color:var(--pk-ink); line-height:1.2; }
+.pk-cal-item .t2{ font-size:11.5px; color:var(--pk-ink-soft); margin-top:3px; font-variant-numeric:tabular-nums; }
+.pk-cal-item .t3{ display:flex; align-items:center; gap:10px; margin-top:9px; flex-wrap:wrap; }
+.pk-cal-item .ppl{ display:flex; }
+.pk-cal-item .ppl .av{ margin-left:-5px; border:2px solid var(--pk-paper-rec); }
+.pk-cal-item .ppl .av:first-child{ margin-left:0; }
+.pk-cal-item .notelink{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; color:var(--pk-accent-ink); min-width:0; }
+.pk-cal-item .notelink .go{ display:inline-flex; opacity:.6; }
+.pk-cal-item .linkbtn{ display:inline-flex; align-items:center; gap:5px; font-family:var(--pk-sans); font-size:11.5px; font-weight:600; color:var(--pk-ink-faint); background:transparent; border:none; cursor:pointer; padding:0; }
+.pk-cal-item .linkbtn:hover{ color:var(--pk-accent-ink); }
+
+.pk-cal-quicknote{ display:flex; gap:9px; align-items:flex-start; background:var(--pk-accent-tint); border-radius:10px; padding:11px 13px; margin-bottom:10px; font-size:13px; line-height:1.45; color:var(--pk-ink-2); }
+.pk-cal-quicknote .qn-tack{ color:var(--pk-accent); flex:0 0 auto; margin-top:1px; }
+body.mood-swiss .pk-cal-quicknote, body.mood-neubrutalist .pk-cal-quicknote{ border-radius:0; }
+body.mood-neubrutalist .pk-cal-quicknote{ border:2px solid #1A1A1A; }
+
+.pk-cal-jot{ flex:0 0 auto; display:flex; align-items:center; gap:8px; }
+.pk-cal-jot input{ flex:1 1 auto; min-width:0; height:40px; padding:0 13px; border-radius:10px; font-family:var(--pk-sans); font-size:13px; color:var(--pk-ink); background:var(--pk-paper-rec); border:var(--pk-border-w) solid var(--pk-edge); outline:none; }
+.pk-cal-jot input::placeholder{ color:var(--pk-ink-faint); }
+.pk-cal-jot input:focus{ border-color:var(--pk-accent-line); }
+.pk-cal-jot-add{ flex:0 0 auto; width:40px; height:40px; border-radius:10px; border:none; background:var(--pk-accent); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+body.mood-swiss .pk-cal-jot input, body.mood-swiss .pk-cal-jot-add,
+body.mood-neubrutalist .pk-cal-jot input, body.mood-neubrutalist .pk-cal-jot-add{ border-radius:0; }
+body.mood-neubrutalist .pk-cal-jot-add{ border:2px solid #1A1A1A; box-shadow:2px 2px 0 #1A1A1A; }
+
+.pk-cal-panel-foot{ flex:0 0 auto; display:flex; align-items:center; gap:7px; font-size:11px; color:var(--pk-ink-faint); margin-top:12px; padding-top:12px; border-top:1px solid var(--pk-line); }
+.pk-cal-panel-foot svg{ color:var(--pk-accent); }

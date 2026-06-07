@@ -162,9 +162,10 @@ struct NoteListView: View {
         #endif
     }
 
-    /// Hide the navigation bar only on the iPad/Mac dashboard (the calendar needs
-    /// the bar for its Done/＋ buttons).
-    private var barHidden: Bool { isRegular && !showingMonthCalendar }
+    /// Hide the navigation bar on iPad/Mac: both the dashboard (actions live in the
+    /// rail) and the calendar (it carries its own header) provide their own chrome,
+    /// so the system bar would only add an empty gap at the top.
+    private var barHidden: Bool { isRegular }
 
     /// Whether to show the side rail (iPad/Mac) or a compact grid (iPhone).
     private var isRegular: Bool {
@@ -601,6 +602,15 @@ struct NoteListView: View {
         path.append(note)
     }
 
+    /// Create a note dated to a given day (from the calendar's day panel) and open
+    /// it. Leaving the calendar so the new note is what the user sees.
+    private func createNote(on day: Date) {
+        let note = Note(title: "", startDate: day)
+        context.insert(note)
+        showingMonthCalendar = false
+        path.append(note)
+    }
+
     private func createAndRecord() {
         let note = Note(title: "New recording")
         context.insert(note)
@@ -633,6 +643,7 @@ struct NoteListView: View {
             onOpenNote: { note in path.append(note) },
             loadMeetings: { start, end in await eventKit.meetings(from: start, to: end) },
             onAddEvent: { draft in _ = await eventKit.addEvent(draft) },
+            onCreateNote: { day in createNote(on: day) },
             onClose: { showingMonthCalendar = false }
         )
     }

@@ -15,42 +15,51 @@ function Av({ who, size = 21, cls = "av" }) {
   return <div className={cls} style={{ background: p.chip, width: size, height: size }}>{p.initials}</div>;
 }
 
+// ════════════════════ SHARED SIDEBAR ════════════════════
+function PkSidebar({ active = "notes" }) {
+  const Ic = CI();
+  const nav = [
+    { id: "notes", icon: "list", label: "All notes", ct: "38" },
+    { id: "calendar", icon: "calendar", label: "Calendar" },
+    { id: "recents", icon: "clock", label: "Recents" },
+    { id: "ask", icon: "sparkles", label: "Ask Parley" },
+    { id: "actions", icon: "flag", label: "Action items", ct: "7" },
+    { id: "archive", icon: "folder", label: "Archive" },
+  ];
+  return (
+    <aside className="pk-side">
+      <div className="pk-brand">
+        <PkAppIcon size={32} />
+        <div className="wm">Parley</div>
+      </div>
+      <div className="pk-searchbar">{React.createElement(Ic.search, { size: 15 })}<span>Search notes &amp; transcripts</span></div>
+      <nav className="pk-nav">
+        {nav.map((n) => (
+          <div key={n.id} className={"pk-nav-item" + (n.id === active ? " on" : "")}>
+            {React.createElement(Ic[n.icon], { size: 17 })}
+            <span>{n.label}</span>
+            {n.ct && <span className="ct">{n.ct}</span>}
+          </div>
+        ))}
+      </nav>
+      <div className="pk-nav-h">Spaces</div>
+      <div className="pk-tag"><span className="sw" style={{ background: "var(--pk-accent)" }} />Product</div>
+      <div className="pk-tag"><span className="sw" style={{ background: "#B14B3A" }} />1:1s</div>
+      <div className="pk-tag"><span className="sw" style={{ background: "#5A6B7A" }} />Research</div>
+      <div className="pk-side-foot">
+        <button className="pk-set-link">{React.createElement(Ic.gear, { size: 16 })} Settings</button>
+        <button className="pk-record-cta"><span className="rd" /> New recording</button>
+      </div>
+    </aside>
+  );
+}
+
 // ════════════════════ HOME / NOTES LIST ════════════════════
 function PkHome({ compact }) {
   const Ic = CI();
-  const nav = [
-    { icon: "list", label: "All notes", ct: "38", on: true },
-    { icon: "clock", label: "Recents" },
-    { icon: "sparkles", label: "Ask Parley" },
-    { icon: "flag", label: "Action items", ct: "7" },
-    { icon: "folder", label: "Archive" },
-  ];
   return (
     <div className={"pk-home" + (compact ? "" : " has-ask")}>
-      <aside className="pk-side">
-        <div className="pk-brand">
-          <PkAppIcon size={32} />
-          <div className="wm">Parley</div>
-        </div>
-        <div className="pk-searchbar">{React.createElement(Ic.search, { size: 15 })}<span>Search notes &amp; transcripts</span></div>
-        <nav className="pk-nav">
-          {nav.map((n) => (
-            <div key={n.label} className={"pk-nav-item" + (n.on ? " on" : "")}>
-              {React.createElement(Ic[n.icon], { size: 17 })}
-              <span>{n.label}</span>
-              {n.ct && <span className="ct">{n.ct}</span>}
-            </div>
-          ))}
-        </nav>
-        <div className="pk-nav-h">Spaces</div>
-        <div className="pk-tag"><span className="sw" style={{ background: "var(--pk-accent)" }} />Product</div>
-        <div className="pk-tag"><span className="sw" style={{ background: "#B14B3A" }} />1:1s</div>
-        <div className="pk-tag"><span className="sw" style={{ background: "#5A6B7A" }} />Research</div>
-        <div className="pk-side-foot">
-          <button className="pk-set-link">{React.createElement(Ic.gear, { size: 16 })} Settings</button>
-          <button className="pk-record-cta"><span className="rd" /> New recording</button>
-        </div>
-      </aside>
+      <PkSidebar active="notes" />
 
       <main className="pk-home-main">
         <div className="pk-home-head">
@@ -246,3 +255,6 @@ function PkSummary() {
 
 window.PkHome = PkHome;
 window.PkSummary = PkSummary;
+window.PkSidebar = PkSidebar;
+window.Av = Av;
+window.PK_PEOPLE = PK_PEOPLE;

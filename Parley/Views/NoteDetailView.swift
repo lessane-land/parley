@@ -862,8 +862,14 @@ struct NoteDetailView: View {
         ScrollView(.vertical) {
             ZStack(alignment: .topLeading) {
                 typedNotes
+                    #if os(iOS)
+                    // iOS editor self-sizes to its content (it's not its own scroller).
                     .scrollDisabled(true)
                     .fixedSize(horizontal: false, vertical: true)
+                    #else
+                    // macOS editor is its own scroll view — give it a stable height.
+                    .frame(minHeight: 360)
+                    #endif
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .allowsHitTesting(typedActive)
 
@@ -1134,10 +1140,10 @@ struct NoteDetailView: View {
         #else
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 4) {
-                macFmt("bold") { macRich.bold() }
-                macFmt("italic") { macRich.italic() }
-                macFmt("textformat.size.larger") { macRich.header() }
-                macFmt("list.bullet") { macRich.bullet() }
+                macFmt("bold") { macRich.bold() }.keyboardShortcut("b", modifiers: .command)
+                macFmt("italic") { macRich.italic() }.keyboardShortcut("i", modifiers: .command)
+                macFmt("textformat.size.larger") { macRich.header() }.keyboardShortcut("t", modifiers: [.command, .shift])
+                macFmt("list.bullet") { macRich.bullet() }.keyboardShortcut("l", modifiers: [.command, .shift])
                 Spacer()
             }
             RichTextEditor(
@@ -1943,29 +1949,6 @@ struct RichTextEditor: UIViewRepresentable {
 #if os(macOS)
 import AppKit
 
-/// An `NSTextView` that grows with its content (so it lives inside the page's
-/// SwiftUI ScrollView). Formatting uses AppKit's native rich-text editing: ⌘B / ⌘I,
-/// the Format ▸ Font and Format ▸ Text ▸ Lists menus.
-final class GrowingTextView: NSTextView {
-    /// A floor so the view always has a height (and therefore gets a width from
-    /// SwiftUI) — otherwise it can collapse to zero and never lay out its text.
-    override var intrinsicContentSize: NSSize {
-        guard let lm = layoutManager, let tc = textContainer else {
-            return NSSize(width: NSView.noIntrinsicMetric, height: 240)
-        }
-        lm.ensureLayout(for: tc)
-        return NSSize(width: NSView.noIntrinsicMetric, height: max(lm.usedRect(for: tc).height, 240))
-    }
-    override func didChangeText() {
-        super.didChangeText()
-        invalidateIntrinsicContentSize()
-    }
-    override func layout() {
-        super.layout()
-        invalidateIntrinsicContentSize()   // re-measure when the width changes
-    }
-}
-
 /// Holds a weak reference to the Mac editor's text view and applies formatting —
 /// so an on-screen B / I / H / • toolbar works (not just the Format menu).
 @Observable
@@ -2054,8 +2037,13 @@ struct RichTextEditor: NSViewRepresentable {
     var controller: MacRichController? = nil
     var onChange: (Data?, String) -> Void
 
-    func makeNSView(context: Context) -> GrowingTextView {
-        let tv = GrowingTextView()
+    func makeNSView(context: Context) -> NSScrollView {
+        // The standard, reliable embedding: an NSTextView inside its own scroll
+        // view (no self-sizing tricks). SwiftUI gives it a stable frame.
+        let scroll = NSTextView.scrollableTextView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        guard let tv = scroll.documentView as? NSTextView else { return scroll }
         tv.delegate = context.coordinator
         controller?.textView = tv
         controller?.fontSize = fontSize
@@ -2067,15 +2055,8 @@ struct RichTextEditor: NSViewRepresentable {
         tv.font = .systemFont(ofSize: fontSize)
         tv.textColor = textColor
         tv.insertionPointColor = tintColor
-        tv.textContainerInset = .zero
+        tv.textContainerInset = NSSize(width: 0, height: 4)
         tv.textContainer?.lineFragmentPadding = 0
-        tv.isVerticallyResizable = true
-        tv.isHorizontallyResizable = false
-        tv.minSize = NSSize(width: 0, height: 0)
-        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        tv.textContainer?.widthTracksTextView = true
-        tv.textContainer?.size = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
-        tv.autoresizingMask = [.width]
         if let initialRTF,
            let ns = try? NSMutableAttributedString(
                data: initialRTF,
@@ -2088,10 +2069,10 @@ struct RichTextEditor: NSViewRepresentable {
             tv.string = initialPlain
         }
         tv.typingAttributes = [.font: NSFont.systemFont(ofSize: fontSize), .foregroundColor: textColor]
-        return tv
+        return scroll
     }
 
-    func updateNSView(_ tv: GrowingTextView, context: Context) {}
+    func updateNSView(_ scroll: NSScrollView, context: Context) {}
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 

@@ -1170,7 +1170,7 @@ private struct DayPanel: View {
             expanded.remove(ev.id)
             return
         }
-        withAnimation(.snappy) { expanded.insert(ev.id) }
+        withAnimation(.snappy) { _ = expanded.insert(ev.id) }
         let needsLoad: Bool
         switch prep[ev.id] {
         case .some(.loading), .some(.ready): needsLoad = false

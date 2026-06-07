@@ -1965,9 +1965,9 @@ struct RichTextEditor: NSViewRepresentable {
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = false
         tv.minSize = NSSize(width: 0, height: 0)
-        tv.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         tv.textContainer?.widthTracksTextView = true
-        tv.textContainer?.size = NSSize(width: 0, height: .greatestFiniteMagnitude)
+        tv.textContainer?.size = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
         tv.autoresizingMask = [.width]
         if let initialRTF,
            let ns = try? NSMutableAttributedString(

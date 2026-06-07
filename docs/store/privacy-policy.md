@@ -47,4 +47,4 @@ If this policy changes, the updated version will be posted at this URL with a ne
 date.
 
 ## Contact
-Questions? Contact: **[your support email]**
+Questions? Contact: **lessane.dev@gmail.com**

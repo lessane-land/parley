@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		000000000000000000000017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000016 /* Assets.xcassets */; };
+		000000000000000000000602 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000601 /* PrivacyInfo.xcprivacy */; };
 		000000000000000000000019 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000018 /* Preview Assets.xcassets */; };
 		00000000000000000000001D /* ParleyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000001C /* ParleyApp.swift */; };
 		00000000000000000000001F /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000001E /* Note.swift */; };
@@ -58,6 +59,7 @@
 /* Begin PBXFileReference section */
 		00000000000000000000000B /* Parley.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Parley.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000015 /* Parley.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Parley.entitlements; sourceTree = "<group>"; };
+		000000000000000000000601 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		000000000000000000000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		000000000000000000000018 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		00000000000000000000001A /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
@@ -139,6 +141,7 @@
 				000000000000000000000016 /* Assets.xcassets */,
 				000000000000000000000009 /* Preview Content */,
 				000000000000000000000015 /* Parley.entitlements */,
+				000000000000000000000601 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Parley;
 			sourceTree = "<group>";
@@ -301,6 +304,7 @@
 			files = (
 				000000000000000000000019 /* Preview Assets.xcassets in Resources */,
 				000000000000000000000017 /* Assets.xcassets in Resources */,
+				000000000000000000000602 /* PrivacyInfo.xcprivacy in Resources */,
 				000000000000000000000035 /* Archivo-Bold.ttf in Resources */,
 				000000000000000000000037 /* Archivo-ExtraBold.ttf in Resources */,
 				000000000000000000000039 /* Archivo-Regular.ttf in Resources */,

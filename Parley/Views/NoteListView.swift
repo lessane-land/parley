@@ -57,17 +57,11 @@ struct NoteListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Group {
-                if showingMonthCalendar {
-                    monthCalendar   // full-window calendar (iPad/Mac)
-                } else {
-                    home
-                }
-            }
+            home
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                // iPad hides the bar on the dashboard (actions live in the rail), but
-                // the calendar needs it back for its Done/＋. iPhone keeps its bar.
+                // iPad/Mac hide the bar (actions live in the rail; the calendar
+                // brings its own header). iPhone keeps its bar.
                 .toolbar(barHidden ? .hidden : .visible, for: .navigationBar)
                 .toolbarBackground(theme.paper, for: .navigationBar)
                 .toolbarBackground(barHidden ? .hidden : .visible, for: .navigationBar)
@@ -211,10 +205,16 @@ struct NoteListView: View {
                     rail.frame(width: 268)
                     verticalDivider
                 }
-                grid
-                if usesSidePanels && showingAsk {
-                    askResizeHandle
-                    chatColumn.transition(.move(edge: .trailing))
+                if showingMonthCalendar {
+                    // The calendar takes the main pane, keeping the rail (sidebar)
+                    // and bringing its own day panel — the design's 3-pane layout.
+                    monthCalendar
+                } else {
+                    grid
+                    if usesSidePanels && showingAsk {
+                        askResizeHandle
+                        chatColumn.transition(.move(edge: .trailing))
+                    }
                 }
             }
             // When the rail floats (iPad), the margins around it show the mood's
@@ -408,7 +408,7 @@ struct NoteListView: View {
                     navRow("All Notes", "tray.full", count: notes.count, target: .all)
                     navRow("Recent", "clock", count: recentCount, target: .recent)
                     actionRow("Ask Parley", "sparkles") { withAnimation(.snappy) { showingAsk = true } }
-                    actionRow("Calendar", "calendar") { openCalendar() }
+                    actionRow("Calendar", "calendar", active: showingMonthCalendar) { openCalendar() }
                     actionRow("Reminders", "checklist") { openReminders() }
 
                     if !allTags.isEmpty {
@@ -441,15 +441,17 @@ struct NoteListView: View {
 
     /// A non-selectable sidebar action (Ask Parley, Calendar, …) styled like a nav
     /// row but triggering a one-off action instead of switching the filter scope.
-    private func actionRow(_ label: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
+    private func actionRow(_ label: String, _ icon: String, active: Bool = false,
+                           _ action: @escaping () -> Void) -> some View {
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9)
         return Button(action: action) {
             HStack(spacing: 11) {
-                Image(systemName: icon).foregroundStyle(theme.inkFaint).frame(width: 18)
-                Text(label).font(theme.bodyFont(14)).foregroundStyle(theme.ink)
+                Image(systemName: icon).foregroundStyle(active ? theme.accent : theme.inkFaint).frame(width: 18)
+                Text(label).font(theme.bodyFont(14)).foregroundStyle(active ? theme.accentInk : theme.ink)
                 Spacer()
             }
             .padding(.horizontal, 11).padding(.vertical, 9)
+            .background(active ? theme.accentTint : Color.clear, in: shape)
             .contentShape(shape)
         }
         .buttonStyle(.plain)
@@ -519,9 +521,9 @@ struct NoteListView: View {
     }
 
     private func navRow(_ label: String, _ icon: String, count: Int, target: Scope) -> some View {
-        let on = scope == target
+        let on = scope == target && !showingMonthCalendar
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9)
-        return Button { scope = target } label: {
+        return Button { scope = target; showingMonthCalendar = false } label: {
             HStack(spacing: 11) {
                 Image(systemName: icon).foregroundStyle(on ? theme.accent : theme.inkFaint).frame(width: 18)
                 Text(label).font(theme.bodyFont(14)).foregroundStyle(on ? theme.accentInk : theme.ink)
@@ -535,9 +537,9 @@ struct NoteListView: View {
     }
 
     private func tagRow(_ tag: Tag) -> some View {
-        let on = scope == .tag(tag.persistentModelID)
+        let on = scope == .tag(tag.persistentModelID) && !showingMonthCalendar
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9)
-        return Button { scope = .tag(tag.persistentModelID) } label: {
+        return Button { scope = .tag(tag.persistentModelID); showingMonthCalendar = false } label: {
             HStack(spacing: 11) {
                 Circle().fill(tag.color).frame(width: 9, height: 9).frame(width: 18)
                 Text(tag.name).font(theme.bodyFont(14)).foregroundStyle(on ? theme.accentInk : theme.ink).lineLimit(1)

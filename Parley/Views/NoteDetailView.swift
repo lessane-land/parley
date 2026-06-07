@@ -228,11 +228,20 @@ struct NoteDetailView: View {
                 onAddReminders: { await eventKit.addReminders($0) },
                 onOpenNotes: {
                     showingSummary = false
+                    // Mac has room for both; iPhone/iPad focus the chosen panel.
+                    #if os(macOS)
+                    withAnimation(.snappy) { showNotes = true; showTranscript = true }
+                    #else
                     withAnimation(.snappy) { showNotes = true; showTranscript = false }
+                    #endif
                 },
                 onOpenTranscript: {
                     showingSummary = false
+                    #if os(macOS)
+                    withAnimation(.snappy) { showNotes = true; showTranscript = true }
+                    #else
                     withAnimation(.snappy) { showTranscript = true; showNotes = false }
+                    #endif
                 }
             )
         }

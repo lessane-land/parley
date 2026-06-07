@@ -282,6 +282,8 @@ struct MonthCalendarView: View {
     var onOpenNote: (Note) -> Void
     var loadMeetings: (Date, Date) async -> [Meeting]
     var onAddEvent: (EventDraft) async -> Void
+    /// Return to the dashboard (it's shown as the navigation root, not a modal).
+    var onClose: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var month: Date = MonthCalendarView.startOfMonth(Date())
@@ -293,38 +295,38 @@ struct MonthCalendarView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                monthHeader
-                weekdayHeader
-                grid
-                Divider().overlay(theme.line)
-                dayDetail
-            }
-            .background(theme.paperSunk)
-            .navigationTitle("Calendar")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showingNewEvent = true } label: { Image(systemName: "plus") }
-                        .accessibilityLabel("New Event")
-                }
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
-            }
-            .sheet(isPresented: $showingNewEvent) {
-                // Pre-fill the new event on the selected day.
-                NewEventSheet(theme: theme, day: selected) { draft in
-                    await onAddEvent(draft)
-                    await reload()
-                }
-            }
-            .task(id: month) { await reload() }
+        // No inner NavigationStack — this view *is* the stack's root (full window),
+        // so the toolbar/title belong to the outer stack.
+        VStack(spacing: 0) {
+            monthHeader
+            weekdayHeader
+            grid
+            Divider().overlay(theme.line)
+            dayDetail
         }
-        #if os(macOS)
-        .frame(minWidth: 720, minHeight: 620)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(theme.paperSunk)
+        .navigationTitle("Calendar")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showingNewEvent = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("New Event")
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { onClose?() ?? dismiss() }
+            }
+        }
+        .sheet(isPresented: $showingNewEvent) {
+            // Pre-fill the new event on the selected day.
+            NewEventSheet(theme: theme, day: selected) { draft in
+                await onAddEvent(draft)
+                await reload()
+            }
+        }
+        .task(id: month) { await reload() }
     }
 
     // MARK: Header

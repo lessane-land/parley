@@ -143,7 +143,7 @@ struct NoteDetailView: View {
 
                 splitContent(wide: wide)
             }
-            .padding(24)
+            .padding(isCompact ? 16 : 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .moodPaper(theme)
         }
@@ -306,7 +306,7 @@ struct NoteDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             TextField("Title", text: $note.title)
-                .font(theme.titleFont(26, relativeTo: .title))
+                .font(theme.titleFont(isCompact ? 22 : 26, relativeTo: .title))
                 .tracking(theme.titleTracking)
                 .foregroundStyle(theme.ink)
                 .textFieldStyle(.plain)

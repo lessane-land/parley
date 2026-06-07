@@ -118,8 +118,8 @@ struct SummaryView: View {
                         sidebar(summary).frame(width: 300)
                     }
                 } else {
-                    docColumn(summary)
-                    sidebar(summary)
+                    docColumn(summary).frame(maxWidth: .infinity, alignment: .leading)
+                    sidebar(summary).frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .padding(20)

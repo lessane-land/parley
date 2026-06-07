@@ -82,9 +82,11 @@ struct NoteListView: View {
                         isLoading: loadingMeetings,
                         onPick: openMeeting
                     )
+                    .presentationDragIndicator(.visible)
                 }
                 .sheet(item: $coloringTag) { tag in
                     TagColorSheet(tag: tag, theme: theme)
+                        .presentationDragIndicator(.visible)
                 }
                 .sheet(isPresented: $showingReminders) {
                     RemindersSheet(
@@ -96,6 +98,7 @@ struct NoteListView: View {
                             await eventKit.setReminderCompleted(id: id, completed: done)
                         }
                     )
+                    .presentationDragIndicator(.visible)
                 }
                 // iOS (iPad + iPhone): Ask is a sheet. On macOS it's the inline
                 // column in `home` instead (the binding suppresses the sheet there).
@@ -112,6 +115,7 @@ struct NoteListView: View {
                                 }
                             }
                     }
+                    .presentationDragIndicator(.visible)
                 }
         }
         .tint(theme.accent)
@@ -146,6 +150,7 @@ struct NoteListView: View {
                         }
                     }
             }
+            .presentationDragIndicator(.visible)
         }
         #endif
     }

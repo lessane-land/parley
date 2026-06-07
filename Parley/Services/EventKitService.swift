@@ -50,6 +50,39 @@ final class EventKitService {
             .map(Meeting.init)
     }
 
+    /// Create a calendar event from a draft (in the user's default calendar) and
+    /// return it as a `Meeting` so the caller can link/refresh. Needs calendar
+    /// **write** access (the same full-access prompt we already request).
+    @discardableResult
+    func addEvent(_ draft: EventDraft) async -> Meeting? {
+        guard await ensureCalendarAccess() else { return nil }
+        guard let calendar = store.defaultCalendarForNewEvents
+                ?? store.calendars(for: .event).first(where: { $0.allowsContentModifications }) else { return nil }
+        let event = EKEvent(eventStore: store)
+        event.title = draft.title.isEmpty ? "New event" : draft.title
+        event.startDate = draft.start
+        // Guard against a zero/negative duration.
+        event.endDate = max(draft.end, draft.start.addingTimeInterval(900))
+        event.calendar = calendar
+        if let notes = draft.notes, !notes.isEmpty { event.notes = notes }
+        do {
+            try store.save(event, span: .thisEvent, commit: true)
+            return Meeting(event)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Timed meetings in an arbitrary date range (for the month calendar grid).
+    func meetings(from start: Date, to end: Date) async -> [Meeting] {
+        guard await ensureCalendarAccess() else { return [] }
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        return store.events(matching: predicate)
+            .filter { !$0.isAllDay }
+            .sorted { $0.startDate < $1.startDate }
+            .map(Meeting.init)
+    }
+
     // MARK: Reminders
 
     /// The title of the dedicated reminders list Parley owns. Action items the app
@@ -209,6 +242,14 @@ struct ReminderItem: Identifiable {
 struct ReminderDraft {
     let title: String
     let due: Date?
+}
+
+/// A calendar event to be created.
+struct EventDraft {
+    var title: String
+    var start: Date
+    var end: Date
+    var notes: String? = nil
 }
 
 /// Heuristic action-item detection. This is a deliberate **placeholder** for

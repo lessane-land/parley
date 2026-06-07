@@ -169,28 +169,30 @@ struct NoteCard: View {
             .map(String.init) ?? ""
     }
 
+    private var dense: Bool { size == .dense && !hero }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             dateLine
             Text(note.title.isEmpty ? "New Note" : note.title)
-                .font(theme.titleFont(hero ? 22 : 18, relativeTo: .headline))
+                .font(theme.titleFont(hero ? 22 : (dense ? 15 : 18), relativeTo: .headline))
                 .tracking(theme.titleTracking)
                 .textCase(theme.titleUppercase ? .uppercase : nil)
                 .foregroundStyle(onAccent ? .white : theme.ink)
-                .lineLimit(2)
-                .padding(.bottom, 7)
+                .lineLimit(dense ? 2 : 2)
+                .padding(.bottom, dense ? 4 : 7)
 
-            if !snippet.isEmpty {
+            if size.showsSnippet, !snippet.isEmpty {
                 Text(snippet)
                     .font(theme.bodyFont(13))
                     .foregroundStyle(onAccent ? .white.opacity(0.9) : theme.inkSoft)
                     .lineLimit(hero ? 3 : 2)
             }
 
-            Spacer(minLength: 10)
+            Spacer(minLength: dense ? 6 : 10)
             foot
         }
-        .padding(16)
+        .padding(dense ? 12 : 16)
         .modifier(CardFrame(fill: fill, height: hero ? size.featureHeight : size.cardHeight))
         .modifier(CardSurface(theme: theme, mood: mood, feature: feature))
         // The prototype's `.hw-flag`: a faint accent mark for handwritten notes.

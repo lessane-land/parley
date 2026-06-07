@@ -698,6 +698,10 @@ struct NoteDetailView: View {
     /// within the detail (no need to go back to the list) and pops back.
     private var noteMenu: some View {
         Menu {
+            Button { addNoteToCalendar() } label: {
+                Label("Add to Calendar", systemImage: "calendar.badge.plus")
+            }
+            Divider()
             Button(role: .destructive) { showDeleteNote = true } label: {
                 Label("Delete Note", systemImage: "trash")
             }
@@ -711,12 +715,29 @@ struct NoteDetailView: View {
         Menu {
             Button { showPhotoPicker = true } label: { Label("Add Photo", systemImage: "photo") }
             Button { importingFile = true } label: { Label("Add File", systemImage: "doc") }
+            Button { addNoteToCalendar() } label: { Label("Add to Calendar", systemImage: "calendar.badge.plus") }
             Divider()
             Button(role: .destructive) { showDeleteNote = true } label: {
                 Label("Delete Note", systemImage: "trash")
             }
         } label: {
             Label("More", systemImage: "ellipsis.circle")
+        }
+    }
+
+    /// Create a calendar event from this note (its time if it has one, else the next
+    /// hour) and link it back so we don't duplicate it.
+    private func addNoteToCalendar() {
+        let start = note.startDate ?? Date().addingTimeInterval(3600)
+        let end = note.endDate ?? start.addingTimeInterval(3600)
+        let title = note.title.isEmpty ? "New event" : note.title
+        Task {
+            if let meeting = await eventKit.addEvent(
+                EventDraft(title: title, start: start, end: end,
+                           notes: note.body.isEmpty ? nil : note.body)) {
+                note.calendarEventID = meeting.id
+                if note.startDate == nil { note.startDate = meeting.start; note.endDate = meeting.end }
+            }
         }
     }
 

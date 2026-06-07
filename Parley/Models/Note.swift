@@ -23,6 +23,11 @@ final class Note {
 
     var title: String = ""
     var body: String = ""
+    /// Rich (formatted) version of `body` as RTF, when the user has applied bold /
+    /// italic / headers / bullets. `body` stays the plain-text mirror (search, the
+    /// wrap-up, action-item detection all read it). Optional + external storage →
+    /// CloudKit-safe and a lightweight migration; nil = plain note.
+    @Attribute(.externalStorage) var bodyRich: Data?
     var createdAt: Date = Date()
 
     /// The live, on-device transcript captured while recording. Kept separate

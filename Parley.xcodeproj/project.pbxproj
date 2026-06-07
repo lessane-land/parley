@@ -488,6 +488,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Parley uses the camera to capture a photo of your handwritten notes and read the text on your device.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Parley uses the microphone to transcribe your meetings on your device.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Parley adds your action items to Reminders.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Parley adds your action items to Reminders.";
@@ -496,7 +497,7 @@
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
+				INFOPLIST_KEY_UIBackgroundModes = "audio remote-notification";
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad[sdk=iphoneos*]" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -537,6 +538,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Parley uses the camera to capture a photo of your handwritten notes and read the text on your device.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Parley uses the microphone to transcribe your meetings on your device.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Parley adds your action items to Reminders.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Parley adds your action items to Reminders.";
@@ -545,7 +547,7 @@
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
+				INFOPLIST_KEY_UIBackgroundModes = "audio remote-notification";
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad[sdk=iphoneos*]" = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

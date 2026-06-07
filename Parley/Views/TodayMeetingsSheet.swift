@@ -1215,9 +1215,8 @@ private struct DayPanel: View {
         }
     }
 
-    /// A day's note. Typed notes read as the design's lime "quick note" box;
-    /// recordings read as a plain white card with a waveform — so the panel isn't
-    /// a wall of lime. Tapping opens the note.
+    /// A day's note in the design's lime "quick note" box, with a pencil (typed) /
+    /// waveform (recording) tack. Tapping opens the note.
     private func noteRow(_ note: Note) -> some View {
         let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
         let isRecording = !note.transcript.isEmpty
@@ -1227,12 +1226,12 @@ private struct DayPanel: View {
                 Image(systemName: isRecording ? "waveform" : "pencil")
                     .font(.system(size: 12)).foregroundStyle(theme.accent).padding(.top, 1)
                 Text(title)
-                    .font(theme.bodyFont(13)).foregroundStyle(isRecording ? theme.ink : theme.ink2)
+                    .font(theme.bodyFont(13)).foregroundStyle(theme.ink2)
                     .frame(maxWidth: .infinity, alignment: .leading).lineLimit(2)
             }
             .padding(.horizontal, 13).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isRecording ? theme.paperRaised : theme.accentTint, in: shape)
+            .background(theme.accentTint, in: shape)
             .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
         }
         .buttonStyle(.plain)

@@ -112,6 +112,10 @@ struct NoteDetailView: View {
     @State private var showAttachMenu = false
     /// Camera capture (iPhone) for snapping a photo of paper notes.
     @State private var showCamera = false
+    #if os(macOS)
+    /// Drives the Mac editor's on-screen formatting toolbar.
+    @State private var macRich = MacRichController()
+    #endif
 
     /// Delete-this-note confirmation.
     @State private var showDeleteNote = false
@@ -1128,27 +1132,50 @@ struct NoteDetailView: View {
             }
         }
         #else
-        RichTextEditor(
-            initialRTF: note.bodyRich,
-            initialPlain: note.body,
-            fontSize: density.bodySize,
-            textColor: NSColor(theme.ink2),
-            tintColor: NSColor(theme.accent),
-            onChange: { rtf, plain in
-                note.bodyRich = rtf
-                note.body = plain
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 4) {
+                macFmt("bold") { macRich.bold() }
+                macFmt("italic") { macRich.italic() }
+                macFmt("textformat.size.larger") { macRich.header() }
+                macFmt("list.bullet") { macRich.bullet() }
+                Spacer()
             }
-        )
-        .overlay(alignment: .topLeading) {
-            if note.body.isEmpty && typedActive {
-                Text("Start typing your notes…  ⌘B bold · ⌘I italic · Format ▸ Lists")
-                    .font(theme.bodyFont(density.bodySize))
-                    .foregroundStyle(theme.inkFaint)
-                    .allowsHitTesting(false)
+            RichTextEditor(
+                initialRTF: note.bodyRich,
+                initialPlain: note.body,
+                fontSize: density.bodySize,
+                textColor: NSColor(theme.ink2),
+                tintColor: NSColor(theme.accent),
+                controller: macRich,
+                onChange: { rtf, plain in
+                    note.bodyRich = rtf
+                    note.body = plain
+                }
+            )
+            .overlay(alignment: .topLeading) {
+                if note.body.isEmpty && typedActive {
+                    Text("Start typing your notes…")
+                        .font(theme.bodyFont(density.bodySize))
+                        .foregroundStyle(theme.inkFaint)
+                        .allowsHitTesting(false)
+                }
             }
         }
         #endif
     }
+
+    #if os(macOS)
+    private func macFmt(_ symbol: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(theme.inkSoft)
+                .frame(width: 28, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+    #endif
 
     // MARK: Top-bar record control (the design's REC pill + circular stop)
 
@@ -1939,19 +1966,99 @@ final class GrowingTextView: NSTextView {
     }
 }
 
-/// Rich text editor for macOS — same RTF persistence as iOS, native AppKit
-/// formatting controls.
+/// Holds a weak reference to the Mac editor's text view and applies formatting —
+/// so an on-screen B / I / H / • toolbar works (not just the Format menu).
+@Observable
+final class MacRichController {
+    weak var textView: NSTextView?
+    var fontSize: CGFloat = 16
+
+    func bold()   { toggleTrait(.bold) }
+    func italic() { toggleTrait(.italic) }
+
+    private func toggleTrait(_ trait: NSFontDescriptor.SymbolicTraits) {
+        guard let tv = textView, let ts = tv.textStorage else { return }
+        let body = NSFont.systemFont(ofSize: fontSize)
+        let range = tv.selectedRange()
+        if range.length == 0 {
+            let cur = (tv.typingAttributes[.font] as? NSFont) ?? body
+            tv.typingAttributes[.font] = font(cur, toggling: trait)
+            return
+        }
+        var allOn = true
+        ts.enumerateAttribute(.font, in: range) { v, _, _ in
+            let f = (v as? NSFont) ?? body
+            if !f.fontDescriptor.symbolicTraits.contains(trait) { allOn = false }
+        }
+        ts.beginEditing()
+        ts.enumerateAttribute(.font, in: range) { v, sub, _ in
+            let f = (v as? NSFont) ?? body
+            ts.addAttribute(.font, value: font(f, set: trait, on: !allOn), range: sub)
+        }
+        ts.endEditing()
+        tv.didChangeText()
+    }
+    private func font(_ f: NSFont, toggling t: NSFontDescriptor.SymbolicTraits) -> NSFont {
+        font(f, set: t, on: !f.fontDescriptor.symbolicTraits.contains(t))
+    }
+    private func font(_ f: NSFont, set t: NSFontDescriptor.SymbolicTraits, on: Bool) -> NSFont {
+        var traits = f.fontDescriptor.symbolicTraits
+        if on { traits.insert(t) } else { traits.remove(t) }
+        return NSFont(descriptor: f.fontDescriptor.withSymbolicTraits(traits), size: f.pointSize) ?? f
+    }
+
+    func header() {
+        guard let tv = textView, let ts = tv.textStorage else { return }
+        let para = (tv.string as NSString).paragraphRange(for: tv.selectedRange())
+        guard para.length > 0 else { return }
+        let body = NSFont.systemFont(ofSize: fontSize)
+        let first = ts.attribute(.font, at: para.location, effectiveRange: nil) as? NSFont
+        let isHeader = (first?.pointSize ?? fontSize) >= fontSize * 1.4
+        ts.beginEditing()
+        ts.addAttribute(.font, value: isHeader ? body : NSFont.systemFont(ofSize: fontSize * 1.5, weight: .semibold), range: para)
+        ts.endEditing()
+        tv.didChangeText()
+    }
+
+    func bullet() {
+        guard let tv = textView, let ts = tv.textStorage else { return }
+        let s = tv.string as NSString
+        let para = s.paragraphRange(for: tv.selectedRange())
+        let marker = "•\t"
+        let lines = s.substring(with: para).components(separatedBy: "\n")
+        let allBulleted = lines.filter { !$0.isEmpty }.allSatisfy { $0.hasPrefix(marker) }
+        var rebuilt = ""
+        for (i, line) in lines.enumerated() {
+            var l = line
+            if allBulleted { if l.hasPrefix(marker) { l.removeFirst(marker.count) } }
+            else if !l.isEmpty, !l.hasPrefix(marker) { l = marker + l }
+            rebuilt += l + (i == lines.count - 1 ? "" : "\n")
+        }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize),
+            .foregroundColor: tv.textColor ?? NSColor.textColor,
+        ]
+        ts.replaceCharacters(in: para, with: NSAttributedString(string: rebuilt, attributes: attrs))
+        tv.didChangeText()
+    }
+}
+
+/// Rich text editor for macOS — same RTF persistence as iOS, with an on-screen
+/// toolbar (and the native Format menu / ⌘B ⌘I too).
 struct RichTextEditor: NSViewRepresentable {
     let initialRTF: Data?
     let initialPlain: String
     let fontSize: CGFloat
     let textColor: NSColor
     let tintColor: NSColor
+    var controller: MacRichController? = nil
     var onChange: (Data?, String) -> Void
 
     func makeNSView(context: Context) -> GrowingTextView {
         let tv = GrowingTextView()
         tv.delegate = context.coordinator
+        controller?.textView = tv
+        controller?.fontSize = fontSize
         tv.isRichText = true
         tv.allowsUndo = true
         tv.drawsBackground = false

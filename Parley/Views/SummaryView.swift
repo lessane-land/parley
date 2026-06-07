@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// The "Granola magic" surface: generate (and re-generate) an on-device summary
+/// The wrap-up surface: generate (and re-generate) an on-device summary
 /// of a note's typed notes + transcript. A first-class *pushed* screen in the
 /// note's navigation stack (it relies on the host's back button). Action items
 /// are checkable, carry an owner, and can be pushed to Reminders individually or
@@ -85,10 +85,10 @@ struct SummaryView: View {
     private var emptyPrompt: some View {
         VStack(spacing: 14) {
             Image(systemName: "sparkles").font(.system(size: 34)).foregroundStyle(theme.accent)
-            Text("Granola magic")
+            Text("Wrap up on device")
                 .font(theme.titleFont(20, relativeTo: .title3))
                 .foregroundStyle(theme.ink)
-            Text("Merge your notes and the transcript into a structured wrap-up — decisions, action items, and open questions — entirely on device.")
+            Text("Merge your notes, photos, and the transcript into a structured wrap-up — decisions, action items, and open questions — entirely on device.")
                 .font(theme.bodyFont(14))
                 .foregroundStyle(theme.inkSoft)
                 .multilineTextAlignment(.center)

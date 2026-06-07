@@ -49,7 +49,7 @@ struct NoteDetailView: View {
     /// gets its own clean session.
     @State private var transcription = TranscriptionService()
 
-    /// On-device summarizer (the Granola magic).
+    /// On-device summarizer (the wrap-up).
     @State private var summaryService = SummaryService()
 
     /// Recreating the canvas (via `.id`) forces a reload — used by "Clear".

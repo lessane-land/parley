@@ -123,7 +123,7 @@ private struct DecisionDraft {
     var rationale: String
 }
 
-/// Runs the "Granola magic" entirely on-device: merge the user's sparse notes
+/// Runs the wrap-up entirely on-device: merge the user's sparse notes
 /// with the full transcript into a clean, structured summary.
 @MainActor
 @Observable

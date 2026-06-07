@@ -409,7 +409,7 @@ struct NoteListView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     navRow("All Notes", "tray.full", count: notes.count, target: .all)
                     navRow("Recent", "clock", count: recentCount, target: .recent)
-                    actionRow("Ask Parley", "sparkles") { withAnimation(.snappy) { showingAsk = true } }
+                    actionRow("Ask Parley", "sparkles", active: showingAsk) { withAnimation(.snappy) { showingAsk.toggle() } }
                     actionRow("Calendar", "calendar", active: showingMonthCalendar) { openCalendar() }
                     actionRow("Reminders", "checklist") { openReminders() }
 

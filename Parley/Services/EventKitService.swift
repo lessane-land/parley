@@ -107,6 +107,21 @@ final class EventKitService {
             .map(ReminderItem.init)
     }
 
+    /// Incomplete reminders due within a date window, across **all** the user's
+    /// lists (not just Parley's) — so the calendar can show what's due in the same
+    /// window of time as their events. Soonest due first.
+    func reminders(from start: Date, to end: Date) async -> [ReminderItem] {
+        guard await ensureRemindersAccess() else { return [] }
+        let predicate = store.predicateForIncompleteReminders(
+            withDueDateStarting: start, ending: end, calendars: nil)
+        let reminders: [EKReminder] = await withCheckedContinuation { continuation in
+            _ = store.fetchReminders(matching: predicate) { continuation.resume(returning: $0 ?? []) }
+        }
+        return reminders
+            .sorted { ($0.dueDateComponents?.date ?? .distantFuture) < ($1.dueDateComponents?.date ?? .distantFuture) }
+            .map(ReminderItem.init)
+    }
+
     /// The existing "Parley" reminders list, or nil if it hasn't been created yet.
     private func findParleyList() -> EKCalendar? {
         store.calendars(for: .reminder).first { $0.title == parleyListTitle }

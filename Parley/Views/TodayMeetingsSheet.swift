@@ -295,12 +295,24 @@ struct MonthCalendarView: View {
     let theme: Theme
     let notes: [Note]
     let access: EventKitService.Access
+    var remindersAccess: EventKitService.Access = .unknown
     var onOpenMeeting: (Meeting) -> Void
     var onOpenNote: (Note) -> Void
     var loadMeetings: (Date, Date) async -> [Meeting]
     var onAddEvent: (EventDraft) async -> Void
     /// Create a fresh note dated to a given day (the day panel's "New note").
     var onCreateNote: ((Date) -> Void)? = nil
+    /// Load incomplete reminders due in a window (across all the user's lists).
+    var loadReminders: (Date, Date) async -> [ReminderItem] = { _, _ in [] }
+    /// Mark a reminder complete / incomplete.
+    var onToggleReminder: (String, Bool) async -> Void = { _, _ in }
+    /// Add a reminder (e.g. a prep item pushed to Reminders).
+    var onAddReminder: (ReminderDraft) async -> Void = { _ in }
+    /// Generate an on-device prep brief for a meeting, given its related past notes
+    /// and the titles of reminders due around it.
+    var generatePrep: (Meeting, [Note], [String]) async -> MeetingPrep? = { _, _, _ in nil }
+    /// Why prep is unavailable (nil = the on-device model is ready).
+    var prepUnavailableMessage: String? = nil
     /// Return to the dashboard (it's shown as the navigation root, not a modal).
     var onClose: (() -> Void)? = nil
 
@@ -310,6 +322,7 @@ struct MonthCalendarView: View {
     @State private var cursor: Date = Calendar.current.startOfDay(for: Date())
     @State private var selected: Date = Calendar.current.startOfDay(for: Date())
     @State private var meetings: [Meeting] = []
+    @State private var reminders: [ReminderItem] = []
     @State private var showingNewEvent = false
 
     private let cal = Calendar.current
@@ -329,11 +342,24 @@ struct MonthCalendarView: View {
                 if showPanel {
                     Divider().overlay(theme.line)
                     DayPanel(theme: theme, day: selected, meetings: eventsOn(selected),
-                             notes: notesOn(selected), access: access,
+                             notes: notesOn(selected), reminders: remindersOn(selected),
+                             access: access, remindersAccess: remindersAccess,
                              linkedNote: { linkedNote($0) },
+                             relatedNotes: { relatedNotes(to: $0) },
+                             reminderTitlesForDay: remindersOn(selected).map(\.title),
+                             prepUnavailableMessage: prepUnavailableMessage,
                              onNewEvent: { showingNewEvent = true },
                              onOpenMeeting: onOpenMeeting, onOpenNote: onOpenNote,
-                             onNewNote: { onCreateNote?(selected) })
+                             onNewNote: { onCreateNote?(selected) },
+                             onToggleReminder: { id, done in
+                                 await onToggleReminder(id, done)
+                                 await reloadReminders()
+                             },
+                             onAddReminder: { draft in
+                                 await onAddReminder(draft)
+                                 await reloadReminders()
+                             },
+                             generatePrep: generatePrep)
                         .frame(width: 320)
                 }
             }
@@ -452,9 +478,10 @@ struct MonthCalendarView: View {
         let isSelected = cal.isDate(day, inSameDayAs: selected)
         let evs = eventsOn(day)
         let hasNote = !notesOn(day).isEmpty
+        let hasReminder = !remindersOn(day).isEmpty
         return Button { pickDay(day) } label: {
             VStack(alignment: .leading, spacing: 3) {
-                HStack {
+                HStack(spacing: 5) {
                     Text("\(cal.component(.day, from: day))")
                         .font(theme.monoFont(12.5, relativeTo: .body))
                         .foregroundStyle(isToday ? theme.paper : (inMonth ? theme.ink2 : theme.inkGhost))
@@ -462,6 +489,10 @@ struct MonthCalendarView: View {
                         .background(isToday ? theme.accent : .clear,
                                     in: theme.cornerRadius == 0 ? AnyShape(Rectangle()) : AnyShape(Circle()))
                     Spacer(minLength: 0)
+                    if hasReminder {
+                        Image(systemName: "checklist").font(.system(size: 10))
+                            .foregroundStyle(theme.rec.opacity(0.8))
+                    }
                     if hasNote {
                         Image(systemName: "pencil").font(.system(size: 10))
                             .foregroundStyle(theme.accent.opacity(0.7))
@@ -630,6 +661,12 @@ struct MonthCalendarView: View {
     private func reload() async {
         guard let first = rangeStart, let last = rangeEnd else { return }
         meetings = await loadMeetings(first, last)
+        reminders = await loadReminders(first, last)
+    }
+
+    private func reloadReminders() async {
+        guard let first = rangeStart, let last = rangeEnd else { return }
+        reminders = await loadReminders(first, last)
     }
 
     private func eventsOn(_ day: Date) -> [Meeting] {
@@ -640,8 +677,29 @@ struct MonthCalendarView: View {
         notes.filter { cal.isDate($0.startDate ?? $0.createdAt, inSameDayAs: day) }
             .sorted { ($0.startDate ?? $0.createdAt) < ($1.startDate ?? $1.createdAt) }
     }
+    private func remindersOn(_ day: Date) -> [ReminderItem] {
+        reminders.filter { if let due = $0.due { return cal.isDate(due, inSameDayAs: day) } else { return false } }
+    }
     private func linkedNote(_ meeting: Meeting) -> Note? {
         notes.first { $0.calendarEventID == meeting.id }
+    }
+
+    /// Past notes that look related to a meeting — prior instances of the same
+    /// titled meeting, notes sharing attendees, or the note already linked to it.
+    /// The newest few, used to ground the AI prep brief.
+    private func relatedNotes(to ev: Meeting) -> [Note] {
+        let title = ev.title.lowercased()
+        let att = Set(ev.attendees.map { $0.lowercased() })
+        return notes.filter { n in
+            guard (n.startDate ?? n.createdAt) < ev.start else { return false }   // past only
+            if n.calendarEventID == ev.id { return true }
+            if !title.isEmpty, n.title.lowercased() == title { return true }
+            if !att.isEmpty, !att.isDisjoint(with: Set(n.attendees.map { $0.lowercased() })) { return true }
+            return false
+        }
+        .sorted { ($0.startDate ?? $0.createdAt) > ($1.startDate ?? $1.createdAt) }
+        .prefix(3)
+        .map { $0 }
     }
     private func eventKind(_ ev: Meeting) -> CalEventKind {
         let now = Date()
@@ -773,14 +831,31 @@ private struct DayPanel: View {
     let day: Date
     let meetings: [Meeting]
     let notes: [Note]
+    let reminders: [ReminderItem]
     let access: EventKitService.Access
+    let remindersAccess: EventKitService.Access
     var linkedNote: (Meeting) -> Note?
+    var relatedNotes: (Meeting) -> [Note]
+    var reminderTitlesForDay: [String]
+    var prepUnavailableMessage: String?
     var onNewEvent: () -> Void
     var onOpenMeeting: (Meeting) -> Void
     var onOpenNote: (Note) -> Void
     var onNewNote: () -> Void
+    var onToggleReminder: (String, Bool) async -> Void
+    var onAddReminder: (ReminderDraft) async -> Void
+    var generatePrep: (Meeting, [Note], [String]) async -> MeetingPrep?
 
     private let cal = Calendar.current
+
+    /// Per-event prep: which cards are expanded, and the result/loading state.
+    @State private var expanded: Set<String> = []
+    @State private var prep: [String: PrepState] = [:]
+    /// Prep items the user has already pushed to Reminders this session (so the
+    /// "+" turns into a check without a round-trip).
+    @State private var added: Set<String> = []
+
+    private enum PrepState: Equatable { case loading, ready(MeetingPrep), failed }
 
     var body: some View {
         ScrollView {
@@ -799,6 +874,16 @@ private struct DayPanel: View {
                         .padding(.bottom, 8)
                 }
                 ForEach(meetings) { ev in eventItem(ev) }
+
+                if !reminders.isEmpty || remindersAccess == .granted {
+                    section(reminders.isEmpty ? "Reminders" : "\(reminders.count) due")
+                    if reminders.isEmpty {
+                        Text("Nothing due this day.")
+                            .font(theme.bodyFont(13)).italic().foregroundStyle(theme.inkFaint)
+                            .padding(.bottom, 8)
+                    }
+                    ForEach(reminders) { r in reminderRow(r) }
+                }
 
                 section("Notes")
                 if notes.isEmpty {
@@ -856,51 +941,182 @@ private struct DayPanel: View {
             .padding(.top, 6).padding(.bottom, 10)
     }
 
+    // MARK: Event card (with AI prep)
+
     private func eventItem(_ ev: Meeting) -> some View {
         let now = Date()
         let isLive = ev.start <= now && now < ev.end
         let linked = linkedNote(ev)
         let rail: Color = (isLive || linked != nil) ? theme.accent : theme.inkGhost
-        return Button { onOpenMeeting(ev) } label: {
-            HStack(spacing: 0) {
-                Rectangle().fill(rail).frame(width: 4)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 5) {
-                        if isLive { Circle().fill(theme.accent).frame(width: 6, height: 6) }
-                        Text(ev.title).font(theme.bodyFont(14).weight(.semibold))
-                            .foregroundStyle(theme.ink).lineLimit(2)
-                    }
-                    Text("\(ev.start.formatted(.dateTime.hour().minute())) – \(ev.end.formatted(.dateTime.hour().minute()))")
-                        .font(theme.monoFont(11)).foregroundStyle(theme.inkSoft)
-                    HStack(spacing: 10) {
-                        if !ev.attendees.isEmpty { avatars(ev.attendees) }
-                        if let linked {
-                            HStack(spacing: 4) {
-                                Image(systemName: "pencil").font(.system(size: 11))
-                                Text(linked.title.isEmpty ? "Linked note" : linked.title).lineLimit(1)
-                                Image(systemName: "arrow.right").font(.system(size: 10)).opacity(0.6)
-                            }
-                            .font(theme.bodyFont(11.5).weight(.semibold))
-                            .foregroundStyle(theme.accentInk)
-                        } else {
-                            Label("Link a note", systemImage: "link")
-                                .font(theme.bodyFont(11.5).weight(.semibold))
-                                .foregroundStyle(theme.inkFaint)
-                        }
-                    }
-                    .padding(.top, 3)
-                }
-                .padding(.horizontal, 12).padding(.vertical, 11)
-                Spacer(minLength: 0)
+        return HStack(spacing: 0) {
+            Rectangle().fill(rail).frame(width: 4)
+            VStack(alignment: .leading, spacing: 0) {
+                Button { onOpenMeeting(ev) } label: { eventBody(ev, isLive: isLive, linked: linked) }
+                    .buttonStyle(.plain)
+                if prepUnavailableMessage == nil { prepArea(ev) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.paperRaised)
+        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 11))
+        .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 11)
+            .strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
+        .padding(.bottom, 9)
+    }
+
+    private func eventBody(_ ev: Meeting, isLive: Bool, linked: Note?) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                if isLive { Circle().fill(theme.accent).frame(width: 6, height: 6) }
+                Text(ev.title).font(theme.bodyFont(14).weight(.semibold))
+                    .foregroundStyle(theme.ink).lineLimit(2)
+            }
+            Text("\(ev.start.formatted(.dateTime.hour().minute())) – \(ev.end.formatted(.dateTime.hour().minute()))")
+                .font(theme.monoFont(11)).foregroundStyle(theme.inkSoft)
+            HStack(spacing: 10) {
+                if !ev.attendees.isEmpty { avatars(ev.attendees) }
+                if let linked {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pencil").font(.system(size: 11))
+                        Text(linked.title.isEmpty ? "Linked note" : linked.title).lineLimit(1)
+                        Image(systemName: "arrow.right").font(.system(size: 10)).opacity(0.6)
+                    }
+                    .font(theme.bodyFont(11.5).weight(.semibold))
+                    .foregroundStyle(theme.accentInk)
+                } else {
+                    Label("Link a note", systemImage: "link")
+                        .font(theme.bodyFont(11.5).weight(.semibold))
+                        .foregroundStyle(theme.inkFaint)
+                }
+            }
+            .padding(.top, 3)
+        }
+        .padding(.horizontal, 12).padding(.top, 11).padding(.bottom, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private func prepArea(_ ev: Meeting) -> some View {
+        let isOpen = expanded.contains(ev.id)
+        VStack(alignment: .leading, spacing: 8) {
+            Divider().overlay(theme.line)
+            Button { togglePrep(ev) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles").font(.system(size: 11))
+                    Text(isOpen ? "Hide prep" : "Prep with Parley")
+                        .font(theme.bodyFont(11.5).weight(.semibold))
+                    Spacer(minLength: 0)
+                    Image(systemName: isOpen ? "chevron.up" : "chevron.down").font(.system(size: 9))
+                }
+                .foregroundStyle(theme.accentInk)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isOpen { prepContent(ev) }
+        }
+        .padding(.horizontal, 12).padding(.bottom, 11).padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private func prepContent(_ ev: Meeting) -> some View {
+        if let state = prep[ev.id] {
+            switch state {
+            case .loading:
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Preparing on device…").font(theme.bodyFont(12)).foregroundStyle(theme.inkSoft)
+                }
+            case .ready(let p):
+                VStack(alignment: .leading, spacing: 8) {
+                    if !p.context.isEmpty {
+                        Text(p.context).font(theme.bodyFont(12.5)).foregroundStyle(theme.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if p.checklist.isEmpty {
+                        Text("Nothing to prepare.").font(theme.bodyFont(12)).italic().foregroundStyle(theme.inkFaint)
+                    } else {
+                        ForEach(p.checklist, id: \.self) { item in prepItemRow(ev, item: item) }
+                    }
+                }
+            case .failed:
+                Text("Couldn't prepare right now — try again.")
+                    .font(theme.bodyFont(12)).foregroundStyle(theme.inkFaint)
+            }
+        }
+    }
+
+    private func prepItemRow(_ ev: Meeting, item: String) -> some View {
+        let key = ev.id + "|" + item
+        let isAdded = added.contains(key)
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "circle").font(.system(size: 11)).foregroundStyle(theme.accent).padding(.top, 2)
+            Text(item).font(theme.bodyFont(12.5)).foregroundStyle(theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Button {
+                added.insert(key)
+                Task { await onAddReminder(ReminderDraft(title: item, due: ev.start)) }
+            } label: {
+                Image(systemName: isAdded ? "checkmark.circle.fill" : "plus.circle")
+                    .font(.system(size: 15))
+                    .foregroundStyle(isAdded ? theme.accent : theme.inkFaint)
+            }
+            .buttonStyle(.plain)
+            .disabled(isAdded)
+            .accessibilityLabel(isAdded ? "Added to Reminders" : "Add to Reminders")
+        }
+    }
+
+    private func togglePrep(_ ev: Meeting) {
+        if expanded.contains(ev.id) {
+            expanded.remove(ev.id)
+            return
+        }
+        withAnimation(.snappy) { expanded.insert(ev.id) }
+        let needsLoad: Bool
+        switch prep[ev.id] {
+        case .some(.loading), .some(.ready): needsLoad = false
+        default: needsLoad = true
+        }
+        guard needsLoad else { return }
+        prep[ev.id] = .loading
+        Task { @MainActor in
+            let result = await generatePrep(ev, relatedNotes(ev), reminderTitlesForDay)
+            prep[ev.id] = result.map { PrepState.ready($0) } ?? .failed
+        }
+    }
+
+    // MARK: Reminders
+
+    private func reminderRow(_ r: ReminderItem) -> some View {
+        Button {
+            Task { await onToggleReminder(r.id, !r.completed) }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: r.completed ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 16)).foregroundStyle(r.completed ? theme.accent : theme.inkFaint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(r.title).font(theme.bodyFont(13.5)).foregroundStyle(theme.ink).lineLimit(2)
+                    if let due = r.due {
+                        Text(due.formatted(.dateTime.hour().minute()))
+                            .font(theme.monoFont(10.5)).foregroundStyle(theme.inkSoft)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.paperRaised)
-            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 11))
-            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 11)
+            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10))
+            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
                 .strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
         }
         .buttonStyle(.plain)
-        .padding(.bottom, 9)
+        .padding(.bottom, 8)
     }
 
     private func avatars(_ names: [String]) -> some View {
@@ -934,7 +1150,7 @@ private struct DayPanel: View {
     private var footer: some View {
         HStack(spacing: 7) {
             Image(systemName: "bolt.fill").font(.system(size: 11)).foregroundStyle(theme.accent)
-            Text("Notes & events stay on this device")
+            Text("Notes, events & prep stay on this device")
                 .font(theme.bodyFont(11)).foregroundStyle(theme.inkFaint)
         }
         .padding(.top, 14)

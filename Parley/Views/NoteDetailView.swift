@@ -1177,16 +1177,17 @@ struct NoteDetailView: View {
     private func applyInitialFace() {
         // Base notes/transcript layout first.
         showTranscript = !note.transcript.isEmpty || backgroundRecordingThisNote
+        // Lead with the wrap-up whenever one exists (notes/transcript a tap back
+        // away); otherwise use the remembered view or the smart default.
+        if note.summaryData != nil {
+            showingSummary = true
+            return
+        }
         let face = UserDefaults.standard.string(forKey: faceKey) ?? smartDefaultFace
         switch face {
-        case "summary":
-            if note.summaryData != nil { showingSummary = true }   // push the summary
-        case "transcript":
-            showTranscript = true
-        case "notes":
-            showTranscript = false
-        default:
-            break
+        case "transcript": showTranscript = true
+        case "notes": showTranscript = false
+        default: break
         }
     }
 

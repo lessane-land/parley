@@ -175,10 +175,9 @@ struct NoteListView: View {
         #endif
     }
 
-    /// Hide the navigation bar on iPad/Mac: both the dashboard (actions live in the
-    /// rail) and the calendar (it carries its own header) provide their own chrome,
-    /// so the system bar would only add an empty gap at the top.
-    private var barHidden: Bool { isRegular }
+    /// Hide the navigation bar on iPad/Mac (the rail/header provide their own
+    /// chrome), and on iPhone when the calendar is up (it has its own header).
+    private var barHidden: Bool { isRegular || showingMonthCalendar }
 
     /// Whether to show the side rail (iPad/Mac) or a compact grid (iPhone).
     private var isRegular: Bool {
@@ -247,8 +246,14 @@ struct NoteListView: View {
             .background { if railFloats { Color.clear.moodPaper(theme) } }
             .overlay { if usesSidePanels { settingsSlideOver } }
         } else {
-            grid
-                .searchable(text: $searchText)
+            // iPhone: the calendar takes over full-screen (same MonthCalendarView,
+            // panel stacks below), matching iPad/Mac. Otherwise the notes grid.
+            if showingMonthCalendar {
+                monthCalendar
+            } else {
+                grid
+                    .searchable(text: $searchText)
+            }
         }
     }
 
@@ -728,17 +733,8 @@ struct NoteListView: View {
     }
 
     private func openCalendar() {
-        // iPad/Mac get the big month grid; iPhone gets the agenda sheet.
-        if isRegular {
-            showingMonthCalendar = true
-            return
-        }
-        showingToday = true
-        loadingMeetings = true
-        Task {
-            meetings = await eventKit.upcomingMeetings()
-            loadingMeetings = false
-        }
+        // Full Month/Week/Day calendar on every platform now.
+        showingMonthCalendar = true
     }
 
     /// The full-window month-grid calendar (iPad/Mac). Tapping a meeting/note pushes

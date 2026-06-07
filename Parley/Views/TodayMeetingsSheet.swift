@@ -322,6 +322,9 @@ struct MonthCalendarView: View {
     var onClose: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    #endif
     @State private var scale: CalendarScale = .month
     /// The anchor the month/week stage is built around.
     @State private var cursor: Date = Calendar.current.startOfDay(for: Date())
@@ -408,7 +411,21 @@ struct MonthCalendarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
+    /// Compact (iPhone) packs the controls into two rows so nothing truncates.
+    private var isPhoneWidth: Bool {
+        #if os(iOS)
+        return hSizeClass == .compact
+        #else
+        return false
+        #endif
+    }
+
+    @ViewBuilder
     private var header: some View {
+        if isPhoneWidth { compactHeader } else { regularHeader }
+    }
+
+    private var regularHeader: some View {
         HStack(spacing: 16) {
             #if os(iOS)
             if let onToggleSidebar {
@@ -455,6 +472,38 @@ struct MonthCalendarView: View {
             .fixedSize()
         }
         .padding(.horizontal, 22).padding(.top, 18).padding(.bottom, 14)
+    }
+
+    private var compactHeader: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                if let onClose {
+                    Button { onClose() } label: { Image(systemName: "chevron.backward").font(.system(size: 16, weight: .semibold)) }
+                        .buttonStyle(.plain).foregroundStyle(theme.accentInk)
+                        .accessibilityLabel("Back to notes")
+                }
+                Text(headerTitle)
+                    .font(theme.titleFont(19, relativeTo: .title3))
+                    .foregroundStyle(theme.ink).lineLimit(1)
+                Spacer(minLength: 4)
+                Button { step(-1) } label: { Image(systemName: "chevron.left") }
+                    .buttonStyle(.plain).foregroundStyle(theme.inkSoft)
+                Button("Today") { goToday() }
+                    .font(theme.bodyFont(12).weight(.semibold)).foregroundStyle(theme.inkSoft)
+                Button { step(1) } label: { Image(systemName: "chevron.right") }
+                    .buttonStyle(.plain).foregroundStyle(theme.inkSoft)
+                Button { showingNewEvent = true } label: {
+                    Image(systemName: "plus.circle.fill").font(.system(size: 22))
+                        .foregroundStyle(theme.accent)
+                }
+                .buttonStyle(.plain).accessibilityLabel("New event")
+            }
+            Picker("View", selection: $scale.animation(.snappy)) {
+                ForEach(CalendarScale.allCases) { Text($0.name).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 12)
     }
 
     @ViewBuilder

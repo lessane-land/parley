@@ -311,14 +311,11 @@ struct NoteDetailView: View {
             guard autoRecord, !didAutoStart, !transcription.isRecording else { return }
             didAutoStart = true
             onAutoRecordConsumed()
-            // The very first launch needs the pushed view + audio session to settle;
-            // a synchronous start here can silently no-op. Defer briefly, then retry
-            // a couple of times until recording actually begins.
-            for attempt in 0..<3 {
-                if transcription.isRecording { break }
-                try? await Task.sleep(for: .milliseconds(attempt == 0 ? 300 : 500))
-                if transcription.isRecording || transcription.state == .preparing
-                    || transcription.state == .downloadingModel { continue }
+            // Let the pushed view + audio session settle, then start once. (A
+            // synchronous start on first launch can silently no-op.)
+            try? await Task.sleep(for: .milliseconds(350))
+            let s = transcription.state
+            if !transcription.isRecording, s != .preparing, s != .downloadingModel {
                 toggleRecord()
             }
         }

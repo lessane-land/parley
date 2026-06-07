@@ -531,8 +531,8 @@ struct MonthCalendarView: View {
             .padding(.top, 10).padding(.bottom, 8).padding(.horizontal, 14)
 
             GeometryReader { geo in
-                let rows = 5
-                let rowH = max(70, geo.size.height / CGFloat(rows))
+                let rows = 6   // a month can span 6 weeks — show them all
+                let rowH = max(isPhoneWidth ? 44 : 64, geo.size.height / CGFloat(rows))
                 let gap = max(1, theme.borderWidth)   // Neubrutalist → 2px black gaps
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: gap), count: 7), spacing: gap) {
                     ForEach(monthDays, id: \.self) { day in monthCell(day, height: rowH) }
@@ -904,7 +904,7 @@ struct MonthCalendarView: View {
         let weekday = cal.component(.weekday, from: monthStart)
         let leading = (weekday - cal.firstWeekday + 7) % 7
         guard let start = cal.date(byAdding: .day, value: -leading, to: monthStart) else { return [] }
-        return (0..<35).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
+        return (0..<42).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
     }
 
     private var weekDays: [Date] {

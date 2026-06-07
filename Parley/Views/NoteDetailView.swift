@@ -1920,14 +1920,22 @@ import AppKit
 /// SwiftUI ScrollView). Formatting uses AppKit's native rich-text editing: ⌘B / ⌘I,
 /// the Format ▸ Font and Format ▸ Text ▸ Lists menus.
 final class GrowingTextView: NSTextView {
+    /// A floor so the view always has a height (and therefore gets a width from
+    /// SwiftUI) — otherwise it can collapse to zero and never lay out its text.
     override var intrinsicContentSize: NSSize {
-        guard let lm = layoutManager, let tc = textContainer else { return super.intrinsicContentSize }
+        guard let lm = layoutManager, let tc = textContainer else {
+            return NSSize(width: NSView.noIntrinsicMetric, height: 240)
+        }
         lm.ensureLayout(for: tc)
-        return NSSize(width: NSView.noIntrinsicMetric, height: lm.usedRect(for: tc).height)
+        return NSSize(width: NSView.noIntrinsicMetric, height: max(lm.usedRect(for: tc).height, 240))
     }
     override func didChangeText() {
         super.didChangeText()
         invalidateIntrinsicContentSize()
+    }
+    override func layout() {
+        super.layout()
+        invalidateIntrinsicContentSize()   // re-measure when the width changes
     }
 }
 
@@ -1956,7 +1964,10 @@ struct RichTextEditor: NSViewRepresentable {
         tv.textContainer?.lineFragmentPadding = 0
         tv.isVerticallyResizable = true
         tv.isHorizontallyResizable = false
+        tv.minSize = NSSize(width: 0, height: 0)
+        tv.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
         tv.textContainer?.widthTracksTextView = true
+        tv.textContainer?.size = NSSize(width: 0, height: .greatestFiniteMagnitude)
         tv.autoresizingMask = [.width]
         if let initialRTF,
            let ns = try? NSMutableAttributedString(

@@ -244,9 +244,10 @@ struct SummaryView: View {
                         .onTapGesture { withAnimation(.snappy) { editing = true } }
                 }
             }
-            if !summary.decisions.isEmpty { decisionsSection(summary.decisions) }
-            if !summary.actionItems.isEmpty { actionItemsSection(summary) }
-            if !summary.openQuestions.isEmpty { openQuestionsSection(summary.openQuestions) }
+            // In edit mode show every section (even empty) so items can be added.
+            if editing || !summary.decisions.isEmpty { decisionsSection(summary.decisions) }
+            if editing || !summary.actionItems.isEmpty { actionItemsSection(summary) }
+            if editing || !summary.openQuestions.isEmpty { openQuestionsSection(summary.openQuestions) }
         }
     }
 
@@ -270,8 +271,10 @@ struct SummaryView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                    if editing { Spacer(minLength: 0); removeButton { removeDecision(decision.id) } }
                 }
             }
+            if editing { addButton("Add decision") { addDecision() } }
         }
     }
 
@@ -279,13 +282,16 @@ struct SummaryView: View {
         VStack(alignment: .leading, spacing: 10) {
             sectionHeader("Action items", count: summary.actionItems.count)
             ForEach(summary.actionItems) { item in actionRow(item) }
-            Button { Task { await remind(summary.actionItems) } } label: {
-                Label("Send all to Reminders", systemImage: "plus.circle")
-                    .font(.subheadline.weight(.semibold))
+            if editing { addButton("Add action item") { addAction() } }
+            if !summary.actionItems.isEmpty {
+                Button { Task { await remind(summary.actionItems) } } label: {
+                    Label("Send all to Reminders", systemImage: "plus.circle")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .tint(theme.accent)
+                .padding(.top, 2)
             }
-            .buttonStyle(.bordered)
-            .tint(theme.accent)
-            .padding(.top, 2)
         }
     }
 
@@ -302,8 +308,12 @@ struct SummaryView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !item.owner.isEmpty { avatar(item.owner, size: 22) }
-            dueChip(item)
-            remindButton(item)
+            if editing {
+                removeButton { removeAction(item.id) }
+            } else {
+                dueChip(item)
+                remindButton(item)
+            }
         }
         .padding(12)
         .moodCard(theme)
@@ -374,8 +384,12 @@ struct SummaryView: View {
             sectionHeader("Open questions", count: items.count)
             if editing {
                 ForEach(items.indices, id: \.self) { i in
-                    editField(openQuestionBinding(i), size: 14)
+                    HStack(spacing: 8) {
+                        editField(openQuestionBinding(i), size: 14)
+                        removeButton { removeOpenQuestion(i) }
+                    }
                 }
+                addButton("Add open question") { addOpenQuestion() }
             } else {
                 bullets(items)
             }
@@ -620,6 +634,41 @@ struct SummaryView: View {
 
     private func persist() {
         note.summaryData = try? JSONEncoder().encode(summary)
+    }
+
+    // MARK: Add / remove items (edit mode)
+
+    private func mutate(_ change: (inout MeetingSummary) -> Void) {
+        guard var s = summary else { return }
+        change(&s); summary = s; persist()
+    }
+    private func addDecision()            { mutate { $0.decisions.append(Decision(text: "")) } }
+    private func removeDecision(_ id: Decision.ID) { mutate { $0.decisions.removeAll { $0.id == id } } }
+    private func addAction()              { mutate { $0.actionItems.append(ActionItem(title: "")) } }
+    private func removeAction(_ id: ActionItem.ID) { mutate { $0.actionItems.removeAll { $0.id == id } } }
+    private func addOpenQuestion()        { mutate { $0.openQuestions.append("") } }
+    private func removeOpenQuestion(_ i: Int) { mutate { if $0.openQuestions.indices.contains(i) { $0.openQuestions.remove(at: i) } } }
+
+    /// A small circular remove control for an edit-mode row.
+    private func removeButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "minus.circle.fill").font(.system(size: 17))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(theme.paperRaised, theme.inkFaint)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Remove")
+    }
+
+    /// A small "add" control under an edit-mode section.
+    private func addButton(_ title: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: "plus.circle")
+                .font(theme.bodyFont(13).weight(.semibold))
+                .foregroundStyle(theme.accentInk)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 2)
     }
 }
 

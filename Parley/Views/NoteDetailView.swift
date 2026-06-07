@@ -1122,6 +1122,7 @@ struct NoteDetailView: View {
             initialRTF: note.bodyRich,
             initialPlain: note.body,
             fontSize: density.bodySize,
+            fontName: theme.bodyFontName,
             textColor: UIColor(theme.ink2),
             tintColor: UIColor(theme.accent),
             onChange: { rtf, plain in
@@ -1150,6 +1151,7 @@ struct NoteDetailView: View {
                 initialRTF: note.bodyRich,
                 initialPlain: note.body,
                 fontSize: density.bodySize,
+                fontName: theme.bodyFontName,
                 textColor: NSColor(theme.ink2),
                 tintColor: NSColor(theme.accent),
                 controller: macRich,
@@ -1770,11 +1772,14 @@ struct RichTextEditor: UIViewRepresentable {
     let initialRTF: Data?
     let initialPlain: String
     let fontSize: CGFloat
+    var fontName: String = ""
     let textColor: UIColor
     let tintColor: UIColor
     var onChange: (Data?, String) -> Void
 
-    fileprivate var bodyFont: UIFont { .systemFont(ofSize: fontSize) }
+    // The app's body typeface at the chosen size (so notes match snippets/titles
+    // across all platforms), falling back to the system font.
+    fileprivate var bodyFont: UIFont { UIFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize) }
 
     func makeUIView(context: Context) -> UITextView {
         let tv = UITextView()
@@ -1928,8 +1933,7 @@ struct RichTextEditor: UIViewRepresentable {
         }
         private func headerFont(_ bodyFont: UIFont) -> UIFont {
             let size = bodyFont.pointSize * 1.5
-            let semibold = UIFont.systemFont(ofSize: size, weight: .semibold)
-            return semibold
+            return UIFont(name: bodyFont.fontName, size: size) ?? .systemFont(ofSize: size, weight: .semibold)
         }
 
         // MARK: Bullet
@@ -1973,13 +1977,17 @@ import AppKit
 final class MacRichController {
     weak var textView: NSTextView?
     var fontSize: CGFloat = 16
+    var fontName: String = ""
+
+    /// The app's body font at the base size (system fallback).
+    private var bodyFont: NSFont { NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize) }
 
     func bold()   { toggleTrait(.bold) }
     func italic() { toggleTrait(.italic) }
 
     private func toggleTrait(_ trait: NSFontDescriptor.SymbolicTraits) {
         guard let tv = textView, let ts = tv.textStorage else { return }
-        let body = NSFont.systemFont(ofSize: fontSize)
+        let body = bodyFont
         let range = tv.selectedRange()
         if range.length == 0 {
             let cur = (tv.typingAttributes[.font] as? NSFont) ?? body
@@ -2012,11 +2020,11 @@ final class MacRichController {
         guard let tv = textView, let ts = tv.textStorage else { return }
         let para = (tv.string as NSString).paragraphRange(for: tv.selectedRange())
         guard para.length > 0 else { return }
-        let body = NSFont.systemFont(ofSize: fontSize)
         let first = ts.attribute(.font, at: para.location, effectiveRange: nil) as? NSFont
         let isHeader = (first?.pointSize ?? fontSize) >= fontSize * 1.4
+        let headerFont = NSFont(name: fontName, size: fontSize * 1.5) ?? .systemFont(ofSize: fontSize * 1.5, weight: .semibold)
         ts.beginEditing()
-        ts.addAttribute(.font, value: isHeader ? body : NSFont.systemFont(ofSize: fontSize * 1.5, weight: .semibold), range: para)
+        ts.addAttribute(.font, value: isHeader ? bodyFont : headerFont, range: para)
         ts.endEditing()
         tv.didChangeText()
     }
@@ -2036,7 +2044,7 @@ final class MacRichController {
             rebuilt += l + (i == lines.count - 1 ? "" : "\n")
         }
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize),
+            .font: bodyFont,
             .foregroundColor: tv.textColor ?? NSColor.textColor,
         ]
         ts.replaceCharacters(in: para, with: NSAttributedString(string: rebuilt, attributes: attrs))
@@ -2050,10 +2058,13 @@ struct RichTextEditor: NSViewRepresentable {
     let initialRTF: Data?
     let initialPlain: String
     let fontSize: CGFloat
+    var fontName: String = ""
     let textColor: NSColor
     let tintColor: NSColor
     var controller: MacRichController? = nil
     var onChange: (Data?, String) -> Void
+
+    private var bodyFont: NSFont { NSFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize) }
 
     func makeNSView(context: Context) -> NSScrollView {
         // The standard, reliable embedding: an NSTextView inside its own scroll
@@ -2065,12 +2076,13 @@ struct RichTextEditor: NSViewRepresentable {
         tv.delegate = context.coordinator
         controller?.textView = tv
         controller?.fontSize = fontSize
+        controller?.fontName = fontName
         tv.isRichText = true
         tv.allowsUndo = true
         tv.drawsBackground = false
         tv.isEditable = true
         tv.isSelectable = true
-        tv.font = .systemFont(ofSize: fontSize)
+        tv.font = bodyFont
         tv.textColor = textColor
         tv.insertionPointColor = tintColor
         tv.textContainerInset = NSSize(width: 0, height: 4)
@@ -2086,7 +2098,7 @@ struct RichTextEditor: NSViewRepresentable {
         } else {
             tv.string = initialPlain
         }
-        tv.typingAttributes = [.font: NSFont.systemFont(ofSize: fontSize), .foregroundColor: textColor]
+        tv.typingAttributes = [.font: bodyFont, .foregroundColor: textColor]
         return scroll
     }
 

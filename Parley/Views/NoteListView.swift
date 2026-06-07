@@ -45,6 +45,9 @@ struct NoteListView: View {
     @State private var reminders: [ReminderItem] = []
     @State private var loadingReminders = false
 
+    /// On-device meeting-prep generator (Foundation Models), used by the calendar.
+    @State private var prepService = MeetingPrepService()
+
     private enum Scope: Hashable {
         case all, recent
         case tag(PersistentIdentifier)
@@ -602,6 +605,35 @@ struct NoteListView: View {
         path.append(note)
     }
 
+    /// Compact, on-device digest of related past notes, fed to the prep model so it
+    /// can ground "what to do beforehand" in real history (prior summaries lead with
+    /// their overview, open questions, and any still-unfinished action items).
+    static func historyText(from notes: [Note]) -> String {
+        guard !notes.isEmpty else { return "" }
+        return notes.map { n in
+            let when = (n.startDate ?? n.createdAt).formatted(.dateTime.month().day().year())
+            var detail = ""
+            if let data = n.summaryData,
+               let s = try? JSONDecoder().decode(MeetingSummary.self, from: data), !s.overview.isEmpty {
+                detail = s.overview
+                if !s.openQuestions.isEmpty {
+                    detail += " Open questions: " + s.openQuestions.joined(separator: "; ") + "."
+                }
+                let pending = s.actionItems.filter { !$0.done }.map(\.title)
+                if !pending.isEmpty {
+                    detail += " Unfinished actions: " + pending.joined(separator: "; ") + "."
+                }
+            } else if !n.body.isEmpty {
+                detail = String(n.body.prefix(300))
+            } else if !n.transcript.isEmpty {
+                detail = String(n.transcript.prefix(300))
+            }
+            let title = n.title.isEmpty ? "Untitled" : n.title
+            return "• \(title) (\(when)): \(detail)"
+        }
+        .joined(separator: "\n")
+    }
+
     /// Create a note dated to a given day (from the calendar's day panel) and open
     /// it. Leaving the calendar so the new note is what the user sees.
     private func createNote(on day: Date) {
@@ -639,11 +671,21 @@ struct NoteListView: View {
             theme: theme,
             notes: notes,
             access: eventKit.calendarAccess,
+            remindersAccess: eventKit.remindersAccess,
             onOpenMeeting: { meeting in openMeeting(meeting) },
             onOpenNote: { note in path.append(note) },
             loadMeetings: { start, end in await eventKit.meetings(from: start, to: end) },
             onAddEvent: { draft in _ = await eventKit.addEvent(draft) },
             onCreateNote: { day in createNote(on: day) },
+            loadReminders: { start, end in await eventKit.reminders(from: start, to: end) },
+            onToggleReminder: { id, done in await eventKit.setReminderCompleted(id: id, completed: done) },
+            onAddReminder: { draft in _ = await eventKit.addReminders([draft]) },
+            generatePrep: { meeting, related, reminderTitles in
+                await prepService.generate(
+                    title: meeting.title, when: meeting.start, attendees: meeting.attendees,
+                    historyText: Self.historyText(from: related), reminders: reminderTitles)
+            },
+            prepUnavailableMessage: prepService.availabilityMessage(),
             onClose: { showingMonthCalendar = false }
         )
     }

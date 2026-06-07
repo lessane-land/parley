@@ -331,7 +331,6 @@ struct NoteDetailView: View {
     @ViewBuilder
     private var processingBanner: some View {
         if transcription.state == .identifyingSpeakers || transcription.state == .finishing {
-            let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 12, style: .continuous)
             HStack(spacing: 10) {
                 ProgressView().controlSize(.small)
                 Text(transcription.state == .identifyingSpeakers
@@ -339,11 +338,12 @@ struct NoteDetailView: View {
                      : "Finishing recording…")
                     .font(theme.bodyFont(13))
                     .foregroundStyle(theme.ink)
+                    .lineLimit(1)
             }
             .padding(.horizontal, 16).padding(.vertical, 11)
-            .background(theme.paperRaised, in: shape)
-            .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
-            .themeShadow(theme.shadow)
+            // moodCard casts the shadow behind a shape, never the text (no Neubrutalist
+            // double-text ghosting).
+            .moodCard(theme)
             .padding(.top, 10)
             .transition(.move(edge: .top).combined(with: .opacity))
         }

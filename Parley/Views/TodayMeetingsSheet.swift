@@ -329,7 +329,6 @@ struct MonthCalendarView: View {
     @State private var showingNewEvent = false
 
     private let cal = Calendar.current
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
 
     /// The week/day grids cover the whole day and scroll; they open scrolled to
     /// the morning (or just before the first event), so nothing is ever cut off.
@@ -337,6 +336,11 @@ struct MonthCalendarView: View {
     private let dayEndHour = 24
     private let weekHourHeight: CGFloat = 46
     private let dayHourHeight: CGFloat = 58
+
+    /// Shape for the accent (New event) buttons — square for Swiss/Neubrutalist.
+    private var accentButtonShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9)
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -372,7 +376,7 @@ struct MonthCalendarView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(theme.paper)
+        .moodPaper(theme)
         #if os(iOS)
         .toolbar(.hidden, for: .navigationBar)
         #endif
@@ -394,7 +398,6 @@ struct MonthCalendarView: View {
             stage
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(theme.paper)
     }
 
     private var header: some View {
@@ -431,7 +434,9 @@ struct MonthCalendarView: View {
             .buttonStyle(.plain)
             .foregroundStyle(theme.paper)
             .padding(.horizontal, 14).padding(.vertical, 9)
-            .background(theme.accent, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 9))
+            .background(theme.accent, in: accentButtonShape)
+            .overlay(accentButtonShape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+            .themeShadow(theme.shadow)
             .fixedSize()
         }
         .padding(.horizontal, 22).padding(.top, 18).padding(.bottom, 14)
@@ -464,11 +469,12 @@ struct MonthCalendarView: View {
             GeometryReader { geo in
                 let rows = 5
                 let rowH = max(70, geo.size.height / CGFloat(rows))
-                LazyVGrid(columns: columns, spacing: 1) {
+                let gap = max(1, theme.borderWidth)   // Neubrutalist → 2px black gaps
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: gap), count: 7), spacing: gap) {
                     ForEach(monthDays, id: \.self) { day in monthCell(day, height: rowH) }
                 }
                 .background(theme.line)
-                .overlay(Rectangle().strokeBorder(theme.line, lineWidth: 1))
+                .overlay(Rectangle().strokeBorder(theme.line, lineWidth: gap))
             }
             .padding(.horizontal, 14).padding(.bottom, 14)
         }
@@ -594,23 +600,22 @@ struct MonthCalendarView: View {
     private func weekHeaderCell(_ d: Date) -> some View {
         let isToday = cal.isDateInToday(d)
         let isSel = cal.isDate(d, inSameDayAs: selected)
-        // Design: today's column header is washed (accent tint); the *selected*
-        // day (when it isn't today) gets its number in an accent box.
-        let boxed = isSel && !isToday
+        // Design: today's date sits in a filled accent box; the *selected* day
+        // (when it isn't today) gets a tinted header cell.
         return Button { pickDay(d) } label: {
             VStack(spacing: 3) {
                 Text(cal.shortWeekdaySymbols[cal.component(.weekday, from: d) - 1].uppercased())
                     .font(theme.monoFont(10)).tracking(0.6).foregroundStyle(theme.inkFaint)
                 Text("\(cal.component(.day, from: d))")
                     .font(theme.titleFont(17, relativeTo: .headline))
-                    .foregroundStyle(boxed ? theme.paper : theme.ink)
+                    .foregroundStyle(isToday ? theme.paper : theme.ink)
                     .frame(width: 30, height: 30)
-                    .background(boxed ? theme.accent : .clear,
+                    .background(isToday ? theme.accent : .clear,
                                 in: theme.cornerRadius == 0 ? AnyShape(Rectangle()) : AnyShape(Circle()))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
-            .background(isToday ? theme.accentTint : .clear)
+            .background(isSel && !isToday ? theme.accentTint : .clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -632,7 +637,7 @@ struct MonthCalendarView: View {
     }
 
     private func timeColumn(_ day: Date, hourHeight: CGFloat) -> some View {
-        let isSel = cal.isDate(day, inSameDayAs: selected) && !cal.isDateInToday(day)
+        let isToday = cal.isDateInToday(day)
         let total = CGFloat(dayEndHour - dayStartHour) * hourHeight
         return ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
@@ -645,7 +650,7 @@ struct MonthCalendarView: View {
             ForEach(notesOn(day)) { note in noteBlock(note, hourHeight: hourHeight) }
         }
         .frame(maxWidth: .infinity, minHeight: total, alignment: .topLeading)
-        .background(isSel ? theme.paperSunk : .clear)   // selected column shaded (design)
+        .background(isToday ? theme.accent.opacity(0.05) : .clear)   // today column washed (design)
         .overlay(alignment: .leading) { Divider().overlay(theme.line.opacity(0.5)) }
     }
 
@@ -968,7 +973,8 @@ private struct DayPanel: View {
     }
 
     private var newEventButton: some View {
-        Button(action: onNewEvent) {
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
+        return Button(action: onNewEvent) {
             Label("New event", systemImage: "plus")
                 .font(theme.bodyFont(13).weight(.semibold))
                 .frame(maxWidth: .infinity)
@@ -976,7 +982,9 @@ private struct DayPanel: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(theme.paper)
-        .background(theme.accent, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10))
+        .background(theme.accent, in: shape)
+        .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+        .themeShadow(theme.shadow)
         .padding(.bottom, 16)
     }
 
@@ -998,6 +1006,8 @@ private struct DayPanel: View {
                     .foregroundStyle(theme.paper)
                     .frame(width: 40, height: 40)
                     .background(theme.accent, in: shape)
+                    .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
+                    .themeShadow(theme.shadow)
             }
             .buttonStyle(.plain)
             .disabled(jot.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -1215,21 +1225,22 @@ private struct DayPanel: View {
         }
     }
 
+    /// A day's note in the design's "quick note" style: an accent-tinted card with
+    /// a pencil tack (waveform for recordings). Tapping opens it.
     private func noteRow(_ note: Note) -> some View {
-        Button { onOpenNote(note) } label: {
-            HStack(spacing: 10) {
-                Image(systemName: note.transcript.isEmpty ? "note.text" : "waveform")
-                    .foregroundStyle(theme.accent).frame(width: 18)
+        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
+        return Button { onOpenNote(note) } label: {
+            HStack(alignment: .top, spacing: 9) {
+                Image(systemName: note.transcript.isEmpty ? "pencil" : "waveform")
+                    .font(.system(size: 12)).foregroundStyle(theme.accent).padding(.top, 1)
                 Text(note.title.isEmpty ? "New Note" : note.title)
-                    .font(theme.bodyFont(13.5)).foregroundStyle(theme.ink).lineLimit(1)
-                Spacer(minLength: 0)
+                    .font(theme.bodyFont(13)).foregroundStyle(theme.ink2)
+                    .frame(maxWidth: .infinity, alignment: .leading).lineLimit(2)
             }
-            .padding(.horizontal, 12).padding(.vertical, 9)
+            .padding(.horizontal, 13).padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.paperRaised)
-            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10))
-            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
-                .strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
+            .background(theme.accentTint, in: shape)
+            .overlay(shape.strokeBorder(theme.edge, lineWidth: theme.borderWidth))
         }
         .buttonStyle(.plain)
         .padding(.bottom, 8)

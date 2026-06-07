@@ -438,9 +438,6 @@ struct NoteDetailView: View {
                     NSPasteboard.general.clearContents(); NSPasteboard.general.setString(t, forType: .string)
                     #endif
                 } label: { Label("Copy recognized text", systemImage: "doc.on.doc") }
-                Button {
-                    note.body += (note.body.isEmpty ? "" : "\n\n") + t
-                } label: { Label("Add text to notes", systemImage: "text.append") }
             }
             Button(role: .destructive) { removeAttachment(attachment) } label: {
                 Label("Remove", systemImage: "trash")
@@ -1107,15 +1104,40 @@ struct NoteDetailView: View {
         note.transcriptSegments.filter(\.flagged).map(\.text)
     }
 
+    @ViewBuilder
     private var typedNotes: some View {
-        TextEditor(text: $note.body)
+        #if os(iOS)
+        RichTextEditor(
+            initialRTF: note.bodyRich,
+            initialPlain: note.body,
+            fontSize: density.bodySize,
+            textColor: UIColor(theme.ink2),
+            tintColor: UIColor(theme.accent),
+            onChange: { rtf, plain in
+                note.bodyRich = rtf
+                note.body = plain
+            }
+        )
+        .overlay(alignment: .topLeading) {
+            if note.body.isEmpty && typedActive {
+                Text("Start typing your notes…")
+                    .font(theme.bodyFont(density.bodySize))
+                    .foregroundStyle(theme.inkFaint)
+                    .allowsHitTesting(false)
+            }
+        }
+        #else
+        // macOS edits plain text (rich editing is iOS for now); editing here drops
+        // any stale rich version so the plain text stays the source of truth.
+        TextEditor(text: Binding(
+            get: { note.body },
+            set: { note.body = $0; note.bodyRich = nil }
+        ))
             .font(theme.bodyFont(density.bodySize))
             .foregroundStyle(theme.ink2)
             .lineSpacing(density.lineSpacing)
             .scrollContentBackground(.hidden)
             .overlay(alignment: .topLeading) {
-                // Only when typing is the active mode — in Draw mode the prompt
-                // is misleading (and the user asked not to see it on iPad).
                 if note.body.isEmpty && typedActive {
                     Text("Start typing your notes…")
                         .font(theme.bodyFont(density.bodySize))
@@ -1125,6 +1147,7 @@ struct NoteDetailView: View {
                         .allowsHitTesting(false)
                 }
             }
+        #endif
     }
 
     // MARK: Top-bar record control (the design's REC pill + circular stop)
@@ -1692,6 +1715,190 @@ struct CameraPicker: UIViewControllerRepresentable {
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             parent.dismiss()
+        }
+    }
+}
+
+// MARK: - Rich text editor (iPhone/iPad)
+
+/// A `UITextView`-backed rich editor so notes can carry bold / italic / headers /
+/// bullets. It persists RTF (+ a plain mirror) via `onChange`, and shows a
+/// formatting toolbar above the keyboard (a UIKit input-accessory, so it reliably
+/// rides the UITextView). UIKit, not the new SwiftUI rich `TextEditor`, so
+/// attribute toggling is dependable.
+struct RichTextEditor: UIViewRepresentable {
+    let initialRTF: Data?
+    let initialPlain: String
+    let fontSize: CGFloat
+    let textColor: UIColor
+    let tintColor: UIColor
+    var onChange: (Data?, String) -> Void
+
+    fileprivate var bodyFont: UIFont { .systemFont(ofSize: fontSize) }
+
+    func makeUIView(context: Context) -> UITextView {
+        let tv = UITextView()
+        tv.delegate = context.coordinator
+        tv.backgroundColor = .clear
+        tv.textContainerInset = .zero
+        tv.textContainer.lineFragmentPadding = 0
+        tv.allowsEditingTextAttributes = true
+        tv.tintColor = tintColor
+        tv.font = bodyFont
+        tv.textColor = textColor
+        if let initialRTF,
+           let ns = try? NSMutableAttributedString(
+               data: initialRTF,
+               options: [.documentType: NSAttributedString.DocumentType.rtf],
+               documentAttributes: nil) {
+            // Re-tint to the current theme (RTF stored an ink colour from before).
+            ns.addAttribute(.foregroundColor, value: textColor,
+                            range: NSRange(location: 0, length: ns.length))
+            tv.attributedText = ns
+        } else {
+            tv.text = initialPlain
+            tv.font = bodyFont
+            tv.textColor = textColor
+        }
+        tv.typingAttributes = [.font: bodyFont, .foregroundColor: textColor]
+        context.coordinator.textView = tv
+        tv.inputAccessoryView = context.coordinator.makeToolbar(tint: tintColor)
+        return tv
+    }
+
+    func updateUIView(_ tv: UITextView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        let parent: RichTextEditor
+        weak var textView: UITextView?
+        init(_ parent: RichTextEditor) { self.parent = parent }
+
+        func textViewDidChange(_ tv: UITextView) { push(tv) }
+
+        /// Persist the current content as RTF + plain text.
+        func push(_ tv: UITextView) {
+            let ns = tv.attributedText ?? NSAttributedString()
+            let rtf = try? ns.data(from: NSRange(location: 0, length: ns.length),
+                                   documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+            parent.onChange(ns.length == 0 ? nil : rtf, ns.string)
+        }
+
+        // MARK: Keyboard toolbar
+
+        func makeToolbar(tint: UIColor) -> UIToolbar {
+            let bar = UIToolbar()
+            bar.sizeToFit()
+            bar.tintColor = tint
+            func item(_ symbol: String, _ action: Selector) -> UIBarButtonItem {
+                UIBarButtonItem(image: UIImage(systemName: symbol), style: .plain, target: self, action: action)
+            }
+            bar.items = [
+                item("bold", #selector(boldTapped)),
+                item("italic", #selector(italicTapped)),
+                item("textformat.size.larger", #selector(headerTapped)),
+                item("list.bullet", #selector(bulletTapped)),
+                UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
+                item("keyboard.chevron.compact.down", #selector(doneTapped)),
+            ]
+            return bar
+        }
+
+        @objc private func boldTapped()   { guard let tv = textView else { return }; toggleTrait(.traitBold, tv: tv, bodyFont: parent.bodyFont); push(tv) }
+        @objc private func italicTapped() { guard let tv = textView else { return }; toggleTrait(.traitItalic, tv: tv, bodyFont: parent.bodyFont); push(tv) }
+        @objc private func headerTapped() { guard let tv = textView else { return }; toggleHeader(tv: tv, bodyFont: parent.bodyFont); push(tv) }
+        @objc private func bulletTapped() { guard let tv = textView else { return }; toggleBullet(tv: tv, bodyFont: parent.bodyFont, textColor: parent.textColor); push(tv) }
+        @objc private func doneTapped()   { textView?.resignFirstResponder() }
+
+        // MARK: Bold / Italic
+
+        private func toggleTrait(_ trait: UIFontDescriptor.SymbolicTraits, tv: UITextView, bodyFont: UIFont) {
+            let range = tv.selectedRange
+            if range.length == 0 {
+                // No selection → flip the trait for the next typed characters.
+                let current = (tv.typingAttributes[.font] as? UIFont) ?? bodyFont
+                tv.typingAttributes[.font] = font(current, toggling: trait)
+                return
+            }
+            let mutable = NSMutableAttributedString(attributedString: tv.attributedText)
+            // Turn the trait off only if *every* character already has it.
+            var allOn = true
+            mutable.enumerateAttribute(.font, in: range) { value, _, _ in
+                let f = (value as? UIFont) ?? bodyFont
+                if !f.fontDescriptor.symbolicTraits.contains(trait) { allOn = false }
+            }
+            mutable.enumerateAttribute(.font, in: range) { value, sub, _ in
+                let f = (value as? UIFont) ?? bodyFont
+                mutable.addAttribute(.font, value: font(f, set: trait, on: !allOn), range: sub)
+            }
+            applyMutated(mutable, to: tv, keeping: range)
+        }
+
+        private func font(_ f: UIFont, toggling trait: UIFontDescriptor.SymbolicTraits) -> UIFont {
+            font(f, set: trait, on: !f.fontDescriptor.symbolicTraits.contains(trait))
+        }
+        private func font(_ f: UIFont, set trait: UIFontDescriptor.SymbolicTraits, on: Bool) -> UIFont {
+            var traits = f.fontDescriptor.symbolicTraits
+            if on { traits.insert(trait) } else { traits.remove(trait) }
+            guard let d = f.fontDescriptor.withSymbolicTraits(traits) else { return f }
+            return UIFont(descriptor: d, size: f.pointSize)
+        }
+
+        // MARK: Header
+
+        private func toggleHeader(tv: UITextView, bodyFont: UIFont) {
+            let paraRange = (tv.text as NSString).paragraphRange(for: tv.selectedRange)
+            guard paraRange.length > 0 else {
+                tv.typingAttributes[.font] = headerFont(bodyFont)
+                return
+            }
+            let mutable = NSMutableAttributedString(attributedString: tv.attributedText)
+            let first = (mutable.attribute(.font, at: paraRange.location, effectiveRange: nil) as? UIFont)
+            let isHeader = (first?.pointSize ?? bodyFont.pointSize) >= bodyFont.pointSize * 1.4
+            mutable.addAttribute(.font, value: isHeader ? bodyFont : headerFont(bodyFont), range: paraRange)
+            applyMutated(mutable, to: tv, keeping: tv.selectedRange)
+        }
+        private func headerFont(_ bodyFont: UIFont) -> UIFont {
+            let size = bodyFont.pointSize * 1.5
+            let semibold = UIFont.systemFont(ofSize: size, weight: .semibold)
+            return semibold
+        }
+
+        // MARK: Bullet
+
+        private func toggleBullet(tv: UITextView, bodyFont: UIFont, textColor: UIColor) {
+            let ns = tv.text as NSString
+            let paraRange = ns.paragraphRange(for: tv.selectedRange)
+            let mutable = NSMutableAttributedString(attributedString: tv.attributedText)
+            // Walk each line in the paragraph range, toggling a leading "• ".
+            let block = ns.substring(with: paraRange)
+            let lines = block.components(separatedBy: "\n")
+            let marker = "•\t"
+            let allBulleted = lines.filter { !$0.isEmpty }.allSatisfy { $0.hasPrefix(marker) }
+            var rebuilt = ""
+            for (i, line) in lines.enumerated() {
+                var l = line
+                if allBulleted {
+                    if l.hasPrefix(marker) { l.removeFirst(marker.count) }
+                } else if !l.isEmpty, !l.hasPrefix(marker) {
+                    l = marker + l
+                }
+                rebuilt += l + (i == lines.count - 1 ? "" : "\n")
+            }
+            let replacement = NSAttributedString(string: rebuilt,
+                                                 attributes: [.font: bodyFont, .foregroundColor: textColor])
+            mutable.replaceCharacters(in: paraRange, with: replacement)
+            applyMutated(mutable, to: tv, keeping: NSRange(location: paraRange.location, length: 0))
+        }
+
+        // MARK: Commit
+
+        private func applyMutated(_ mutable: NSMutableAttributedString, to tv: UITextView, keeping range: NSRange) {
+            tv.attributedText = mutable
+            let safe = NSRange(location: min(range.location, mutable.length),
+                               length: min(range.length, max(0, mutable.length - range.location)))
+            tv.selectedRange = safe
         }
     }
 }

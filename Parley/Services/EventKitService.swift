@@ -227,6 +227,9 @@ struct Meeting: Identifiable {
     let start: Date
     let end: Date
     let attendees: [String]
+    /// The source calendar's name (e.g. "Work", "Home") — shown after the time
+    /// like the design's "· Meeting / · Product" label, but from real data.
+    let calendarName: String
 
     init(_ event: EKEvent) {
         id = event.eventIdentifier ?? UUID().uuidString
@@ -234,6 +237,7 @@ struct Meeting: Identifiable {
         start = event.startDate
         end = event.endDate
         attendees = (event.attendees ?? []).compactMap(\.name)
+        calendarName = event.calendar?.title ?? ""
     }
 }
 

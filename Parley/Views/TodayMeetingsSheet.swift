@@ -392,11 +392,6 @@ struct MonthCalendarView: View {
 
     private var header: some View {
         HStack(spacing: 16) {
-            Button { onClose?() ?? dismiss() } label: {
-                Image(systemName: "chevron.backward").font(.system(size: 15, weight: .semibold))
-            }
-            .buttonStyle(.plain).foregroundStyle(theme.accentInk)
-            .accessibilityLabel("Back to notes")
             Text(headerTitle)
                 .font(theme.titleFont(24, relativeTo: .title))
                 .tracking(theme.titleTracking)
@@ -470,6 +465,7 @@ struct MonthCalendarView: View {
             }
             .padding(.horizontal, 14).padding(.bottom, 14)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func monthCell(_ day: Date, height: CGFloat) -> some View {
@@ -493,6 +489,8 @@ struct MonthCalendarView: View {
                         Image(systemName: "checklist").font(.system(size: 10))
                             .foregroundStyle(theme.rec.opacity(0.8))
                     }
+                    // Standalone notes read as a pencil flag (the design's noteflag);
+                    // the notes themselves live in the day panel.
                     if hasNote {
                         Image(systemName: "pencil").font(.system(size: 10))
                             .foregroundStyle(theme.accent.opacity(0.7))
@@ -560,6 +558,7 @@ struct MonthCalendarView: View {
                 .padding(.trailing, 14)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var dayGrid: some View {
@@ -570,6 +569,7 @@ struct MonthCalendarView: View {
             }
             .padding(.trailing, 16)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func weekHeaderCell(_ d: Date) -> some View {

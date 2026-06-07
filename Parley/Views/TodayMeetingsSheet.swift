@@ -341,34 +341,22 @@ struct MonthCalendarView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // The day panel rides alongside when there's room (always on Mac and
-            // iPad landscape; it folds away on a narrow iPad portrait split).
-            let showPanel = geo.size.width >= 720
-            HStack(spacing: 0) {
-                main
-                if showPanel {
+            // Portrait (iPad): the day panel reads better stacked *under* the
+            // calendar than as a skinny column aside. Landscape/Mac: alongside.
+            let portrait = geo.size.height > geo.size.width
+            if portrait {
+                VStack(spacing: 0) {
+                    main
                     Divider().overlay(theme.line)
-                    DayPanel(theme: theme, day: selected, meetings: eventsOn(selected),
-                             notes: notesOn(selected), reminders: remindersOn(selected),
-                             access: access, remindersAccess: remindersAccess,
-                             linkedNote: { linkedNote($0) },
-                             relatedNotes: { relatedNotes(to: $0) },
-                             reminderTitlesForDay: remindersOn(selected).map(\.title),
-                             prepUnavailableMessage: prepUnavailableMessage,
-                             onNewEvent: { showingNewEvent = true },
-                             onOpenMeeting: onOpenMeeting, onOpenNote: onOpenNote,
-                             onNewNote: { onCreateNote?(selected) },
-                             onJotNote: { text in onJotNote?(selected, text) },
-                             onToggleReminder: { id, done in
-                                 await onToggleReminder(id, done)
-                                 await reloadReminders()
-                             },
-                             onAddReminder: { draft in
-                                 await onAddReminder(draft)
-                                 await reloadReminders()
-                             },
-                             generatePrep: generatePrep)
-                        .frame(width: 320)
+                    dayPanel.frame(height: min(geo.size.height * 0.42, 360))
+                }
+            } else {
+                HStack(spacing: 0) {
+                    main
+                    if geo.size.width >= 720 {
+                        Divider().overlay(theme.line)
+                        dayPanel.frame(width: 320)
+                    }
                 }
             }
         }
@@ -384,6 +372,29 @@ struct MonthCalendarView: View {
             }
         }
         .task(id: rangeKey) { await reload() }
+    }
+
+    private var dayPanel: some View {
+        DayPanel(theme: theme, day: selected, meetings: eventsOn(selected),
+                 notes: notesOn(selected), reminders: remindersOn(selected),
+                 access: access, remindersAccess: remindersAccess,
+                 linkedNote: { linkedNote($0) },
+                 relatedNotes: { relatedNotes(to: $0) },
+                 reminderTitlesForDay: remindersOn(selected).map(\.title),
+                 prepUnavailableMessage: prepUnavailableMessage,
+                 onNewEvent: { showingNewEvent = true },
+                 onOpenMeeting: onOpenMeeting, onOpenNote: onOpenNote,
+                 onNewNote: { onCreateNote?(selected) },
+                 onJotNote: { text in onJotNote?(selected, text) },
+                 onToggleReminder: { id, done in
+                     await onToggleReminder(id, done)
+                     await reloadReminders()
+                 },
+                 onAddReminder: { draft in
+                     await onAddReminder(draft)
+                     await reloadReminders()
+                 },
+                 generatePrep: generatePrep)
     }
 
     // MARK: Main column (header + stage)

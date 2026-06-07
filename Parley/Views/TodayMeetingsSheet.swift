@@ -542,32 +542,39 @@ struct MonthCalendarView: View {
         let days = weekDays
         return VStack(spacing: 0) {
             // weekday header row, aligned to the columns (leading time gutter).
+            // The leading spacer is height-capped so it can't stretch the row.
             HStack(spacing: 0) {
-                Color.clear.frame(width: 58)
+                Color.clear.frame(width: 58, height: 1)
                 ForEach(days, id: \.self) { d in weekHeaderCell(d) }
             }
             .padding(.trailing, 14)
             Divider().overlay(theme.line)
-            ScrollView {
-                HStack(alignment: .top, spacing: 0) {
-                    timeGutter(hourHeight: 48)
-                    ForEach(days, id: \.self) { d in
-                        timeColumn(d, hourHeight: 48)
+            // Fill the remaining height like the design: the hour rows stretch to
+            // fit the pane (scrolls only if it gets very short).
+            GeometryReader { geo in
+                let hourH = max(38, geo.size.height / CGFloat(dayEndHour - dayStartHour))
+                ScrollView {
+                    HStack(alignment: .top, spacing: 0) {
+                        timeGutter(hourHeight: hourH)
+                        ForEach(days, id: \.self) { d in timeColumn(d, hourHeight: hourH) }
                     }
+                    .padding(.trailing, 14)
                 }
-                .padding(.trailing, 14)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var dayGrid: some View {
-        ScrollView {
-            HStack(alignment: .top, spacing: 0) {
-                timeGutter(hourHeight: 64)
-                timeColumn(selected, hourHeight: 64)
+        GeometryReader { geo in
+            let hourH = max(52, geo.size.height / CGFloat(dayEndHour - dayStartHour))
+            ScrollView {
+                HStack(alignment: .top, spacing: 0) {
+                    timeGutter(hourHeight: hourH)
+                    timeColumn(selected, hourHeight: hourH)
+                }
+                .padding(.trailing, 16)
             }
-            .padding(.trailing, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
@@ -575,20 +582,23 @@ struct MonthCalendarView: View {
     private func weekHeaderCell(_ d: Date) -> some View {
         let isToday = cal.isDateInToday(d)
         let isSel = cal.isDate(d, inSameDayAs: selected)
+        // Design: today's column header is washed (accent tint); the *selected*
+        // day (when it isn't today) gets its number in an accent box.
+        let boxed = isSel && !isToday
         return Button { pickDay(d) } label: {
-            VStack(spacing: 2) {
-                Text(cal.veryShortStandaloneWeekdaySymbols[cal.component(.weekday, from: d) - 1].uppercased())
+            VStack(spacing: 3) {
+                Text(cal.shortWeekdaySymbols[cal.component(.weekday, from: d) - 1].uppercased())
                     .font(theme.monoFont(10)).tracking(0.6).foregroundStyle(theme.inkFaint)
                 Text("\(cal.component(.day, from: d))")
                     .font(theme.titleFont(17, relativeTo: .headline))
-                    .foregroundStyle(isToday ? theme.paper : theme.ink)
+                    .foregroundStyle(boxed ? theme.paper : theme.ink)
                     .frame(width: 30, height: 30)
-                    .background(isToday ? theme.accent : .clear,
+                    .background(boxed ? theme.accent : .clear,
                                 in: theme.cornerRadius == 0 ? AnyShape(Rectangle()) : AnyShape(Circle()))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
-            .background(isSel ? theme.accentTint : .clear)
+            .background(isToday ? theme.accentTint : .clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -609,7 +619,7 @@ struct MonthCalendarView: View {
     }
 
     private func timeColumn(_ day: Date, hourHeight: CGFloat) -> some View {
-        let isToday = cal.isDateInToday(day)
+        let isSel = cal.isDate(day, inSameDayAs: selected) && !cal.isDateInToday(day)
         let total = CGFloat(dayEndHour - dayStartHour) * hourHeight
         return ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
@@ -621,7 +631,7 @@ struct MonthCalendarView: View {
             ForEach(eventsOn(day)) { ev in eventBlock(ev, hourHeight: hourHeight) }
         }
         .frame(maxWidth: .infinity, minHeight: total, alignment: .topLeading)
-        .background(isToday ? theme.accent.opacity(0.04) : .clear)
+        .background(isSel ? theme.paperSunk : .clear)   // selected column shaded (design)
         .overlay(alignment: .leading) { Divider().overlay(theme.line.opacity(0.5)) }
     }
 
@@ -650,6 +660,10 @@ struct MonthCalendarView: View {
             .background(bg)
             .overlay(alignment: .leading) { Rectangle().fill(rail).frame(width: 3) }
             .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 6))
+            // Mood card edge (Neubrutalist gets its black border + hard shadow).
+            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 6)
+                .strokeBorder(theme.edge, lineWidth: max(1, theme.borderWidth)))
+            .themeShadow(theme.shadow)
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 4)

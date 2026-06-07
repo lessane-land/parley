@@ -479,8 +479,12 @@ struct MonthCalendarView: View {
         let isToday = cal.isDateInToday(day)
         let isSelected = cal.isDate(day, inSameDayAs: selected)
         let evs = eventsOn(day)
-        let hasNote = !notesOn(day).isEmpty
+        let nts = notesOn(day)
         let hasReminder = !remindersOn(day).isEmpty
+        let maxChips = 3
+        let shownEvents = Array(evs.prefix(maxChips))
+        let shownNotes = Array(nts.prefix(max(0, maxChips - shownEvents.count)))
+        let overflow = (evs.count + nts.count) - (shownEvents.count + shownNotes.count)
         return Button { pickDay(day) } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
@@ -495,16 +499,11 @@ struct MonthCalendarView: View {
                         Image(systemName: "checklist").font(.system(size: 10))
                             .foregroundStyle(theme.rec.opacity(0.8))
                     }
-                    // Standalone notes read as a pencil flag (the design's noteflag);
-                    // the notes themselves live in the day panel.
-                    if hasNote {
-                        Image(systemName: "pencil").font(.system(size: 10))
-                            .foregroundStyle(theme.accent.opacity(0.7))
-                    }
                 }
-                ForEach(evs.prefix(3)) { ev in monthChip(ev) }
-                if evs.count > 3 {
-                    Text("+\(evs.count - 3) more")
+                ForEach(shownEvents) { ev in monthChip(ev) }
+                ForEach(shownNotes) { note in monthNoteChip(note) }
+                if overflow > 0 {
+                    Text("+\(overflow) more")
                         .font(theme.monoFont(10)).foregroundStyle(theme.inkFaint)
                         .padding(.leading, 6)
                 }
@@ -540,6 +539,20 @@ struct MonthCalendarView: View {
         .padding(.horizontal, 6).padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(bg, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 5))
+    }
+
+    /// A note in a month cell — pencil (typed) / waveform (recording) + title, on a
+    /// soft accent tint so it reads distinctly from events.
+    private func monthNoteChip(_ note: Note) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: note.transcript.isEmpty ? "pencil" : "waveform")
+                .font(.system(size: 8)).foregroundStyle(theme.accent)
+            Text(note.title.isEmpty ? "Note" : note.title)
+                .font(theme.bodyFont(11)).foregroundStyle(theme.ink2).lineLimit(1)
+        }
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.accentTint.opacity(0.6), in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 5))
     }
 
     // MARK: Week / Day time grids
@@ -925,13 +938,8 @@ private struct DayPanel: View {
                 }
                 ForEach(meetings) { ev in eventItem(ev) }
 
-                if !reminders.isEmpty || remindersAccess == .granted {
-                    section(reminders.isEmpty ? "Reminders" : "\(reminders.count) due")
-                    if reminders.isEmpty {
-                        Text("Nothing due this day.")
-                            .font(theme.bodyFont(13)).italic().foregroundStyle(theme.inkFaint)
-                            .padding(.bottom, 8)
-                    }
+                if !reminders.isEmpty {
+                    section("\(reminders.count) due")
                     ForEach(reminders) { r in reminderRow(r) }
                 }
 
@@ -1037,7 +1045,7 @@ private struct DayPanel: View {
                 Text(ev.title).font(theme.bodyFont(14).weight(.semibold))
                     .foregroundStyle(theme.ink).lineLimit(2)
             }
-            Text("\(ev.start.formatted(.dateTime.hour().minute())) – \(ev.end.formatted(.dateTime.hour().minute()))")
+            Text("\(ev.start.formatted(.dateTime.hour().minute())) – \(ev.end.formatted(.dateTime.hour().minute()))\(ev.calendarName.isEmpty ? "" : " · \(ev.calendarName)")")
                 .font(theme.monoFont(11)).foregroundStyle(theme.inkSoft)
             HStack(spacing: 10) {
                 if !ev.attendees.isEmpty { avatars(ev.attendees) }

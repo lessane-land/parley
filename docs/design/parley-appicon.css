@@ -1,0 +1,84 @@
+/* ============================================================
+   PARLEY — APP ICON (mood-aware squircle) + showcase board
+   The icon reads its look from --aic-* vars set per mood. The
+   live ".is-active" icon tracks the active body mood + accent;
+   fixed ".is-paper/.is-terminal/..." swatches stay constant.
+   ============================================================ */
+
+.pk-app-icon{
+  display:block; overflow:visible;
+  --aic-bg:   #FBF8F1;
+  --aic-bg2:  #F1EADB;
+  --aic-fg:   #3E5C50;
+  --aic-dot:  #3E5C50;
+  --aic-dot-d:none;
+  --aic-border:transparent;
+  --aic-bw:   0;
+  --aic-grid-d:none;
+  --aic-shadow-d:none;
+}
+.pk-app-icon .aic-g0{ stop-color:var(--aic-bg); }
+.pk-app-icon .aic-g1{ stop-color:var(--aic-bg2); }
+.pk-app-icon .aic-border{ fill:none; stroke:var(--aic-border); stroke-width:var(--aic-bw); }
+.pk-app-icon .aic-glyph .aic-stroke{
+  fill:none; stroke:var(--aic-fg); stroke-width:9; stroke-linecap:round; stroke-linejoin:round;
+}
+.pk-app-icon .aic-tail{ stroke-width:7.5; }
+.pk-app-icon .aic-dot{ fill:var(--aic-dot); display:var(--aic-dot-d); }
+.pk-app-icon .aic-grid{ display:var(--aic-grid-d); }
+.pk-app-icon .aic-grid line{ stroke:rgba(255,255,255,.05); stroke-width:1; }
+.pk-app-icon .aic-shadow{ display:var(--aic-shadow-d); fill:#1A1A1A; }
+
+/* ---- fixed mood swatches ---- */
+.pk-app-icon.is-paper{ --aic-bg:#FCF8F0; --aic-bg2:#EFE7D6; --aic-fg:#3E5C50; --aic-dot:#3E5C50; }
+.pk-app-icon.is-terminal{ --aic-bg:#161D28; --aic-bg2:#0B0E14; --aic-fg:#FF9F1C; --aic-dot:#FF9F1C; --aic-grid-d:block; }
+.pk-app-icon.is-swiss{ --aic-bg:#FFFFFF; --aic-bg2:#FFFFFF; --aic-fg:#111111; --aic-dot:#E2231A; --aic-dot-d:block; --aic-border:#111111; --aic-bw:3; }
+.pk-app-icon.is-neubrutalist{ --aic-bg:#2B4BF2; --aic-bg2:#2B4BF2; --aic-fg:#F5F3EC; --aic-dot:#D8F000; --aic-dot-d:block; --aic-border:#1A1A1A; --aic-bw:5; --aic-shadow-d:block; }
+
+/* terminal glyph glow */
+.pk-app-icon.is-terminal .aic-glyph,
+body.mood-terminal .pk-app-icon.is-active .aic-glyph{ filter:drop-shadow(0 0 2.5px rgba(255,159,28,.55)); }
+
+/* ---- live "active" icon: tracks body mood + the tweaked accent ---- */
+.pk-app-icon.is-active{ --aic-bg:var(--pk-paper-rec); --aic-bg2:var(--pk-paper-sink); --aic-fg:var(--pk-accent); --aic-dot:var(--pk-accent); }
+body.mood-terminal .pk-app-icon.is-active{ --aic-bg:#161D28; --aic-bg2:#0B0E14; --aic-fg:var(--pk-accent); --aic-dot:var(--pk-accent); --aic-grid-d:block; }
+body.mood-swiss .pk-app-icon.is-active{ --aic-bg:#FFFFFF; --aic-bg2:#FFFFFF; --aic-fg:#111111; --aic-dot:var(--pk-accent); --aic-dot-d:block; --aic-border:#111111; --aic-bw:3; }
+body.mood-neubrutalist .pk-app-icon.is-active{ --aic-bg:var(--pk-accent); --aic-bg2:var(--pk-accent); --aic-fg:#F5F3EC; --aic-dot:var(--pk-highlight,#D8F000); --aic-dot-d:block; --aic-border:#1A1A1A; --aic-bw:5; --aic-shadow-d:block; }
+
+/* ============================================================
+   SHOWCASE BOARD
+   ============================================================ */
+.pk-iconboard{
+  width:100%; height:100%; background:var(--pk-paper); color:var(--pk-ink);
+  font-family:var(--pk-sans); padding:54px 54px; overflow:hidden;
+  display:flex; flex-direction:column; justify-content:center; gap:40px;
+}
+.pk-ib-hero{ display:flex; align-items:center; gap:34px; }
+.pk-ib-lockup{ display:flex; flex-direction:column; gap:6px; }
+.pk-ib-wordmark{ font-family:var(--pk-serif); font-size:52px; font-weight:600; letter-spacing:-.02em; line-height:1; color:var(--pk-ink); }
+body.mood-neubrutalist .pk-ib-wordmark{ font-family:var(--pk-display,"Archivo Black"); font-weight:800; }
+body.mood-swiss .pk-ib-wordmark{ font-weight:700; text-transform:uppercase; letter-spacing:-.01em; }
+.pk-ib-tag{ font-size:15px; color:var(--pk-ink-soft); letter-spacing:.005em; }
+.pk-ib-note{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--pk-ink-faint); margin-top:8px; }
+.pk-ib-dot{ width:7px; height:7px; border-radius:50%; background:var(--pk-accent); flex:0 0 auto; }
+
+.pk-ib-platforms{ display:flex; gap:18px; align-items:stretch; }
+.pk-ib-plat{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+.pk-ib-wall{
+  display:flex; flex-direction:column; align-items:center; gap:9px;
+  padding:24px 30px; border-radius:18px;
+  background:linear-gradient(150deg,#4A5A72,#2C3647 70%);
+  border:1px solid rgba(0,0,0,.18);
+}
+.pk-ib-applabel{ font-size:11px; font-weight:500; color:rgba(255,255,255,.92); letter-spacing:.01em; }
+.pk-ib-plat.is-mac .pk-ib-wall{ background:linear-gradient(150deg,#6B7790,#3A4456 70%); padding-bottom:18px; }
+.pk-ib-dock{ width:150px; height:14px; margin-top:-6px; border-radius:8px; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.18); backdrop-filter:blur(4px); }
+.pk-ib-platname{ font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--pk-ink-faint); }
+
+.pk-ib-moods{ margin-top:14px; }
+.pk-ib-moodh{ font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--pk-ink-faint); margin-bottom:16px; }
+.pk-ib-moodrow{ display:flex; gap:30px; }
+.pk-ib-moodcell{ display:flex; flex-direction:column; align-items:center; gap:11px; font-size:12px; font-weight:500; color:var(--pk-ink-soft); }
+
+/* sidebar / chrome mark uses the same icon */
+.pk-brand .pk-app-icon{ border-radius:0; }

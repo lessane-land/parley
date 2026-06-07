@@ -17,6 +17,28 @@ device surfaces** — especially the brand-new WWDC-2025 APIs.
 - 23 Swift files, 19 bundled fonts. Bundle id `com.lessane.Parley`,
   CloudKit container `iCloud.com.lessane.Parley`.
 
+## Enabling speaker diarization (FluidAudio)
+
+Auto speaker detection is **opt-in via a Swift package** and compiled only when
+present (`#if canImport(FluidAudio)` in `TranscriptionService.swift`). Apple ships
+no on-device diarization API; FluidAudio runs Core ML diarization models on the
+ANE — fully on-device, so the privacy rule holds. To turn it on:
+
+1. Xcode ▸ File ▸ **Add Package Dependencies…** → `https://github.com/FluidInference/FluidAudio` → add to the Parley target.
+2. Rebuild. With the package present, each recording is captured to a temp `.caf`,
+   diarized on stop, and lines are auto-labeled "Speaker 1/2/…" (rename any once to
+   relabel the whole speaker). Without the package the app builds and runs exactly
+   as before (manual labeling only).
+3. **API shape (verified against the package):** `try await LSEENDDiarizer(variant: .dihard3)`
+   (async init), `try diarizer.processComplete(audioFileURL:)` (throwing but
+   **synchronous**) → **`DiarizerTimeline`**; `timeline.speakers` is
+   `[Int: DiarizerSpeaker]`, each with `finalizedSegments: [DiarizerSegment]`, and
+   `DiarizerSegment.startTime/endTime` are **`Float`** seconds. Needs a real
+   Apple-Silicon device; models download on first use.
+
+Mapping is timestamp-based (each line's [prev-finalize, finalize] window vs. the
+diarization turns), so labels can be a touch off at boundaries — fine for v1.
+
 ## Working agreement / environment notes
 
 - **Develop on `claude/optimistic-brown-fSPcZ`.** Commit + push there.
@@ -34,9 +56,10 @@ device surfaces** — especially the brand-new WWDC-2025 APIs.
 ## What's built (by area)
 
 - **Models** (`Models/`): `Note` (id, title, body, createdAt, drawing,
-  transcript, calendarEventID, summaryData, tags) and `Tag` (name, colorHex,
-  notes). All CloudKit-safe: every property optional/defaulted, no unique
-  constraints, relationships optional.
+  transcript, transcriptData, calendarEventID, startDate, endDate, attendees,
+  summaryData, tags), `TranscriptSegment` (text/at/speaker, JSON in
+  `transcriptData`), and `Tag` (name, colorHex, notes). All CloudKit-safe: every
+  property optional/defaulted, no unique constraints, relationships optional.
 - **Theme system** (`Theme/`): four moods (Paper/Terminal/Swiss/Neubrutalist)
   resolved into design tokens; per-mood accent/highlight/warmth/face overrides;
   density; mood grids + paper grain; bundled OFL fonts. Driven by
@@ -49,12 +72,16 @@ device surfaces** — especially the brand-new WWDC-2025 APIs.
   - `SummaryService` — Foundation Models guided generation → `MeetingSummary`
     (overview/decisions/action items+owners/open questions).
   - `SyncMonitor` — CloudKit sync status for the sidebar chip.
+  - `AskService` — "Ask Parley" on-device chat (Foundation Models) grounded in a
+    capped corpus of the user's notes; multi-turn via one `LanguageModelSession`.
 - **Views** (`Views/`): home is a `NavigationStack` with a rail + notes grid
   (`NoteListView` + `NotesGridView`); tapping a note pushes `NoteDetailView`
   full-screen (top-bar record cluster, orientation-aware notes⟷transcript split,
   unified Pencil-over-text canvas, transcript timeline, bottom Summarize bar).
-  Plus `SettingsView`, `TodayMeetingsSheet`, `ActionItemsSheet`, `SummaryView`,
-  `DrawingCanvas`, `TranscriptPanel`.
+  Plus the redesigned `SettingsView` (mood grid w/ `AppIconView`, AI & Summarize),
+  `ChatView` (Ask Parley, opened from the home sparkles button), `TodayMeetingsSheet`,
+  `ActionItemsSheet`, `SummaryView`, `DrawingCanvas`, `TranscriptPanel`. The app
+  icon is the design's squircle "P" mark (Assets ▸ AppIcon).
 
 ## ⚠️ Highest-risk areas to verify on device (do these first)
 
@@ -78,7 +105,12 @@ suspects:
 4. **CloudKit** — needs the iCloud/CloudKit capability + container provisioned on
    your paid team (see README "Setup"); test sync across two devices on the same
    Apple ID. Foundation Models + Speech also need a real, Apple-Intelligence-
-   capable device.
+   capable device. **Fixed:** `Note`'s `id/title/body/createdAt` lacked
+   declaration-level defaults, so the CloudKit store failed to open and silently
+   ran local-only — they now default on the property (CloudKit requires every
+   attribute optional-or-defaulted). `SyncMonitor` now also reports the iCloud
+   account status + the container-open failure reason on the sync chip, so a
+   misconfig reads as a concrete message instead of a quiet "On this device".
 
 ## Device test checklist
 
@@ -99,12 +131,19 @@ suspects:
 ## Pending work (roughly prioritized)
 
 1. **Compile + device-test pass** (above). Most important.
-2. **E4 remainder** — promote meeting metadata (start date, attendees) from
-   prefilled body text to real `Note` fields; consider `Decision` as a type.
-3. **Summary as a pushed screen** (currently a sheet from the bottom bar).
-4. **Transcript speakers** — store transcript as segments (with optional speaker
-   + timestamp) to show speaker initials on the timeline nodes. (On-device
-   diarization isn't offered; would need a heuristic or manual labeling.)
+2. **E4 done** — meeting metadata (start/end date, attendees) promoted to real
+   `Note` fields (rendered as a meta line in the detail header; attendees feed the
+   summary prompt). `Decision` is now a structured type (text + optional
+   rationale, with legacy `[String]` decoding) alongside `ActionItem`.
+3. **Summary screen done** — promoted from a bottom-bar sheet to a first-class
+   *pushed* screen (`navigationDestination(isPresented:)`) with a real back button.
+4. **Transcript speakers done** — transcript is stored as `TranscriptSegment`s
+   (`Note.transcriptData`, mirrored from the flat `transcript`) with a wall-clock
+   timestamp per line; the timeline shows time + speaker and a node menu assigns a
+   **free-text** speaker name (quick-pick of names used in the note, "New name…",
+   or Clear). Naming an auto "Speaker N" renames every line of that speaker.
+   **Auto-diarization** (optional, on-device) is wired behind
+   `#if canImport(FluidAudio)`: see "Enabling speaker diarization" below.
 5. **iPhone compact** layout fine-tuning (rail hidden; filters in toolbar — works,
    but could be nicer).
 6. **Tests** — add a unit-test target (do this in Xcode) for: locale resolution

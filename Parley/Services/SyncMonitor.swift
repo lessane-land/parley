@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import CloudKit
 
 /// Watches CloudKit sync activity and exposes a simple status for the UI.
 ///
@@ -20,8 +21,23 @@ final class SyncMonitor {
 
     private(set) var status: Status
 
-    init(cloudEnabled: Bool) {
-        status = cloudEnabled ? .idle : .localOnly
+    /// Matches the iCloud container declared in `Parley.entitlements`.
+    private static let containerID = "iCloud.com.lessane.Parley"
+
+    init(cloudEnabled: Bool, fallbackReason: String? = nil) {
+        if cloudEnabled {
+            status = .idle
+        } else if let fallbackReason {
+            status = .error("Sync off — \(fallbackReason)")
+        } else {
+            status = .localOnly
+        }
+
+        // Whether or not the CloudKit store started, check the iCloud account —
+        // a "not signed in / restricted" reason is far more useful than a silent
+        // "On this device".
+        Task { [weak self] in await self?.checkAccount(cloudEnabled: cloudEnabled) }
+
         guard cloudEnabled else { return }
 
         NotificationCenter.default.addObserver(
@@ -47,6 +63,37 @@ final class SyncMonitor {
                     self.status = .synced
                 }
             }
+        }
+    }
+
+    /// Surface the iCloud account state so a misconfiguration reads as a concrete
+    /// reason rather than a quiet local-only fallback. Only downgrades the status
+    /// to an error for genuinely unavailable accounts; an available account leaves
+    /// the sync-event status untouched.
+    private func checkAccount(cloudEnabled: Bool) async {
+        let accountStatus: CKAccountStatus
+        do {
+            accountStatus = try await CKContainer(identifier: Self.containerID).accountStatus()
+        } catch {
+            if cloudEnabled, status == .idle {
+                status = .error("Couldn't check iCloud: \(error.localizedDescription)")
+            }
+            return
+        }
+
+        switch accountStatus {
+        case .available:
+            break // good — keep idle/syncing/synced
+        case .noAccount:
+            status = .error("Not signed in to iCloud. Sign in (Settings ▸ Apple Account) and turn on iCloud Drive.")
+        case .restricted:
+            status = .error("iCloud is restricted on this device (parental or MDM controls).")
+        case .temporarilyUnavailable:
+            status = .error("iCloud is temporarily unavailable — try again shortly.")
+        case .couldNotDetermine:
+            if status == .idle { status = .error("Couldn't determine the iCloud account state.") }
+        @unknown default:
+            break
         }
     }
 }

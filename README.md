@@ -43,8 +43,9 @@ Parley/
 │                             registers fonts, injects the shared services.
 ├─ Models/
 │  └─ Note.swift              @Model: id, title, body, createdAt, drawing,
-│                             transcript, calendarEventID, summaryData.
-│                             CloudKit-ready (all optional/defaulted, no unique).
+│                             transcript, transcriptData (timestamped segments),
+│                             calendarEventID, startDate, endDate, attendees,
+│                             summaryData. CloudKit-ready (all optional/defaulted).
 ├─ Services/
 │  ├─ TranscriptionService    AVAudioEngine → SpeechAnalyzer/Transcriber.
 │  ├─ EventKitService         Today's meetings (read) + Reminders (write).
@@ -113,6 +114,10 @@ registered at launch via CoreText.
 
 - The new Speech / Foundation Models APIs are isolated in their services; a call
   signature may need adjusting against the shipping SDK.
+- **Speaker diarization is opt-in**: Apple has no on-device diarization API, so
+  auto speaker labels require the FluidAudio Swift package (on-device Core ML, no
+  cloud). It's compiled only when present (`#if canImport(FluidAudio)`); without
+  it, speakers are labeled by hand. See `HANDOFF.md` ▸ "Enabling speaker diarization".
 - Action-item detection without a summary is a simple heuristic
   (`ActionItemDetector`); the summary path uses the model.
 - Paper/Swiss face pickers await bundling Fraunces / Source Serif 4 / Spectral /

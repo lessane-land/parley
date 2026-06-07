@@ -1,4 +1,10 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
+#if canImport(AppKit)
+import AppKit
+#endif
 
 /// Convenience initializer so we can paste the design's hex codes verbatim.
 /// SwiftUI's `Color` has no hex initializer of its own, so this is a common
@@ -21,6 +27,22 @@ extension Color {
             b = Double(value & 0xFF) / 255
         }
         self.init(.sRGB, red: r, green: g, blue: b, opacity: opacity)
+    }
+
+    /// The reverse: a `#RRGGBB` string for persisting a `ColorPicker` selection.
+    /// Resolves the color in sRGB via the platform color type.
+    func toHex() -> String? {
+        #if canImport(UIKit)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard UIColor(self).getRed(&r, green: &g, blue: &b, alpha: &a) else { return nil }
+        #elseif canImport(AppKit)
+        guard let ns = NSColor(self).usingColorSpace(.sRGB) else { return nil }
+        let r = ns.redComponent, g = ns.greenComponent, b = ns.blueComponent
+        #else
+        return nil
+        #endif
+        return String(format: "#%02X%02X%02X", Int((r * 255).rounded()),
+                      Int((g * 255).rounded()), Int((b * 255).rounded()))
     }
 }
 

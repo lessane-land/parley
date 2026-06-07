@@ -37,12 +37,46 @@ final class ThemeManager {
     /// Whether the iPad handwriting canvas is shown.
     var handwriting: Bool { didSet { UserDefaults.standard.set(handwriting, forKey: Self.handwritingKey) } }
 
+    /// Whether to recognize enrolled voices and auto-label them across meetings.
+    var recognizeSpeakers: Bool { didSet { UserDefaults.standard.set(recognizeSpeakers, forKey: Self.recognizeSpeakersKey) } }
+
+    /// macOS only: also capture system audio (the meeting's far side) when
+    /// recording, so the transcript includes the other participants. Needs Screen
+    /// Recording permission.
+    var captureSystemAudio: Bool { didSet { UserDefaults.standard.set(captureSystemAudio, forKey: Self.captureSystemAudioKey) } }
+
     var density: Density { didSet { UserDefaults.standard.set(density.rawValue, forKey: Self.densityKey) } }
+
+    /// Dashboard note-card size (Small / Medium / Large).
+    var cardSize: CardSize { didSet { UserDefaults.standard.set(cardSize.rawValue, forKey: Self.cardSizeKey) } }
+    /// Whether pinned notes show as a big wide "feature" card. Off = pinned notes
+    /// sit in the grid at normal size (just styled as pinned).
+    var featurePinned: Bool { didSet { UserDefaults.standard.set(featurePinned, forKey: Self.featurePinnedKey) } }
+    /// Freeform dashboard: drag/resize each card anywhere (iPad/Mac). Off = grid.
+    var freeformBoard: Bool { didSet { UserDefaults.standard.set(freeformBoard, forKey: Self.freeformBoardKey) } }
 
     /// Preferred transcription language as a language code ("es"), or `nil` for
     /// Automatic (follow the device's preferred languages). Not an appearance
     /// setting, but this is the app's single persisted-preferences store.
     var transcriptionLanguage: String? { didSet { persist(transcriptionLanguage, Self.languageKey) } }
+
+    /// Note-detail layout, persisted so the arrangement sticks across notes and
+    /// launches: whether the transcript leads (panels swapped) and how the space
+    /// is divided (size of the leading panel, 0.2…0.8).
+    var layoutSwapped: Bool { didSet { UserDefaults.standard.set(layoutSwapped, forKey: Self.layoutSwappedKey) } }
+    var splitFraction: Double { didSet { UserDefaults.standard.set(splitFraction, forKey: Self.splitFractionKey) } }
+
+    // MARK: AI & Summarize (the design's Settings ▸ AI section)
+
+    /// Draft a summary automatically the moment a recording stops.
+    var autoSummarize: Bool { didSet { UserDefaults.standard.set(autoSummarize, forKey: Self.autoSummarizeKey) } }
+    /// How terse/verbose the generated summary should be.
+    var summaryTone: SummaryTone { didSet { UserDefaults.standard.set(summaryTone.rawValue, forKey: Self.summaryToneKey) } }
+    /// Which structured pieces the summary should always pull out.
+    var extractDecisions: Bool { didSet { UserDefaults.standard.set(extractDecisions, forKey: Self.extractDecisionsKey) } }
+    var extractActionItems: Bool { didSet { UserDefaults.standard.set(extractActionItems, forKey: Self.extractActionItemsKey) } }
+    var extractOpenQuestions: Bool { didSet { UserDefaults.standard.set(extractOpenQuestions, forKey: Self.extractOpenQuestionsKey) } }
+    var extractKeyQuotes: Bool { didSet { UserDefaults.standard.set(extractKeyQuotes, forKey: Self.extractKeyQuotesKey) } }
 
     /// The fully resolved tokens for the current mood + overrides. Views read
     /// `themeManager.theme`.
@@ -100,8 +134,21 @@ final class ThemeManager {
     private static let faceKey = "parley.face"
     private static let warmthKey = "parley.warmth"
     private static let handwritingKey = "parley.handwriting"
+    private static let recognizeSpeakersKey = "parley.recognizeSpeakers"
+    private static let captureSystemAudioKey = "parley.captureSystemAudio"
+    private static let cardSizeKey = "parley.cardSize"
+    private static let featurePinnedKey = "parley.featurePinned"
+    private static let freeformBoardKey = "parley.freeformBoard"
     private static let densityKey = "parley.density"
     private static let languageKey = "parley.transcriptionLanguage"
+    private static let layoutSwappedKey = "parley.layoutSwapped"
+    private static let splitFractionKey = "parley.splitFraction"
+    private static let autoSummarizeKey = "parley.autoSummarize"
+    private static let summaryToneKey = "parley.summaryTone"
+    private static let extractDecisionsKey = "parley.extractDecisions"
+    private static let extractActionItemsKey = "parley.extractActionItems"
+    private static let extractOpenQuestionsKey = "parley.extractOpenQuestions"
+    private static let extractKeyQuotesKey = "parley.extractKeyQuotes"
 
     private func persist(_ value: String?, _ key: String) {
         let d = UserDefaults.standard
@@ -118,7 +165,96 @@ final class ThemeManager {
         faceName = d.string(forKey: Self.faceKey)
         warmth = d.object(forKey: Self.warmthKey) as? Double ?? 38
         handwriting = d.object(forKey: Self.handwritingKey) as? Bool ?? true
+        recognizeSpeakers = d.object(forKey: Self.recognizeSpeakersKey) as? Bool ?? true
+        captureSystemAudio = d.object(forKey: Self.captureSystemAudioKey) as? Bool ?? true
         density = Density(rawValue: d.string(forKey: Self.densityKey) ?? "") ?? .regular
+        cardSize = CardSize(rawValue: d.string(forKey: Self.cardSizeKey) ?? "") ?? .regular
+        featurePinned = d.object(forKey: Self.featurePinnedKey) as? Bool ?? true
+        freeformBoard = d.object(forKey: Self.freeformBoardKey) as? Bool ?? false
         transcriptionLanguage = d.string(forKey: Self.languageKey)
+        layoutSwapped = d.object(forKey: Self.layoutSwappedKey) as? Bool ?? false
+        splitFraction = d.object(forKey: Self.splitFractionKey) as? Double ?? 0.5
+        autoSummarize = d.object(forKey: Self.autoSummarizeKey) as? Bool ?? true
+        summaryTone = SummaryTone(rawValue: d.string(forKey: Self.summaryToneKey) ?? "") ?? .balanced
+        extractDecisions = d.object(forKey: Self.extractDecisionsKey) as? Bool ?? true
+        extractActionItems = d.object(forKey: Self.extractActionItemsKey) as? Bool ?? true
+        extractOpenQuestions = d.object(forKey: Self.extractOpenQuestionsKey) as? Bool ?? true
+        extractKeyQuotes = d.object(forKey: Self.extractKeyQuotesKey) as? Bool ?? false
     }
+}
+
+/// How verbose the on-device summary should be (Settings ▸ AI ▸ Summary tone).
+enum SummaryTone: String, CaseIterable, Identifiable {
+    case brief, balanced, detailed
+    var id: String { rawValue }
+    var name: String { rawValue.capitalized }
+
+    /// A line folded into the model instructions.
+    var guidance: String {
+        switch self {
+        case .brief: "Be very concise — short phrases, only the essentials."
+        case .balanced: "Be concise but complete."
+        case .detailed: "Be thorough; capture nuance and context."
+        }
+    }
+}
+
+/// Dashboard note-card size. Drives the grid's column width and each card's height
+/// so the user can make cards smaller or larger.
+enum CardSize: String, CaseIterable, Identifiable {
+    case dense, compact, regular, large
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .dense:   "Dense"
+        case .compact: "Small"
+        case .regular: "Medium"
+        case .large:   "Large"
+        }
+    }
+
+    /// SF Symbol for the size control.
+    var icon: String {
+        switch self {
+        case .dense:   "square.grid.4x3.fill"
+        case .compact: "square.grid.3x3"
+        case .regular: "square.grid.2x2"
+        case .large:   "square"
+        }
+    }
+
+    /// Minimum grid column width (adaptive columns). 150 packs two columns on a
+    /// phone — handy when you have hundreds of notes.
+    var columnMin: CGFloat {
+        switch self {
+        case .dense:   150
+        case .compact: 190
+        case .regular: 240
+        case .large:   300
+        }
+    }
+
+    /// Standard card height.
+    var cardHeight: CGFloat {
+        switch self {
+        case .dense:   120
+        case .compact: 150
+        case .regular: 188
+        case .large:   240
+        }
+    }
+
+    /// Pinned ("feature") card height — a bit taller.
+    var featureHeight: CGFloat {
+        switch self {
+        case .dense:   150
+        case .compact: 170
+        case .regular: 210
+        case .large:   270
+        }
+    }
+
+    /// At the densest size the card drops its snippet to stay readable.
+    var showsSnippet: Bool { self != .dense }
 }

@@ -515,9 +515,9 @@ struct NoteListView: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(theme.accent, in: RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 12))
         }
         .buttonStyle(.plain)
+        .moodCard(theme, fill: theme.accent)
     }
 
     private func navRow(_ label: String, _ icon: String, count: Int, target: Scope) -> some View {

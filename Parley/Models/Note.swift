@@ -214,15 +214,21 @@ final class Attachment {
     /// The raw bytes. `.externalStorage` keeps large blobs out of the row.
     @Attribute(.externalStorage) var data: Data?
 
+    /// Text recognized from this attachment (a photo/scan of handwritten or printed
+    /// notes), via on-device Vision. Cached so the wrap-up can fold it in without
+    /// re-running OCR. Optional → lightweight migration + CloudKit-safe.
+    var ocrText: String?
+
     /// The owning note — the inverse of `Note.attachments`.
     var note: Note?
 
-    init(id: UUID = UUID(), filename: String = "", typeIdentifier: String = "", createdAt: Date = .now, data: Data? = nil) {
+    init(id: UUID = UUID(), filename: String = "", typeIdentifier: String = "", createdAt: Date = .now, data: Data? = nil, ocrText: String? = nil) {
         self.id = id
         self.filename = filename
         self.typeIdentifier = typeIdentifier
         self.createdAt = createdAt
         self.data = data
+        self.ocrText = ocrText
     }
 }
 

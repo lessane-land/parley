@@ -110,6 +110,8 @@ struct NoteDetailView: View {
     @State private var importingFile = false
     @State private var previewAttachment: Attachment?
     @State private var showAttachMenu = false
+    /// Camera capture (iPhone) for snapping a photo of paper notes.
+    @State private var showCamera = false
 
     /// Delete-this-note confirmation.
     @State private var showDeleteNote = false
@@ -178,6 +180,15 @@ struct NoteDetailView: View {
         .fileImporter(isPresented: $importingFile, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
+        #if os(iOS)
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { data in
+                addAttachment(data: data, filename: "Scan \(Self.stamp()).jpg",
+                              typeIdentifier: UTType.jpeg.identifier)
+            }
+            .ignoresSafeArea()
+        }
+        #endif
         // Create a new event / reminder straight from the note (prefilled with its
         // title) — not only via the summary.
         .sheet(isPresented: $showNewEvent) {
@@ -379,6 +390,17 @@ struct NoteDetailView: View {
                     }
                     .frame(width: 104, height: 58)
                     .clipped()
+                    // Badge: text was recognized from this photo (folds into wrap-up).
+                    .overlay(alignment: .bottomLeading) {
+                        if let t = attachment.ocrText, !t.isEmpty {
+                            Image(systemName: "text.viewfinder")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(theme.paper)
+                                .padding(3)
+                                .background(theme.accent, in: RoundedRectangle(cornerRadius: 4))
+                                .padding(4)
+                        }
+                    }
 
                     Text(attachment.filename.isEmpty ? "Attachment" : attachment.filename)
                         .font(theme.monoFont(9.5, relativeTo: .caption2))
@@ -408,6 +430,18 @@ struct NoteDetailView: View {
         }
         .contextMenu {
             Button { previewAttachment = attachment } label: { Label("Open", systemImage: "eye") }
+            if let t = attachment.ocrText, !t.isEmpty {
+                Button {
+                    #if canImport(UIKit)
+                    UIPasteboard.general.string = t
+                    #elseif canImport(AppKit)
+                    NSPasteboard.general.clearContents(); NSPasteboard.general.setString(t, forType: .string)
+                    #endif
+                } label: { Label("Copy recognized text", systemImage: "doc.on.doc") }
+                Button {
+                    note.body += (note.body.isEmpty ? "" : "\n\n") + t
+                } label: { Label("Add text to notes", systemImage: "text.append") }
+            }
             Button(role: .destructive) { removeAttachment(attachment) } label: {
                 Label("Remove", systemImage: "trash")
             }
@@ -424,7 +458,12 @@ struct NoteDetailView: View {
             Label("Attach", systemImage: "paperclip").labelStyle(.iconOnly)
         }
         .confirmationDialog("Add Attachment", isPresented: $showAttachMenu, titleVisibility: .visible) {
-            Button("Photo") { showPhotoPicker = true }
+            #if os(iOS)
+            if CameraPicker.isAvailable {
+                Button("Take Photo") { showCamera = true }
+            }
+            #endif
+            Button("Photo Library") { showPhotoPicker = true }
             Button("File") { importingFile = true }
             Button("Cancel", role: .cancel) {}
         }
@@ -553,6 +592,15 @@ struct NoteDetailView: View {
         context.insert(attachment)
         // Append on the note side; SwiftData sets the inverse (`attachment.note`).
         note.attachments = (note.attachments ?? []) + [attachment]
+        // Photos/scans get OCR'd on-device so the wrap-up can fold their text in
+        // (e.g. a snapshot of a handwritten notebook page).
+        if AttachmentSupport.isImage(attachment) {
+            Task { @MainActor in
+                let text = await HandwritingOCR.recognizeImage(
+                    data, languages: ocrLanguages, customWords: note.attendees)
+                if !text.isEmpty { attachment.ocrText = text }
+            }
+        }
     }
 
     private func removeAttachment(_ attachment: Attachment) {
@@ -1258,6 +1306,17 @@ struct NoteDetailView: View {
                 text += (text.isEmpty ? "" : "\n") + handwritten
             }
         }
+        // Fold in text recognized from attached photos/scans (cached on attach;
+        // OCR'd on the fly if the photo predates the cache).
+        for attachment in (note.attachments ?? []) where AttachmentSupport.isImage(attachment) {
+            var ocr = attachment.ocrText ?? ""
+            if ocr.isEmpty, let data = attachment.data {
+                ocr = await HandwritingOCR.recognizeImage(
+                    data, languages: ocrLanguages, customWords: note.attendees)
+                if !ocr.isEmpty { attachment.ocrText = ocr }
+            }
+            if !ocr.isEmpty { text += (text.isEmpty ? "" : "\n") + ocr }
+        }
         return text
     }
 
@@ -1551,7 +1610,87 @@ enum HandwritingOCR {
         return nil
         #endif
     }
+
+    /// Recognize text from a photo/scan (raw image data, not a `PKDrawing`). Same
+    /// on-device Vision recognizer tuned for handwriting — so a snapshot of a
+    /// notebook page can be folded into the wrap-up.
+    static func recognizeImage(_ data: Data, languages: [String] = [], customWords: [String] = []) async -> String {
+        guard let cg = decodeCGImage(data) else { return "" }
+        return await withCheckedContinuation { (cont: CheckedContinuation<String, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let request = VNRecognizeTextRequest()
+                request.recognitionLevel = .accurate
+                request.usesLanguageCorrection = true
+                if #available(iOS 16.0, macOS 13.0, *) {
+                    request.revision = VNRecognizeTextRequestRevision3
+                }
+                if !languages.isEmpty { request.recognitionLanguages = languages }
+                if !customWords.isEmpty { request.customWords = customWords }
+                do {
+                    try VNImageRequestHandler(cgImage: cg, options: [:]).perform([request])
+                    let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+                    cont.resume(returning: lines.joined(separator: "\n"))
+                } catch {
+                    cont.resume(returning: "")
+                }
+            }
+        }
+    }
+
+    private static func decodeCGImage(_ data: Data) -> CGImage? {
+        #if canImport(UIKit)
+        return UIImage(data: data)?.cgImage
+        #elseif canImport(AppKit)
+        guard let img = NSImage(data: data) else { return nil }
+        return img.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        #else
+        return nil
+        #endif
+    }
 }
+
+#if os(iOS)
+// MARK: - Camera capture (iPhone)
+
+/// A thin SwiftUI wrapper over `UIImagePickerController`'s camera, so you can snap
+/// a photo of a paper notebook page right inside a note. Returns JPEG bytes.
+struct CameraPicker: UIViewControllerRepresentable {
+    var onCapture: (Data) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    /// Whether this device actually has a camera (false in the Simulator).
+    static var isAvailable: Bool { UIImagePickerController.isSourceTypeAvailable(.camera) }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ controller: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraPicker
+        init(_ parent: CameraPicker) { self.parent = parent }
+
+        func imagePickerController(_ picker: UIImagePickerController,
+                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage,
+               let data = image.jpegData(compressionQuality: 0.85) {
+                parent.onCapture(data)
+            }
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
+    }
+}
+#endif
 
 // MARK: - Canvas items (images + shapes)
 

@@ -316,6 +316,8 @@ struct MonthCalendarView: View {
     var generatePrep: (Meeting, [Note], [String]) async -> MeetingPrep? = { _, _, _ in nil }
     /// Why prep is unavailable (nil = the on-device model is ready).
     var prepUnavailableMessage: String? = nil
+    /// Show/hide the app's sidebar (iPad portrait collapses it for room).
+    var onToggleSidebar: (() -> Void)? = nil
     /// Return to the dashboard (it's shown as the navigation root, not a modal).
     var onClose: (() -> Void)? = nil
 
@@ -397,6 +399,15 @@ struct MonthCalendarView: View {
 
     private var header: some View {
         HStack(spacing: 16) {
+            #if os(iOS)
+            if let onToggleSidebar {
+                Button(action: onToggleSidebar) {
+                    Image(systemName: "sidebar.left").font(.system(size: 16, weight: .semibold))
+                }
+                .buttonStyle(.plain).foregroundStyle(theme.inkSoft)
+                .accessibilityLabel("Toggle sidebar")
+            }
+            #endif
             Text(headerTitle)
                 .font(theme.titleFont(24, relativeTo: .title))
                 .tracking(theme.titleTracking)
@@ -790,28 +801,23 @@ struct MonthCalendarView: View {
     // MARK: Navigation
 
     private func step(_ delta: Int) {
-        withAnimation(.snappy) {
-            switch scale {
-            case .month:
-                if let m = cal.date(byAdding: .month, value: delta, to: cursor) { cursor = m }
-            case .week:
-                if let w = cal.date(byAdding: .day, value: delta * 7, to: cursor) { cursor = w }
-            case .day:
-                if let d = cal.date(byAdding: .day, value: delta, to: selected) { selected = d; cursor = d }
-            }
+        // No animation — paging months/weeks should be instant, not a slide.
+        switch scale {
+        case .month:
+            if let m = cal.date(byAdding: .month, value: delta, to: cursor) { cursor = m }
+        case .week:
+            if let w = cal.date(byAdding: .day, value: delta * 7, to: cursor) { cursor = w }
+        case .day:
+            if let d = cal.date(byAdding: .day, value: delta, to: selected) { selected = d; cursor = d }
         }
     }
     private func goToday() {
-        withAnimation(.snappy) {
-            let t = cal.startOfDay(for: Date())
-            cursor = t; selected = t
-        }
+        let t = cal.startOfDay(for: Date())
+        cursor = t; selected = t
     }
     private func pickDay(_ day: Date) {
-        withAnimation(.snappy) {
-            selected = day
-            if scale != .month { cursor = day }
-        }
+        selected = day
+        if scale != .month { cursor = day }
     }
 
     private var headerTitle: String {

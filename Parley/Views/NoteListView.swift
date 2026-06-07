@@ -28,6 +28,11 @@ struct NoteListView: View {
     @State private var showingToday = false
     @State private var showingMonthCalendar = false
     @State private var showingAsk = false
+    /// Window is taller than wide (iPad portrait) — drives auto-collapsing the rail
+    /// in the calendar, which is too cramped as a 3-pane in portrait.
+    @State private var isPortrait = false
+    /// Rail hidden in the calendar (auto in portrait; toggle from the calendar).
+    @State private var sidebarHidden = false
 
     /// Tag rename: the tag being renamed + draft text.
     @State private var editingTag: Tag?
@@ -125,6 +130,15 @@ struct NoteListView: View {
                 }
         }
         .tint(theme.accent)
+        // Track portrait (iPad) so the calendar can drop the rail in vertical.
+        .onGeometryChange(for: Bool.self) { $0.size.height > $0.size.width } action: { portrait in
+            isPortrait = portrait
+            if !portrait { sidebarHidden = false }            // landscape → always show rail
+            else if showingMonthCalendar { sidebarHidden = true }
+        }
+        .onChange(of: showingMonthCalendar) { _, showing in
+            sidebarHidden = showing && isPortrait
+        }
         // Menu bar "Open Parley" while recording → jump to that note.
         .onChange(of: recorder.openTick) { _, _ in
             guard let id = recorder.openNoteRequest,
@@ -201,11 +215,13 @@ struct NoteListView: View {
             // iPad/Mac: rail + grid, with Ask as an inline right column and Settings
             // as a right slide-over — both "aside", not modal sheets.
             HStack(spacing: 0) {
-                if railFloats {
-                    floatingRail
-                } else {
-                    rail.frame(width: 268)
-                    verticalDivider
+                if !sidebarHidden {
+                    if railFloats {
+                        floatingRail
+                    } else {
+                        rail.frame(width: 268)
+                        verticalDivider
+                    }
                 }
                 if usesSidePanels && showingAsk && askExpanded {
                     // Ask Parley expanded to fill the content area (rail stays).
@@ -731,6 +747,7 @@ struct NoteListView: View {
                     historyText: Self.historyText(from: related), reminders: reminderTitles)
             },
             prepUnavailableMessage: prepService.availabilityMessage(),
+            onToggleSidebar: { withAnimation(.snappy) { sidebarHidden.toggle() } },
             onClose: { showingMonthCalendar = false }
         )
     }

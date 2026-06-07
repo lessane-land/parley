@@ -1313,8 +1313,11 @@ struct NoteDetailView: View {
     /// Settings ▸ AI ▸ Auto-summarize is on — so it's ready when the user opens it.
     private func autoSummarizeIfEnabled() async {
         guard themeManager.autoSummarize, !note.transcript.isEmpty else { return }
+        let speakers = Set(note.transcriptSegments.compactMap(\.speaker).filter { !$0.isEmpty })
+        let isMeeting = speakers.count >= 2 || note.attendees.count >= 2
         let result = await summaryService.summarize(
             notes: await combinedNotesText(), transcript: note.transcript, attendees: note.attendees,
+            isMeeting: isMeeting,
             tone: themeManager.summaryTone,
             includeDecisions: themeManager.extractDecisions,
             includeActionItems: themeManager.extractActionItems,

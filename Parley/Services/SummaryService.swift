@@ -153,6 +153,7 @@ final class SummaryService {
     }
 
     func summarize(notes: String, transcript: String, attendees: [String] = [],
+                   isMeeting: Bool = true,
                    tone: SummaryTone = .balanced,
                    includeDecisions: Bool = true,
                    includeActionItems: Bool = true,
@@ -164,15 +165,19 @@ final class SummaryService {
         }
 
         state = .working
+        // Adapt the role: a multi-speaker recording is a meeting; otherwise it's
+        // just the user's own notes (no attendees / decisions to attribute).
+        let role = isMeeting
+            ? "You are a meeting-notes assistant. From the user's notes and the transcript, produce a clean, faithful summary capturing the meeting's decisions, action items, and open questions."
+            : "You are a notes assistant. These are the user's personal notes — NOT a meeting. Produce a clean, faithful summary and pull out any to-dos as action items. There are no attendees or speakers to attribute; leave decisions and open questions empty unless the notes clearly contain them."
         let session = LanguageModelSession(instructions: """
-        You are a meeting-notes assistant. From a user's sparse notes and a full \
-        transcript, produce a clean, faithful summary. Only include information \
-        supported by the inputs — never invent facts. \(tone.guidance) If a section \
-        has nothing, return an empty list.
+        \(role) Only include information supported by the inputs — never invent \
+        facts, people, or tasks. \(tone.guidance) If a section has nothing, return \
+        an empty list.
         """)
         do {
             let draft = try await session.respond(
-                to: Self.prompt(notes: notes, transcript: transcript, attendees: attendees),
+                to: Self.prompt(notes: notes, transcript: transcript, attendees: attendees, isMeeting: isMeeting),
                 generating: SummaryDraft.self
             ).content
             state = .idle
@@ -193,19 +198,18 @@ final class SummaryService {
         }
     }
 
-    private static func prompt(notes: String, transcript: String, attendees: [String]) -> String {
-        """
-        ATTENDEES:
-        \(attendees.isEmpty ? "(unknown)" : attendees.joined(separator: ", "))
-
-        USER NOTES:
+    private static func prompt(notes: String, transcript: String, attendees: [String], isMeeting: Bool) -> String {
+        let closing = isMeeting
+            ? "Summarize this meeting. When assigning action-item owners, prefer names from the attendee list."
+            : "Summarize these notes. Action items are the user's own to-dos — leave the owner empty."
+        return """
+        \(isMeeting ? "ATTENDEES:\n\(attendees.isEmpty ? "(unknown)" : attendees.joined(separator: ", "))\n\n" : "")USER NOTES:
         \(notes.isEmpty ? "(none)" : notes)
 
         TRANSCRIPT:
         \(transcript.isEmpty ? "(none)" : transcript)
 
-        Summarize this meeting. When assigning action-item owners, prefer names \
-        from the attendee list.
+        \(closing)
         """
     }
 }

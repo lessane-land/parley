@@ -22,6 +22,21 @@ struct SummaryView: View {
     @State private var remindedTitles: Set<String> = []
     /// Which action item's date picker popover is open (by id), if any.
     @State private var editingDueID: ActionItem.ID?
+    /// Editing the wrap-up's main text in place.
+    @State private var editingOverview = false
+
+    /// Two-way binding to the summary's overview (the editable main text).
+    private var overviewBinding: Binding<String> {
+        Binding(
+            get: { summary?.overview ?? "" },
+            set: { newValue in
+                guard var s = summary else { return }
+                s.overview = newValue
+                summary = s
+                persist()
+            }
+        )
+    }
 
     /// Two columns (doc + sources) when wide; stacked otherwise.
     private var isWide: Bool {
@@ -156,14 +171,40 @@ struct SummaryView: View {
     private func docColumn(_ summary: MeetingSummary) -> some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Wrap-up", systemImage: "sparkles")
-                    .font(theme.monoFont(11)).tracking(1.4).foregroundStyle(theme.accentInk)
-                if !summary.overview.isEmpty {
+                HStack {
+                    Label("Wrap-up", systemImage: "sparkles")
+                        .font(theme.monoFont(11)).tracking(1.4).foregroundStyle(theme.accentInk)
+                    Spacer()
+                    Button { withAnimation(.snappy) { editingOverview.toggle() } } label: {
+                        Label(editingOverview ? "Done" : "Edit",
+                              systemImage: editingOverview ? "checkmark" : "pencil")
+                            .font(theme.bodyFont(12).weight(.semibold))
+                            .foregroundStyle(theme.accentInk)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if editingOverview {
+                    let shape = RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 10)
+                    TextEditor(text: overviewBinding)
+                        .font(theme.titleFont(21, relativeTo: .title3))
+                        .foregroundStyle(theme.ink)
+                        .lineSpacing(3)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 140)
+                        .padding(10)
+                        .background(theme.paperRaised, in: shape)
+                        .overlay(shape.strokeBorder(theme.accentLine, lineWidth: max(1, theme.borderWidth)))
+                } else if !summary.overview.isEmpty {
                     Text(summary.overview)
                         .font(theme.titleFont(21, relativeTo: .title3))
                         .foregroundStyle(theme.ink)
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
+                        .onTapGesture { withAnimation(.snappy) { editingOverview = true } }
+                } else {
+                    Text("Tap Edit to write the wrap-up yourself…")
+                        .font(theme.bodyFont(14)).italic().foregroundStyle(theme.inkFaint)
+                        .onTapGesture { withAnimation(.snappy) { editingOverview = true } }
                 }
             }
             if !summary.decisions.isEmpty { decisionsSection(summary.decisions) }
@@ -469,16 +510,29 @@ struct SummaryView: View {
     private func generate() async {
         remindedTitles = []
         // Include recognized handwriting so the summary reads pen notes too.
+        let languages = (themeManager.transcriptionLanguage?.isEmpty == false)
+            ? [themeManager.transcriptionLanguage!] : []
         var notesText = note.body
         if let drawing = note.drawing {
-            let languages = (themeManager.transcriptionLanguage?.isEmpty == false)
-                ? [themeManager.transcriptionLanguage!] : []
             let handwritten = await HandwritingOCR.recognize(
                 drawing, languages: languages, customWords: note.attendees)
             if !handwritten.isEmpty { notesText += (notesText.isEmpty ? "" : "\n") + handwritten }
         }
+        // Fold in text recognized from attached photos/scans too.
+        for attachment in (note.attachments ?? []) where AttachmentSupport.isImage(attachment) {
+            var ocr = attachment.ocrText ?? ""
+            if ocr.isEmpty, let data = attachment.data {
+                ocr = await HandwritingOCR.recognizeImage(data, languages: languages, customWords: note.attendees)
+                if !ocr.isEmpty { attachment.ocrText = ocr }
+            }
+            if !ocr.isEmpty { notesText += (notesText.isEmpty ? "" : "\n") + ocr }
+        }
+        // Meeting = more than one speaker (or attendee); otherwise it's just notes.
+        let speakers = Set(note.transcriptSegments.compactMap(\.speaker).filter { !$0.isEmpty })
+        let isMeeting = speakers.count >= 2 || note.attendees.count >= 2
         let result = await service.summarize(
             notes: notesText, transcript: note.transcript, attendees: note.attendees,
+            isMeeting: isMeeting,
             tone: themeManager.summaryTone,
             includeDecisions: themeManager.extractDecisions,
             includeActionItems: themeManager.extractActionItems,

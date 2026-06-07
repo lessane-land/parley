@@ -3,10 +3,13 @@ import WidgetKit
 import SwiftUI
 
 /// The Lock Screen + Dynamic Island UI for an in-progress recording.
+<<<<<<< HEAD
+=======
 ///
 /// Add this file to the **ParleyWidget** target. It uses
 /// `RecordingActivityAttributes` (in `Parley/RecordingActivity.swift`), which must
 /// also be a member of this target — see docs/LIVE_ACTIVITY.md.
+>>>>>>> elegant-johnson-YMfzY
 struct RecordingLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RecordingActivityAttributes.self) { context in
@@ -53,4 +56,8 @@ struct RecordingLiveActivity: Widget {
     private var recDot: some View {
         Circle().fill(.red).frame(width: 10, height: 10)
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> elegant-johnson-YMfzY

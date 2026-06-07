@@ -590,7 +590,7 @@ struct NoteDetailView: View {
             .tint(theme.accent)
 
             Button { showingSummary = true } label: {
-                Label("Summarize", systemImage: "sparkles")
+                Label("Wrap-up", systemImage: "sparkles")
                     .font(.subheadline.weight(.semibold))
             }
             .buttonStyle(.borderedProminent)

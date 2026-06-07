@@ -145,13 +145,13 @@ struct SettingsView: View {
     @ViewBuilder
     private func aiSection(_ manager: ThemeManager) -> some View {
         @Bindable var manager = manager
-        sectionHeader("AI & Summarize")
-        toggleRow("Auto-summarize when I end a meeting",
+        sectionHeader("AI & Wrap-up")
+        toggleRow("Wrap up automatically when I end a meeting",
                   desc: "Draft is ready the moment you stop recording.",
                   isOn: $manager.autoSummarize)
 
-        fieldLabel("Summary tone")
-        Picker("Summary tone", selection: $manager.summaryTone) {
+        fieldLabel("Wrap-up tone")
+        Picker("Wrap-up tone", selection: $manager.summaryTone) {
             ForEach(SummaryTone.allCases) { Text($0.name).tag($0) }
         }
         .pickerStyle(.segmented)

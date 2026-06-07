@@ -272,7 +272,7 @@ struct NoteCard: View {
         if actions > 0 {
             items.append(("checklist", "\(actions)", false))
         } else if note.summaryData != nil {
-            items.append(("sparkles", "Summary", false))
+            items.append(("sparkles", "Wrap-up", false))
         }
         if let attachments = note.attachments, !attachments.isEmpty {
             items.append(("paperclip", "\(attachments.count)", false))

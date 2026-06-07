@@ -39,6 +39,8 @@
 		0000000000000000000000C4 /* TodayMeetingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C3 /* TodayMeetingsSheet.swift */; };
 		0000000000000000000000C6 /* ActionItemsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000C5 /* ActionItemsSheet.swift */; };
 		0000000000000000000000D2 /* SummaryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000D1 /* SummaryService.swift */; };
+		0000000000000000000000FB /* MeetingPrepService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000FA /* MeetingPrepService.swift */; };
+		0000000000000000000000E2 /* SyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000E1 /* SyncMonitor.swift */; };
 		0000000000000000000000D4 /* SummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000D3 /* SummaryView.swift */; };
 		0000000000000000000000E2 /* SyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000E1 /* SyncMonitor.swift */; };
 		0000000000000000000000F2 /* Tag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F1 /* Tag.swift */; };
@@ -91,6 +93,8 @@
 		0000000000000000000000C3 /* TodayMeetingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayMeetingsSheet.swift; sourceTree = "<group>"; };
 		0000000000000000000000C5 /* ActionItemsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionItemsSheet.swift; sourceTree = "<group>"; };
 		0000000000000000000000D1 /* SummaryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryService.swift; sourceTree = "<group>"; };
+		0000000000000000000000FA /* MeetingPrepService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingPrepService.swift; sourceTree = "<group>"; };
+		0000000000000000000000E1 /* SyncMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMonitor.swift; sourceTree = "<group>"; };
 		0000000000000000000000D3 /* SummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryView.swift; sourceTree = "<group>"; };
 		0000000000000000000000E1 /* SyncMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncMonitor.swift; sourceTree = "<group>"; };
 		0000000000000000000000F1 /* Tag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tag.swift; sourceTree = "<group>"; };
@@ -230,6 +234,7 @@
 				0000000000000000000000B1 /* TranscriptionService.swift */,
 				0000000000000000000000C1 /* EventKitService.swift */,
 				0000000000000000000000D1 /* SummaryService.swift */,
+				0000000000000000000000FA /* MeetingPrepService.swift */,
 				0000000000000000000000E1 /* SyncMonitor.swift */,
 			);
 			path = Services;
@@ -348,6 +353,7 @@
 				0000000000000000000000C4 /* TodayMeetingsSheet.swift in Sources */,
 				0000000000000000000000C6 /* ActionItemsSheet.swift in Sources */,
 				0000000000000000000000D2 /* SummaryService.swift in Sources */,
+				0000000000000000000000FB /* MeetingPrepService.swift in Sources */,
 				0000000000000000000000D4 /* SummaryView.swift in Sources */,
 				0000000000000000000000E2 /* SyncMonitor.swift in Sources */,
 			);

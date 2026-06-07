@@ -54,18 +54,20 @@ struct NoteListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            home
-                .navigationTitle("")
+            Group {
+                if showingMonthCalendar {
+                    monthCalendar   // full-window calendar (iPad/Mac)
+                } else {
+                    home
+                }
+            }
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
-                // iPad has no top-bar actions anymore (everything's in the rail), so
-                // hide the navigation bar entirely and let the dashboard use the full
-                // height. iPhone keeps its bar (that's where its actions live).
-                // The bar's *background* must be hidden too — leaving it `.visible`
-                // kept the bar's height reserved (the gap at the top).
-                .toolbar(isRegular ? .hidden : .visible, for: .navigationBar)
+                // iPad hides the bar on the dashboard (actions live in the rail), but
+                // the calendar needs it back for its Done/＋. iPhone keeps its bar.
+                .toolbar(barHidden ? .hidden : .visible, for: .navigationBar)
                 .toolbarBackground(theme.paper, for: .navigationBar)
-                .toolbarBackground(isRegular ? .hidden : .visible, for: .navigationBar)
+                .toolbarBackground(barHidden ? .hidden : .visible, for: .navigationBar)
                 .toolbar { homeToolbar }
                 #endif
                 .navigationDestination(for: Note.self) { note in
@@ -93,12 +95,6 @@ struct NoteListView: View {
                     TagColorSheet(tag: tag, theme: theme)
                         .presentationDragIndicator(.visible)
                 }
-                // The big month calendar (iPad/Mac): full screen on iPad, a window on Mac.
-                #if os(iOS)
-                .fullScreenCover(isPresented: $showingMonthCalendar) { monthCalendar }
-                #else
-                .sheet(isPresented: $showingMonthCalendar) { monthCalendar }
-                #endif
                 .sheet(isPresented: $showingReminders) {
                     RemindersSheet(
                         theme: theme,
@@ -165,6 +161,10 @@ struct NoteListView: View {
         }
         #endif
     }
+
+    /// Hide the navigation bar only on the iPad/Mac dashboard (the calendar needs
+    /// the bar for its Done/＋ buttons).
+    private var barHidden: Bool { isRegular && !showingMonthCalendar }
 
     /// Whether to show the side rail (iPad/Mac) or a compact grid (iPhone).
     private var isRegular: Bool {
@@ -622,16 +622,18 @@ struct NoteListView: View {
         }
     }
 
-    /// The month-grid calendar (iPad/Mac), wired to open meetings/notes + add events.
+    /// The full-window month-grid calendar (iPad/Mac). Tapping a meeting/note pushes
+    /// it on top (back returns to the calendar); Done returns to the dashboard.
     private var monthCalendar: some View {
         MonthCalendarView(
             theme: theme,
             notes: notes,
             access: eventKit.calendarAccess,
-            onOpenMeeting: { meeting in showingMonthCalendar = false; openMeeting(meeting) },
-            onOpenNote: { note in showingMonthCalendar = false; path.append(note) },
+            onOpenMeeting: { meeting in openMeeting(meeting) },
+            onOpenNote: { note in path.append(note) },
             loadMeetings: { start, end in await eventKit.meetings(from: start, to: end) },
-            onAddEvent: { draft in _ = await eventKit.addEvent(draft) }
+            onAddEvent: { draft in _ = await eventKit.addEvent(draft) },
+            onClose: { showingMonthCalendar = false }
         )
     }
 

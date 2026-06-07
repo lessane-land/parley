@@ -88,6 +88,14 @@ struct ParleyApp: App {
                 .task(id: themeManager.mood) {
                     AppIcon.apply(mood: themeManager.mood)
                 }
+                #if os(iOS)
+                // The toolbar buttons follow `.tint`, but the navigation *back*
+                // button follows the window's tint — set it so the back chevron
+                // matches the accent like everything else (keeps swipe-to-go-back).
+                .task(id: themeManager.theme.accent) {
+                    AppChrome.tintWindows(themeManager.theme.accent)
+                }
+                #endif
         }
         // Inject the (CloudKit-backed) container; views read it via `@Query`
         // and `@Environment(\.modelContext)`.
@@ -329,3 +337,18 @@ enum AppIcon {
         #endif
     }
 }
+
+#if os(iOS)
+/// Tints the app's windows with the accent so system chrome that follows the
+/// *window* tint (notably the navigation back button) matches the rest of the UI.
+enum AppChrome {
+    @MainActor
+    static func tintWindows(_ color: Color) {
+        let ui = UIColor(color)
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows { window.tintColor = ui }
+        }
+    }
+}
+#endif

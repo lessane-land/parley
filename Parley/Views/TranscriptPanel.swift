@@ -1,4 +1,9 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 /// The live transcript surface — the design's recessed transcript panel with a
 /// record control, a status pill, and the streaming text (confirmed text plus
@@ -56,6 +61,16 @@ struct TranscriptPanel: View {
                 Text(label)
                     .font(theme.monoFont(11))
                     .foregroundStyle(theme.inkFaint)
+            }
+
+            if !fullTranscriptText.isEmpty {
+                Button { copyToPasteboard(fullTranscriptText) } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(theme.inkFaint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Copy transcript")
             }
 
             if let onCollapse {
@@ -238,6 +253,7 @@ struct TranscriptPanel: View {
                     .foregroundStyle(active ? theme.ink : theme.ink2)
                     .lineSpacing(density.lineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)   // select & copy transcript text
             }
             .padding(.bottom, 14)
         }
@@ -346,5 +362,26 @@ struct TranscriptPanel: View {
     private func elapsed(since start: Date) -> String {
         let s = max(0, Int(Date().timeIntervalSince(start)))
         return String(format: "%02d:%02d", s / 60, s % 60)
+    }
+
+    /// The whole transcript as plain text (speaker-prefixed when known) — for the
+    /// header's copy button.
+    private var fullTranscriptText: String {
+        if !segments.isEmpty {
+            return segments.map { seg in
+                let who = (seg.speaker?.isEmpty == false) ? "\(seg.speaker!): " : ""
+                return who + seg.text
+            }.joined(separator: "\n")
+        }
+        return text
+    }
+
+    private func copyToPasteboard(_ string: String) {
+        #if canImport(UIKit)
+        UIPasteboard.general.string = string
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(string, forType: .string)
+        #endif
     }
 }

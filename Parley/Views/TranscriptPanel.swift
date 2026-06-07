@@ -253,7 +253,11 @@ struct TranscriptPanel: View {
                     .foregroundStyle(active ? theme.ink : theme.ink2)
                     .lineSpacing(density.lineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)   // select & copy transcript text
+                    .textSelection(.enabled)   // drag to select & copy
+                    .contextMenu {             // long-press / right-click → reliable copy
+                        Button { copyToPasteboard(text) } label: { Label("Copy line", systemImage: "doc.on.doc") }
+                        Button { copyToPasteboard(fullTranscriptText) } label: { Label("Copy transcript", systemImage: "doc.on.clipboard") }
+                    }
             }
             .padding(.bottom, 14)
         }

@@ -83,7 +83,15 @@ final class TranscriptionService {
     /// Observer for audio-session interruptions (calls, Siri) so background
     /// recording resumes instead of dying silently.
     private var interruptionObserver: NSObjectProtocol?
+    /// Observer for engine configuration/route changes — notably the screen
+    /// locking, which stops the engine. We restart capture so a backgrounded
+    /// recording survives instead of freezing.
+    private var configObserver: NSObjectProtocol?
     #endif
+    /// Kept so the input tap can be reinstalled and the engine restarted after a
+    /// route change without tearing down the running analyzer stream.
+    private var analyzerFormat: AVAudioFormat?
+    private var diarFile: AVAudioFile?
     #if canImport(ActivityKit) && os(iOS)
     private var liveActivity: Activity<RecordingActivityAttributes>?
     #endif
@@ -240,6 +248,7 @@ final class TranscriptionService {
     // MARK: Audio engine
 
     private func startEngine(convertingTo analyzerFormat: AVAudioFormat?) throws {
+        self.analyzerFormat = analyzerFormat
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         // This must be the exact combination Apple's SpeechAnalyzer sample uses.
@@ -252,8 +261,17 @@ final class TranscriptionService {
         try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .defaultToSpeaker])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         observeInterruptions()
+        observeConfigChange()
         #endif
 
+        try installInputTap()
+    }
+
+    /// Install the mic tap and start the engine. Re-callable: used both to start a
+    /// session and to *restart* capture after a route/config change (e.g. the
+    /// screen locking), reusing the already-running analyzer stream so the
+    /// transcript keeps going across the lock.
+    private func installInputTap() throws {
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
 
@@ -267,20 +285,22 @@ final class TranscriptionService {
             )
         }
 
-        // Captured locally so the background tap never touches main-actor state.
-        let continuation = self.continuation
-        let converter = BufferConverter()
-
-        // Record the session audio to a temp file for offline diarization. Only
-        // when FluidAudio is linked (otherwise there's nothing to diarize).
+        // Record the session audio to a temp file for offline diarization. Created
+        // once per session and reused across restarts. Only when FluidAudio is
+        // linked (otherwise there's nothing to diarize); the write is nil-safe.
         #if canImport(FluidAudio)
-        let diarFile = makeDiarFile(format: inputFormat)
+        if diarFile == nil { diarFile = makeDiarFile(format: inputFormat) }
         #endif
 
+        // Captured locally so the background tap never touches main-actor state.
+        let continuation = self.continuation
+        let analyzerFormat = self.analyzerFormat
+        let converter = BufferConverter()
+        let diarFile = self.diarFile
+
+        input.removeTap(onBus: 0)   // safe no-op on first install; avoids a double tap on restart
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in
-            #if canImport(FluidAudio)
             try? diarFile?.write(from: buffer)
-            #endif
             guard let continuation else { return }
             if let analyzerFormat {
                 if let converted = try? converter.convert(buffer, to: analyzerFormat) {
@@ -320,10 +340,30 @@ final class TranscriptionService {
             let optsRaw = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             guard AVAudioSession.InterruptionOptions(rawValue: optsRaw).contains(.shouldResume) else { return }
             try? AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
-            try? engine.start()
+            try? installInputTap()
         @unknown default:
             break
         }
+    }
+
+    /// `AVAudioEngine` stops whenever its I/O configuration changes — most
+    /// importantly when the screen locks (the input route reconfigures). The
+    /// interruption notification doesn't cover that, so without this a
+    /// backgrounded recording silently freezes. Reactivate the session and
+    /// reinstall the tap to keep capturing through the lock.
+    private func observeConfigChange() {
+        guard configObserver == nil else { return }
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.restartCaptureAfterRouteChange() }
+        }
+    }
+
+    private func restartCaptureAfterRouteChange() {
+        guard state == .recording, !engine.isRunning else { return }
+        try? AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
+        try? installInputTap()
     }
     #endif
 
@@ -393,6 +433,14 @@ final class TranscriptionService {
         analyzer = nil
         transcriber = nil
         resultsTask = nil
+        analyzerFormat = nil
+        diarFile = nil
+        #if os(iOS)
+        if let configObserver {
+            NotificationCenter.default.removeObserver(configObserver)
+            self.configObserver = nil
+        }
+        #endif
     }
 
     // MARK: Speaker diarization (FluidAudio, on-device)

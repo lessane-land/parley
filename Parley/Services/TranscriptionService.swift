@@ -2,6 +2,9 @@ import Foundation
 @preconcurrency import AVFoundation
 import Speech
 import SwiftData
+#if canImport(UIKit)
+import UIKit   // detect app backgrounding so we can backfill the transcript on stop
+#endif
 #if canImport(ActivityKit)
 import ActivityKit   // Live Activity: Lock Screen + Dynamic Island recording indicator
 #endif
@@ -92,6 +95,19 @@ final class TranscriptionService {
     /// route change without tearing down the running analyzer stream.
     private var analyzerFormat: AVAudioFormat?
     private var diarFile: AVAudioFile?
+    #if os(iOS)
+    /// Set if the app was backgrounded/locked mid-session. iOS pauses live speech
+    /// recognition then, so on stop we re-transcribe the recording to recover the
+    /// stretch the live pass missed.
+    private var wasBackgrounded = false
+    private var backgroundObserver: NSObjectProtocol?
+    #endif
+    /// Seed text/segments this session started from (a prior transcript already on
+    /// the note), preserved when the backfill replaces this session's portion.
+    private var sessionSeed = ""
+    private var sessionSeedSegments: [TranscriptSegment] = []
+    /// Scratch buffer for the stop-time file re-transcription.
+    private var backfillPieces: [String] = []
     #if canImport(ActivityKit) && os(iOS)
     private var liveActivity: Activity<RecordingActivityAttributes>?
     #endif
@@ -119,6 +135,11 @@ final class TranscriptionService {
         guard state == .idle || isError else { return }
         finalizedText = seed
         finalizedSegments = seedSegments
+        sessionSeed = seed
+        sessionSeedSegments = seedSegments
+        #if os(iOS)
+        wasBackgrounded = false
+        #endif
         speakerEmbeddings = [:]
         volatileText = ""
         state = .preparing
@@ -219,6 +240,7 @@ final class TranscriptionService {
 
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        diarFile = nil   // release the writer so the recording is flushed/closed before we re-read it
         continuation?.finish()
 
         do { try await analyzer?.finalizeAndFinishThroughEndOfInput() } catch { /* best effort */ }
@@ -238,6 +260,12 @@ final class TranscriptionService {
         #endif
         #if canImport(ActivityKit) && os(iOS)
         endLiveActivity()
+        #endif
+
+        // If the app was backgrounded/locked mid-session, iOS paused live
+        // recognition — re-transcribe the full recording to recover that stretch.
+        #if os(iOS)
+        if wasBackgrounded { await backfillFromRecording() }
         #endif
 
         await teardown()
@@ -262,6 +290,7 @@ final class TranscriptionService {
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         observeInterruptions()
         observeConfigChange()
+        observeBackground()
         #endif
 
         try installInputTap()
@@ -285,12 +314,10 @@ final class TranscriptionService {
             )
         }
 
-        // Record the session audio to a temp file for offline diarization. Created
-        // once per session and reused across restarts. Only when FluidAudio is
-        // linked (otherwise there's nothing to diarize); the write is nil-safe.
-        #if canImport(FluidAudio)
+        // Record the whole session to a temp file (created once, reused across
+        // restarts). Used for offline diarization *and* to re-transcribe the
+        // stretch iOS skipped while backgrounded. The write is nil-safe.
         if diarFile == nil { diarFile = makeDiarFile(format: inputFormat) }
-        #endif
 
         // Captured locally so the background tap never touches main-actor state.
         let continuation = self.continuation
@@ -364,6 +391,78 @@ final class TranscriptionService {
         guard state == .recording, !engine.isRunning else { return }
         try? AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
         try? installInputTap()
+    }
+
+    /// Note when the app is backgrounded/locked: iOS pauses live recognition while
+    /// backgrounded, so on stop we re-transcribe the recording to recover that gap.
+    private func observeBackground() {
+        guard backgroundObserver == nil else { return }
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.wasBackgrounded = true }
+        }
+    }
+
+    /// iOS keeps capturing mic audio to `diarAudioURL` while backgrounded, but
+    /// pauses live recognition — so the live transcript is missing whatever was
+    /// said while locked. Re-transcribe the complete recording (a finite file, so
+    /// recognition runs fully in the foreground at stop) and adopt it if it
+    /// recovered more text than the live pass. Best-effort: any failure leaves the
+    /// live transcript untouched.
+    private func backfillFromRecording() async {
+        guard let url = diarAudioURL, let locale = activeLocale else { return }
+        let sessionStart = diarSessionStart ?? startedAt ?? Date()
+        backfillPieces = []
+        do {
+            let audioFile = try AVAudioFile(forReading: url)
+            let transcriber = SpeechTranscriber(
+                locale: locale, transcriptionOptions: [],
+                reportingOptions: [], attributeOptions: []
+            )
+            let fileAnalyzer = SpeechAnalyzer(modules: [transcriber])
+
+            // Consume results concurrently while the file is analyzed (same shape
+            // as the live pass). Appends to a main-actor property — no data race.
+            let collect = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    for try await result in transcriber.results {
+                        guard result.isFinal else { continue }
+                        let piece = String(result.text.characters)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !piece.isEmpty { self.backfillPieces.append(piece) }
+                    }
+                } catch { }
+            }
+
+            if let last = try await fileAnalyzer.analyzeSequence(from: audioFile) {
+                try await fileAnalyzer.finalizeAndFinish(through: last)
+            } else {
+                await fileAnalyzer.cancelAndFinishNow()
+            }
+            await collect.value
+
+            let pieces = backfillPieces
+            guard !pieces.isEmpty else { return }
+            let fileText = pieces.joined(separator: " ")
+            let combined = sessionSeed.isEmpty ? fileText : sessionSeed + " " + fileText
+            // Never shrink a good transcript — only adopt if we recovered more.
+            guard combined.count > finalizedText.count else { return }
+
+            let sampleRate = audioFile.fileFormat.sampleRate
+            let duration = sampleRate > 0 ? Double(audioFile.length) / sampleRate : 0
+            var segments = sessionSeedSegments
+            let total = max(pieces.count, 1)
+            for (i, piece) in pieces.enumerated() {
+                let at = sessionStart.addingTimeInterval(duration * Double(i + 1) / Double(total))
+                segments.append(TranscriptSegment(text: piece, at: at))
+            }
+            finalizedText = combined
+            finalizedSegments = segments
+        } catch {
+            // Keep the live transcript on any failure.
+        }
     }
     #endif
 
@@ -439,6 +538,10 @@ final class TranscriptionService {
         if let configObserver {
             NotificationCenter.default.removeObserver(configObserver)
             self.configObserver = nil
+        }
+        if let backgroundObserver {
+            NotificationCenter.default.removeObserver(backgroundObserver)
+            self.backgroundObserver = nil
         }
         #endif
     }

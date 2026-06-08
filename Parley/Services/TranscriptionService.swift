@@ -334,7 +334,7 @@ final class TranscriptionService {
     private func startLiveActivity(title: String, at start: Date) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let attrs = RecordingActivityAttributes(noteTitle: title.isEmpty ? "New recording" : title, startedAt: start)
-        let content = ActivityContent(state: .init(status: "Recording"), staleDate: nil)
+        let content = ActivityContent(state: RecordingActivityAttributes.ContentState(status: "Recording"), staleDate: nil)
         liveActivity = try? Activity.request(attributes: attrs, content: content)
     }
 

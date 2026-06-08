@@ -55,7 +55,36 @@
 		00000000000000000000050E /* Spectral-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000506 /* Spectral-Regular.ttf */; };
 		00000000000000000000050F /* Spectral-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000507 /* Spectral-SemiBold.ttf */; };
 		023B09602FD33F0200C09394 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 023B095F2FD33F0200C09394 /* FluidAudio */; };
+		000000000000000000000970 /* ParleyWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000960 /* ParleyWidgetBundle.swift */; };
+		000000000000000000000971 /* RecordingLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000961 /* RecordingLiveActivity.swift */; };
+		000000000000000000000972 /* RecordingActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000701 /* RecordingActivity.swift */; };
+		000000000000000000000973 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000962 /* Assets.xcassets */; };
+		000000000000000000000981 /* ParleyWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 000000000000000000000910 /* ParleyWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		000000000000000000000983 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000000000920;
+			remoteInfo = ParleyWidgetExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		000000000000000000000980 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				000000000000000000000981 /* ParleyWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		00000000000000000000000B /* Parley.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Parley.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -109,6 +138,11 @@
 		000000000000000000000505 /* Inter-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Bold.ttf"; sourceTree = "<group>"; };
 		000000000000000000000506 /* Spectral-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Spectral-Regular.ttf"; sourceTree = "<group>"; };
 		000000000000000000000507 /* Spectral-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Spectral-SemiBold.ttf"; sourceTree = "<group>"; };
+		000000000000000000000910 /* ParleyWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ParleyWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000960 /* ParleyWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParleyWidgetBundle.swift; sourceTree = "<group>"; };
+		000000000000000000000961 /* RecordingLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingLiveActivity.swift; sourceTree = "<group>"; };
+		000000000000000000000962 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		000000000000000000000963 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +154,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		000000000000000000000941 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -127,8 +168,20 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000003 /* Parley */,
+				000000000000000000000950 /* ParleyWidget */,
 				000000000000000000000004 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		000000000000000000000950 /* ParleyWidget */ = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000960 /* ParleyWidgetBundle.swift */,
+				000000000000000000000961 /* RecordingLiveActivity.swift */,
+				000000000000000000000962 /* Assets.xcassets */,
+				000000000000000000000963 /* Info.plist */,
+			);
+			path = ParleyWidget;
 			sourceTree = "<group>";
 		};
 		000000000000000000000003 /* Parley */ = {
@@ -153,6 +206,7 @@
 			isa = PBXGroup;
 			children = (
 				00000000000000000000000B /* Parley.app */,
+				000000000000000000000910 /* ParleyWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -254,15 +308,34 @@
 				00000000000000000000000C /* Sources */,
 				00000000000000000000000D /* Frameworks */,
 				00000000000000000000000E /* Resources */,
+				000000000000000000000980 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				000000000000000000000982 /* PBXTargetDependency */,
 			);
 			name = Parley;
 			productName = Parley;
 			productReference = 00000000000000000000000B /* Parley.app */;
 			productType = "com.apple.product-type.application";
+		};
+		000000000000000000000920 /* ParleyWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000930 /* Build configuration list for PBXNativeTarget "ParleyWidgetExtension" */;
+			buildPhases = (
+				000000000000000000000940 /* Sources */,
+				000000000000000000000941 /* Frameworks */,
+				000000000000000000000942 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ParleyWidgetExtension;
+			productName = ParleyWidgetExtension;
+			productReference = 000000000000000000000910 /* ParleyWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -275,6 +348,9 @@
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
 					00000000000000000000000A = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					000000000000000000000920 = {
 						CreatedOnToolsVersion = 26.0;
 					};
 				};
@@ -296,6 +372,7 @@
 			projectRoot = "";
 			targets = (
 				00000000000000000000000A /* Parley */,
+				000000000000000000000920 /* ParleyWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -327,6 +404,14 @@
 				00000000000000000000050D /* Inter-Bold.ttf in Resources */,
 				00000000000000000000050E /* Spectral-Regular.ttf in Resources */,
 				00000000000000000000050F /* Spectral-SemiBold.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		000000000000000000000942 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000973 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -365,7 +450,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		000000000000000000000940 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000970 /* ParleyWidgetBundle.swift in Sources */,
+				000000000000000000000971 /* RecordingLiveActivity.swift in Sources */,
+				000000000000000000000972 /* RecordingActivity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		000000000000000000000982 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000000000920 /* ParleyWidgetExtension */;
+			targetProxy = 000000000000000000000983 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		000000000000000000000011 /* Debug */ = {
@@ -592,6 +695,70 @@
 			};
 			name = Release;
 		};
+		000000000000000000000931 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 56HTY9G299;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ParleyWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Parley;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lessane.Parley.ParleyWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		000000000000000000000932 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 56HTY9G299;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ParleyWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Parley;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lessane.Parley.ParleyWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -609,6 +776,15 @@
 			buildConfigurations = (
 				000000000000000000000013 /* Debug */,
 				000000000000000000000014 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000930 /* Build configuration list for PBXNativeTarget "ParleyWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000931 /* Debug */,
+				000000000000000000000932 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

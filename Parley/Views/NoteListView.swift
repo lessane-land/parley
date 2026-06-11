@@ -145,7 +145,7 @@ struct NoteListView: View {
             VStack(spacing: 12) {
                 HStack(spacing: 9) {
                     brandMark
-                    Text("Parley")
+                    Text("Inkling")
                         .font(theme.titleFont(20, relativeTo: .title3))
                         .tracking(theme.titleTracking)
                         .foregroundStyle(theme.ink)
@@ -189,7 +189,7 @@ struct NoteListView: View {
         RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 8)
             .fill(theme.accent)
             .frame(width: 30, height: 30)
-            .overlay(Text("P").font(theme.titleFont(17, relativeTo: .headline)).foregroundStyle(.white))
+            .overlay(Image(systemName: "pencil.tip").font(.system(size: 15, weight: .bold)).foregroundStyle(.white))
     }
 
     private var searchField: some View {

@@ -1,4 +1,10 @@
-# Parley
+# Inkling
+
+> **Name:** the app's brand/display name is **Inkling** (the earlier name
+> "Parley" was an App Store 4.1(c) trademark conflict). The Xcode project, target,
+> folder, and bundle id remain `Parley` / `com.lessane.Parley` — only the visible
+> brand changed (`CFBundleDisplayName`, the in-app wordmark). Update the **App
+> Store Connect → App Name** to match before resubmitting.
 
 A **standalone, on-device, cross-platform** meeting companion — like Granola, but
 private and pen-friendly. It records a meeting, transcribes it live on-device,

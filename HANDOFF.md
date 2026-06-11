@@ -16,6 +16,10 @@ device surfaces** — especially the brand-new WWDC-2025 APIs.
 - Branch: **`claude/optimistic-brown-fSPcZ`** (do all work here; push here).
 - 23 Swift files, 19 bundled fonts. Bundle id `com.lessane.Parley`,
   CloudKit container `iCloud.com.lessane.Parley`.
+- **Brand name is `Inkling`** (display name + in-app wordmark). The project,
+  target, folder, and bundle id stay `Parley` internally — App Store review
+  rejected "Parley" under 4.1(c) (trademark). Set the App Store Connect **App
+  Name** to Inkling too.
 
 ## Working agreement / environment notes
 

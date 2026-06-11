@@ -1,10 +1,10 @@
-# App Review notes — Parley
+# App Review notes — Inkling
 
 Paste into App Store Connect ▸ App Review Information ▸ Notes.
 
 ---
 
-Parley is a private, on‑device meeting‑notes app for iPhone, iPad, and Mac.
+Inkling is a private, on‑device meeting‑notes app for iPhone, iPad, and Mac.
 Everything runs locally; there is no account or login required to review it.
 
 PLATFORM REQUIREMENT
@@ -13,7 +13,7 @@ PLATFORM REQUIREMENT
   in this release.
 
 ON‑DEVICE AI
-- Summaries ("Wrap‑up"), meeting prep, and "Ask Parley" use Apple's on‑device
+- Summaries ("Wrap‑up"), meeting prep, and "Ask Inkling" use Apple's on‑device
   foundation models. On hardware without Apple Intelligence, these features show
   a clear "unavailable" state and the rest of the app works normally.
 

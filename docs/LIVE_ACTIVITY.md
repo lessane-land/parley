@@ -18,14 +18,14 @@ The extension is **iOS/iPadOS only** (`SUPPORTED_PLATFORMS = iphoneos iphonesimu
 Live Activities don't exist on macOS, so the Mac app simply builds without it.
 
 ## To run it
-1. Open `Parley.xcodeproj`, select the **Parley** app scheme + a **real device**.
+1. Open `Parley.xcodeproj`, select the **Inkling** app scheme + a **real device**.
 2. Build & run. Start a recording, then lock the phone / switch apps.
 3. The recording appears on the Lock Screen and in the Dynamic Island with a live
    timer, and ends automatically when you stop.
 
 ## Notes
 - Live Activities need a physical device (Simulator is unreliable) and the user must
-  have Live Activities enabled (Settings ▸ Parley).
+  have Live Activities enabled (Settings ▸ Inkling).
 - If signing complains about the widget, confirm the bundle id
   `com.lessane.Parley.ParleyWidget` under the `ParleyWidgetExtension` target ▸
   Signing & Capabilities, with your team selected (automatic signing).

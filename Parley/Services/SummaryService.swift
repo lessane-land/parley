@@ -227,9 +227,9 @@ final class SummaryService {
     }
 }
 
-// MARK: - Ask Parley (on-device chat across your notes)
+// MARK: - Ask Inkling (on-device chat across your notes)
 
-/// One line in the Ask Parley conversation.
+/// One line in the Ask Inkling conversation.
 struct ChatMessage: Identifiable, Equatable {
     enum Role { case user, assistant }
     let id = UUID()
@@ -248,7 +248,7 @@ private struct AskAnswer {
     var sources: [String]
 }
 
-/// "Ask Parley" — a multi-turn, on-device assistant that answers questions about
+/// "Ask Inkling" — a multi-turn, on-device assistant that answers questions about
 /// the user's notes. The notes corpus is folded into the session instructions
 /// once; each question reuses the session so follow-ups keep context. Nothing
 /// leaves the device (Foundation Models).
@@ -269,14 +269,14 @@ final class AskService {
         case .unavailable(.deviceNotEligible): return "This device doesn't support Apple Intelligence."
         case .unavailable(.appleIntelligenceNotEnabled): return "Turn on Apple Intelligence in Settings to use Ask Parley."
         case .unavailable(.modelNotReady): return "The on-device model is still downloading. Try again shortly."
-        case .unavailable(let other): return "Ask Parley is unavailable (\(other))."
+        case .unavailable(let other): return "Ask Inkling is unavailable (\(other))."
         }
     }
 
     /// (Re)ground the assistant in the current notes. Call when the chat opens.
     func start(context: String) {
         session = LanguageModelSession(instructions: """
-        You are Parley's on-device assistant. Answer the user's questions using ONLY \
+        You are Inkling's on-device assistant. Answer the user's questions using ONLY \
         the notes below — their meeting notes, transcripts, and summaries. If the \
         answer isn't supported by the notes, say so plainly instead of guessing. Be \
         concise and conversational. In `sources`, list the titles of the notes you used.
@@ -292,7 +292,7 @@ final class AskService {
         guard !q.isEmpty, state != .thinking else { return }
         if let message = availabilityMessage() { state = .unavailable(message); return }
 
-        guard let session else { state = .unavailable("Ask Parley isn't ready yet."); return }
+        guard let session else { state = .unavailable("Ask Inkling isn't ready yet."); return }
         messages.append(ChatMessage(role: .user, text: q))
         state = .thinking
         do {

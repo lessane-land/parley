@@ -204,7 +204,7 @@ struct SettingsView: View {
                   desc: "Auto-labels enrolled voices in new meetings. Name a speaker in a transcript to enroll their voice.",
                   isOn: $manager.recognizeSpeakers)
         if speakerProfiles.isEmpty {
-            Text("No enrolled voices yet. In a meeting transcript, tap a speaker and give them a name — Parley remembers that voice on this device (and your iCloud).")
+            Text("No enrolled voices yet. In a meeting transcript, tap a speaker and give them a name — Inkling remembers that voice on this device (and your iCloud).")
                 .font(theme.bodyFont(11.5))
                 .foregroundStyle(theme.inkFaint)
                 .fixedSize(horizontal: false, vertical: true)

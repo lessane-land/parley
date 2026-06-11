@@ -613,7 +613,7 @@ struct MonthCalendarView: View {
     }
 
     /// A note in a month cell — built exactly like the design's chip (time prefix +
-    /// title + a trailing glyph), on the accent tint so notes read like Parley's
+    /// title + a trailing glyph), on the accent tint so notes read like Inkling's
     /// own content. Mirrors `monthChip` so the two are visually consistent.
     private func monthNoteChip(_ note: Note) -> some View {
         let when = note.startDate ?? note.createdAt
@@ -1159,7 +1159,7 @@ private struct DayPanel: View {
             Button { togglePrep(ev) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles").font(.system(size: 10))
-                    Text(isOpen ? "Hide prep" : "Prep with Parley")
+                    Text(isOpen ? "Hide prep" : "Prep with Inkling")
                         .font(theme.bodyFont(11).weight(.semibold))
                 }
                 .foregroundStyle(theme.accentInk)

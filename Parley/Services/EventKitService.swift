@@ -85,13 +85,13 @@ final class EventKitService {
 
     // MARK: Reminders
 
-    /// The title of the dedicated reminders list Parley owns. Action items the app
+    /// The title of the dedicated reminders list Inkling owns. Action items the app
     /// creates go here, and the in-app Reminders screen reads only from it — so the
     /// app's reminders stay grouped and separate from the user's other lists.
-    private let parleyListTitle = "Parley"
+    private let parleyListTitle = "Inkling"
 
-    /// Parley's reminders (incomplete by default), soonest due first — for the
-    /// in-app Reminders list. Reads only from the "Parley" list; if it doesn't
+    /// Inkling's reminders (incomplete by default), soonest due first — for the
+    /// in-app Reminders list. Reads only from the "Inkling" list; if it doesn't
     /// exist yet (nothing's been added), returns empty.
     func fetchReminders(includingCompleted: Bool = false) async -> [ReminderItem] {
         guard await ensureRemindersAccess() else { return [] }
@@ -108,7 +108,7 @@ final class EventKitService {
     }
 
     /// Incomplete reminders due within a date window, across **all** the user's
-    /// lists (not just Parley's) — so the calendar can show what's due in the same
+    /// lists (not just Inkling's) — so the calendar can show what's due in the same
     /// window of time as their events. Soonest due first.
     func reminders(from start: Date, to end: Date) async -> [ReminderItem] {
         guard await ensureRemindersAccess() else { return [] }
@@ -122,12 +122,12 @@ final class EventKitService {
             .map(ReminderItem.init)
     }
 
-    /// The existing "Parley" reminders list, or nil if it hasn't been created yet.
+    /// The existing "Inkling" reminders list, or nil if it hasn't been created yet.
     private func findParleyList() -> EKCalendar? {
         store.calendars(for: .reminder).first { $0.title == parleyListTitle }
     }
 
-    /// The "Parley" reminders list, creating it on first use. A reminders calendar
+    /// The "Inkling" reminders list, creating it on first use. A reminders calendar
     /// needs a source that supports reminders — we borrow the default reminders
     /// list's source (iCloud/local), falling back to a local source.
     private func getOrCreateParleyList() -> EKCalendar? {
@@ -163,7 +163,7 @@ final class EventKitService {
         await addReminders(titles.map { ReminderDraft(title: $0, due: nil) })
     }
 
-    /// Saves each draft as a reminder in Parley's own list (created on first use),
+    /// Saves each draft as a reminder in Inkling's own list (created on first use),
     /// carrying its due date through to the Reminders app when one was set. Returns
     /// how many were written.
     @discardableResult

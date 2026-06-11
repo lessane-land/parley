@@ -172,8 +172,8 @@ private struct MenuBarPanel: View {
             }
 
             Divider()
-            Button("Open Parley") { openApp() }
-            Button("Quit Parley") { NSApplication.shared.terminate(nil) }
+            Button("Open Inkling") { openApp() }
+            Button("Quit Inkling") { NSApplication.shared.terminate(nil) }
         }
         .padding(14)
         .frame(width: 250)

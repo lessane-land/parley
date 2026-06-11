@@ -673,9 +673,9 @@ struct SummaryView: View {
     }
 }
 
-// MARK: - Ask Parley (chat)
+// MARK: - Ask Inkling (chat)
 
-/// The design's "Ask Parley" companion: a chat that answers questions about all
+/// The design's "Ask Inkling" companion: a chat that answers questions about all
 /// your notes, **entirely on device**. Grounds the model in your notes, shows
 /// the sources it leaned on, and offers a few starter prompts.
 struct ChatView: View {
@@ -735,7 +735,7 @@ struct ChatView: View {
     @ViewBuilder
     private var emptyState: some View {
         if case .unavailable(let reason) = service.state {
-            message("Ask Parley unavailable", reason, "sparkles.slash")
+            message("Ask Inkling unavailable", reason, "sparkles.slash")
         } else {
             message("Ask about your meetings",
                     "Try a prompt below, or ask anything — answers come only from your notes, on this device.",

@@ -1,7 +1,7 @@
-# Evolving Parley into the full design
+# Evolving Inkling into the full design
 
 The phased build (0–4 + sync) delivered every capability and the mood design
-system. This is the plan to grow the **screens** up to the full Parley design
+system. This is the plan to grow the **screens** up to the full Inkling design
 (the `Parley.html` prototype: a polished home/sidebar, a refined live-meeting
 screen, and a first-class summary screen).
 
@@ -35,7 +35,7 @@ see `HANDOFF.md`.**
 
 Make the sidebar the design's home screen.
 
-- **Brand header** (mark + "Parley" wordmark). **S**
+- **Brand header** (mark + "Inkling" wordmark). **S**
 - **Search** — a `searchable` field filtering the `@Query` by title/body/transcript. **S**
 - **Nav sections** — All Notes / Recent with counts; selectable. **M**
 - **Tags** — new `Tag` `@Model` (name + color) with an optional Note↔Tags

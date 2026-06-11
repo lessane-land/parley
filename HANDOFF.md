@@ -1,4 +1,4 @@
-# HANDOFF — continuing Parley in a new session
+# HANDOFF — continuing Inkling in a new session
 
 Read this first, then `README.md` (architecture/setup) and
 `docs/DESIGN_EVOLUTION.md` (the design roadmap). This file is the live status +
@@ -6,7 +6,7 @@ how-to-continue note.
 
 ## TL;DR
 
-Parley is a private, on-device, multiplatform (iOS/iPadOS/macOS 26) meeting
+Inkling is a private, on-device, multiplatform (iOS/iPadOS/macOS 26) meeting
 companion. **All five phases + CloudKit sync are implemented, plus large parts
 of the design evolution (E1/E2/E3/E5).** The code has **not been compiled by the
 assistant that wrote it** (it ran on Linux with no Xcode), so the #1 pending task
@@ -24,7 +24,7 @@ present (`#if canImport(FluidAudio)` in `TranscriptionService.swift`). Apple shi
 no on-device diarization API; FluidAudio runs Core ML diarization models on the
 ANE — fully on-device, so the privacy rule holds. To turn it on:
 
-1. Xcode ▸ File ▸ **Add Package Dependencies…** → `https://github.com/FluidInference/FluidAudio` → add to the Parley target.
+1. Xcode ▸ File ▸ **Add Package Dependencies…** → `https://github.com/FluidInference/FluidAudio` → add to the Inkling target.
 2. Rebuild. With the package present, each recording is captured to a temp `.caf`,
    diarized on stop, and lines are auto-labeled "Speaker 1/2/…" (rename any once to
    relabel the whole speaker). Without the package the app builds and runs exactly
@@ -72,14 +72,14 @@ diarization turns), so labels can be a touch off at boundaries — fine for v1.
   - `SummaryService` — Foundation Models guided generation → `MeetingSummary`
     (overview/decisions/action items+owners/open questions).
   - `SyncMonitor` — CloudKit sync status for the sidebar chip.
-  - `AskService` — "Ask Parley" on-device chat (Foundation Models) grounded in a
+  - `AskService` — "Ask Inkling" on-device chat (Foundation Models) grounded in a
     capped corpus of the user's notes; multi-turn via one `LanguageModelSession`.
 - **Views** (`Views/`): home is a `NavigationStack` with a rail + notes grid
   (`NoteListView` + `NotesGridView`); tapping a note pushes `NoteDetailView`
   full-screen (top-bar record cluster, orientation-aware notes⟷transcript split,
   unified Pencil-over-text canvas, transcript timeline, bottom Summarize bar).
   Plus the redesigned `SettingsView` (mood grid w/ `AppIconView`, AI & Summarize),
-  `ChatView` (Ask Parley, opened from the home sparkles button), `TodayMeetingsSheet`,
+  `ChatView` (Ask Inkling, opened from the home sparkles button), `TodayMeetingsSheet`,
   `ActionItemsSheet`, `SummaryView`, `DrawingCanvas`, `TranscriptPanel`. The app
   icon is the design's squircle "P" mark (Assets ▸ AppIcon).
 

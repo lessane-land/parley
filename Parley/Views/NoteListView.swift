@@ -40,10 +40,10 @@ struct NoteListView: View {
     /// The tag whose color is being picked (drives the swatch sheet).
     @State private var coloringTag: Tag?
 
-    /// Width of the macOS "Ask Parley" side column (drag the divider to resize).
+    /// Width of the macOS "Ask Inkling" side column (drag the divider to resize).
     @State private var askWidth: CGFloat = 380
     @State private var askDragBase: CGFloat?
-    /// Ask Parley expanded to fill the content area (rail stays aside).
+    /// Ask Inkling expanded to fill the content area (rail stays aside).
     @State private var askExpanded = false
     @State private var meetings: [Meeting] = []
     @State private var loadingMeetings = false
@@ -116,7 +116,7 @@ struct NoteListView: View {
                 .sheet(isPresented: sheetAsk) {
                     NavigationStack {
                         ChatView(theme: theme)
-                            .navigationTitle("Ask Parley")
+                            .navigationTitle("Ask Inkling")
                             #if os(iOS)
                             .navigationBarTitleDisplayMode(.inline)
                             #endif
@@ -139,7 +139,7 @@ struct NoteListView: View {
         .onChange(of: showingMonthCalendar) { _, showing in
             sidebarHidden = showing && isPortrait
         }
-        // Menu bar "Open Parley" while recording → jump to that note.
+        // Menu bar "Open Inkling" while recording → jump to that note.
         .onChange(of: recorder.openTick) { _, _ in
             guard let id = recorder.openNoteRequest,
                   let note = notes.first(where: { $0.persistentModelID == id }) else { return }
@@ -223,7 +223,7 @@ struct NoteListView: View {
                     }
                 }
                 if usesSidePanels && showingAsk && askExpanded {
-                    // Ask Parley expanded to fill the content area (rail stays).
+                    // Ask Inkling expanded to fill the content area (rail stays).
                     chatColumn.frame(maxWidth: .infinity)
                 } else {
                     if showingMonthCalendar {
@@ -233,7 +233,7 @@ struct NoteListView: View {
                     } else {
                         grid
                     }
-                    // Ask Parley as an inline right column (macOS) over *either* the
+                    // Ask Inkling as an inline right column (macOS) over *either* the
                     // grid or the calendar, so it works from the calendar too.
                     if usesSidePanels && showingAsk {
                         askResizeHandle
@@ -286,11 +286,11 @@ struct NoteListView: View {
         Rectangle().fill(theme.line).frame(width: theme.borderWidth)
     }
 
-    /// Ask Parley as an inline right column (iPad/Mac), resizable on Mac, with an
+    /// Ask Inkling as an inline right column (iPad/Mac), resizable on Mac, with an
     /// expand control to fill the content area (rail stays aside).
     private var chatColumn: some View {
         VStack(spacing: 0) {
-            panelHeader("Ask Parley",
+            panelHeader("Ask Inkling",
                         expanded: askExpanded,
                         onExpand: { withAnimation(.snappy) { askExpanded.toggle() } }) {
                 withAnimation(.snappy) { showingAsk = false; askExpanded = false }
@@ -323,7 +323,7 @@ struct NoteListView: View {
             if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
         }
         #endif
-        .accessibilityLabel("Resize Ask Parley")
+        .accessibilityLabel("Resize Ask Inkling")
     }
 
     /// Settings as a right slide-over with a dimming scrim (iPad/Mac).
@@ -408,7 +408,7 @@ struct NoteListView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
                     Button { showingSettings = true } label: { Label("Settings", systemImage: "gearshape") }
-                    Button { showingAsk = true } label: { Label("Ask Parley", systemImage: "sparkles") }
+                    Button { showingAsk = true } label: { Label("Ask Inkling", systemImage: "sparkles") }
                     Button { openCalendar() } label: { Label("Calendar", systemImage: "calendar") }
                     Button { openReminders() } label: { Label("Reminders", systemImage: "checklist") }
                     Divider()
@@ -434,7 +434,7 @@ struct NoteListView: View {
             VStack(spacing: 12) {
                 HStack(spacing: 9) {
                     brandMark
-                    Text("Parley")
+                    Text("Inkling")
                         .font(theme.titleFont(20, relativeTo: .title3))
                         .tracking(theme.titleTracking)
                         .foregroundStyle(theme.ink)
@@ -458,7 +458,7 @@ struct NoteListView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     navRow("All Notes", "tray.full", count: notes.count, target: .all)
                     navRow("Recent", "clock", count: recentCount, target: .recent)
-                    actionRow("Ask Parley", "sparkles", active: showingAsk) {
+                    actionRow("Ask Inkling", "sparkles", active: showingAsk) {
                         withAnimation(.snappy) { showingAsk.toggle(); if !showingAsk { askExpanded = false } }
                     }
                     actionRow("Calendar", "calendar", active: showingMonthCalendar) { openCalendar() }
@@ -492,7 +492,7 @@ struct NoteListView: View {
         .background(theme.paperSunk)
     }
 
-    /// A non-selectable sidebar action (Ask Parley, Calendar, …) styled like a nav
+    /// A non-selectable sidebar action (Ask Inkling, Calendar, …) styled like a nav
     /// row but triggering a one-off action instead of switching the filter scope.
     private func actionRow(_ label: String, _ icon: String, active: Bool = false,
                            _ action: @escaping () -> Void) -> some View {
@@ -534,7 +534,14 @@ struct NoteListView: View {
         RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 8)
             .fill(theme.accent)
             .frame(width: 30, height: 30)
-            .overlay(Text("P").font(theme.titleFont(17, relativeTo: .headline)).foregroundStyle(.white))
+            .overlay(
+                Image("InklingMark")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.white)
+                    .frame(height: 17)
+            )
     }
 
     private var searchField: some View {

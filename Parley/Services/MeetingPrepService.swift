@@ -21,7 +21,7 @@ private struct PrepDraft {
 
 /// Produces a short "before this meeting" brief entirely on-device (Foundation
 /// Models). Stateless: callers own any per-event loading state and caching. Like
-/// the rest of Parley's AI, it only uses information it's given — it never invents
+/// the rest of Inkling's AI, it only uses information it's given — it never invents
 /// people, facts, or tasks.
 @MainActor
 @Observable

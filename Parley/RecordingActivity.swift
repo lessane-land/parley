@@ -6,7 +6,7 @@ import ActivityKit
 import Foundation
 
 /// Live Activity model for an in-progress recording — shown on the Lock Screen
-/// and in the Dynamic Island while Parley records in the background.
+/// and in the Dynamic Island while Inkling records in the background.
 ///
 /// IMPORTANT: this file must belong to BOTH targets — the app (which starts/ends
 /// the activity) and the widget extension (which draws it). In Xcode, select this

@@ -481,6 +481,7 @@
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_CFBundleDisplayName = Inkling;
+				INFOPLIST_KEY_CFBundleName = Inkling;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Parley uses the microphone to transcribe your meetings on your device.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Parley adds your action items to Reminders.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Parley adds your action items to Reminders.";
@@ -527,6 +528,7 @@
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "Parley reads today's events to create meeting notes.";
 				INFOPLIST_KEY_CFBundleDisplayName = Inkling;
+				INFOPLIST_KEY_CFBundleName = Inkling;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Parley uses the microphone to transcribe your meetings on your device.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Parley adds your action items to Reminders.";
 				INFOPLIST_KEY_NSRemindersUsageDescription = "Parley adds your action items to Reminders.";

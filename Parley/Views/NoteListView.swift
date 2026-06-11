@@ -189,7 +189,15 @@ struct NoteListView: View {
         RoundedRectangle(cornerRadius: theme.cornerRadius == 0 ? 0 : 8)
             .fill(theme.accent)
             .frame(width: 30, height: 30)
-            .overlay(Image(systemName: "pencil.tip").font(.system(size: 15, weight: .bold)).foregroundStyle(.white))
+            .overlay(
+                // The Inkling ink-drop "i" mark, tinted to read on the accent.
+                Image("InklingMark")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.white)
+                    .frame(height: 17)
+            )
     }
 
     private var searchField: some View {

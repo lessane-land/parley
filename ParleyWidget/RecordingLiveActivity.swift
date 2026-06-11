@@ -1,3 +1,4 @@
+#if os(iOS)
 import ActivityKit
 import WidgetKit
 import SwiftUI
@@ -52,3 +53,4 @@ struct RecordingLiveActivity: Widget {
         Circle().fill(.red).frame(width: 10, height: 10)
     }
 }
+#endif

@@ -402,16 +402,14 @@ struct AppIconView: View {
                     .clipShape(Squircle())
             }
 
-            PGlyph().stroke(Color(hex: p.fg),
-                            style: StrokeStyle(lineWidth: 9 * size / 100, lineCap: .round, lineJoin: .round))
-            TailGlyph().stroke(Color(hex: p.fg),
-                               style: StrokeStyle(lineWidth: 7.5 * size / 100, lineCap: .round, lineJoin: .round))
+            InkDrop().fill(Color(hex: p.fg))
 
-            if p.dotVisible {
-                Circle().fill(Color(hex: p.dot))
-                    .frame(width: 10 * size / 100, height: 10 * size / 100)
-                    .position(x: 0.50 * size, y: 0.68 * size)
-            }
+            // The tittle (the dot of the "i"), always shown — the design's
+            // --aic-dot color per mood.
+            Circle().fill(Color(hex: p.dot))
+                .frame(width: 0.16 * size, height: 0.16 * size)
+                .position(x: 0.50 * size, y: 0.1857 * size)
+
             if p.borderWidth > 0 {
                 Squircle().strokeBorder(Color(hex: p.border), lineWidth: p.borderWidth * size / 100)
             }
@@ -456,26 +454,28 @@ struct Squircle: InsettableShape {
     }
 }
 
-/// The "P" stem + bowl that reads as a speech turn.
-private struct PGlyph: Shape {
+/// The Inkling ink-drop — doubles as the stem of a lowercase "i". The path is the
+/// design's appicon glyph (parley-appicon.jsx), scaled/centered to fill the icon.
+private struct InkDrop: Shape {
     func path(in rect: CGRect) -> Path {
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x / 100 * rect.width, y: y / 100 * rect.height) }
-        var path = Path()
-        path.move(to: p(37, 80))
-        path.addLine(to: p(37, 26))
-        path.addCurve(to: p(37, 54), control1: p(68, 26), control2: p(68, 54))
-        return path
-    }
-}
+        var p = Path()
+        p.move(to: CGPoint(x: 50, y: 40))
+        p.addCurve(to: CGPoint(x: 69, y: 74), control1: CGPoint(x: 58, y: 55), control2: CGPoint(x: 69, y: 64))
+        // Round bottom (a semicircle, as two cubic quarters to avoid arc ambiguity).
+        p.addCurve(to: CGPoint(x: 50, y: 93), control1: CGPoint(x: 69, y: 84.49), control2: CGPoint(x: 60.49, y: 93))
+        p.addCurve(to: CGPoint(x: 31, y: 74), control1: CGPoint(x: 39.51, y: 93), control2: CGPoint(x: 31, y: 84.49))
+        p.addCurve(to: CGPoint(x: 50, y: 40), control1: CGPoint(x: 31, y: 64), control2: CGPoint(x: 42, y: 55))
+        p.closeSubpath()
 
-/// The little speech-tail flick off the bowl.
-private struct TailGlyph: Shape {
-    func path(in rect: CGRect) -> Path {
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x / 100 * rect.width, y: y / 100 * rect.height) }
-        var path = Path()
-        path.move(to: p(55, 52))
-        path.addQuadCurve(to: p(48, 65), control: p(60, 61))
-        return path
+        // Map the 0…100 design space into the icon: scale 1.08 about the glyph
+        // centre, nudge up, then fit the 108-unit board to `rect`.
+        var t = CGAffineTransform.identity
+        t = t.scaledBy(x: rect.width / 108, y: rect.height / 108)
+        t = t.translatedBy(x: 4, y: -1.5)
+        t = t.translatedBy(x: 50, y: 54.5)
+        t = t.scaledBy(x: 1.08, y: 1.08)
+        t = t.translatedBy(x: -50, y: -54.5)
+        return p.applying(t)
     }
 }
 

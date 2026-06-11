@@ -1,4 +1,7 @@
-#if canImport(ActivityKit)
+// `canImport(ActivityKit)` is true on macOS (the module exists) even though the
+// types are unavailable there — so it must be combined with `os(iOS)`, matching
+// the guards in TranscriptionService.
+#if canImport(ActivityKit) && os(iOS)
 import ActivityKit
 import Foundation
 

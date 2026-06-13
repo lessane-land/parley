@@ -172,8 +172,8 @@ private struct MenuBarPanel: View {
             }
 
             Divider()
-            Button("Open Parley") { openApp() }
-            Button("Quit Parley") { NSApplication.shared.terminate(nil) }
+            Button("Open Inkling") { openApp() }
+            Button("Quit Inkling") { NSApplication.shared.terminate(nil) }
         }
         .padding(14)
         .frame(width: 250)
@@ -255,6 +255,16 @@ final class RecordingCoordinator {
         Task { await finish() }
     }
 
+    /// Switch the language of the in-progress background recording (see
+    /// `TranscriptionService.changeLanguage`). Also remembers the new preference.
+    func changeLanguage(to preferred: String?) async {
+        themeManager?.transcriptionLanguage = preferred
+        await transcription.changeLanguage(to: preferred)
+    }
+
+    /// The locale the background session is currently transcribing in, if any.
+    var activeLocale: Locale? { transcription.activeLocale }
+
     /// Mirror the streaming transcript onto the note every second, so an open
     /// detail view (and the store) reflect progress even while in the background.
     private func startPersisting(into note: Note) {
@@ -325,10 +335,19 @@ enum AppIcon {
         #elseif canImport(AppKit)
         // Render the live Dock icon from the same design view the Settings grid
         // uses, so it matches the artwork (and the current mood) exactly.
-        let renderer = ImageRenderer(content: AppIconView(mood: mood, size: 512))
+        //
+        // Apple's macOS icon grid sits the body in ~80% of the tile (824/1024)
+        // with a transparent margin + soft shadow; render the art at that inset so
+        // Inkling is the same size as every other Dock icon instead of edge-to-edge.
+        let tile = 512.0
+        let body = tile * 0.805
+        let content = AppIconView(mood: mood, size: body)
+            .shadow(color: .black.opacity(0.22), radius: 11, x: 0, y: 7)
+            .frame(width: tile, height: tile)
+        let renderer = ImageRenderer(content: content)
         renderer.scale = 2
         guard let cg = renderer.cgImage else { return }
-        let image = NSImage(cgImage: cg, size: NSSize(width: 512, height: 512))
+        let image = NSImage(cgImage: cg, size: NSSize(width: tile, height: tile))
         NSApp.applicationIconImage = image
         // Assigning `applicationIconImage` alone often doesn't repaint the Dock —
         // set the tile's contents and force a redraw so the mood icon actually shows.

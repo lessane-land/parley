@@ -227,9 +227,97 @@ final class SummaryService {
     }
 }
 
-// MARK: - Ask Parley (on-device chat across your notes)
+// MARK: - Translation (on-device)
 
-/// One line in the Ask Parley conversation.
+/// Translates a transcript into another language entirely on-device (Foundation
+/// Models), so a Spanish recording can be read in English (or vice-versa) without
+/// anything leaving the machine. Long transcripts are translated in chunks so they
+/// stay within the model's context window, then rejoined.
+@MainActor
+@Observable
+final class TranslationService {
+    enum State: Equatable { case idle, working, unavailable(String) }
+
+    private(set) var state: State = .idle
+
+    func availabilityMessage() -> String? {
+        switch SystemLanguageModel.default.availability {
+        case .available: return nil
+        case .unavailable(.deviceNotEligible): return "This device doesn't support Apple Intelligence."
+        case .unavailable(.appleIntelligenceNotEnabled): return "Turn on Apple Intelligence in Settings to translate."
+        case .unavailable(.modelNotReady): return "The on-device model is still downloading. Try again shortly."
+        case .unavailable(let other): return "Translation is unavailable (\(other))."
+        }
+    }
+
+    /// Translate `text` into the language named by `targetName` ("English",
+    /// "Spanish", …). Returns nil on failure (the caller keeps the original).
+    func translate(_ text: String, into targetName: String) async -> String? {
+        if let message = availabilityMessage() { state = .unavailable(message); return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        state = .working
+        let instructions = """
+        You are a professional translator. Translate the user's text into \(targetName). \
+        Preserve the meaning, tone, names, and numbers. Keep line breaks. Output ONLY the \
+        translation — no preamble, no notes, no quotation marks around it.
+        """
+        var out: [String] = []
+        for chunk in Self.chunk(trimmed) {
+            // A fresh session per chunk keeps each translation independent and well
+            // within the context window (vs. one growing multi-turn session).
+            let session = LanguageModelSession(instructions: instructions)
+            do {
+                let piece = try await session.respond(to: chunk).content
+                out.append(piece.trimmingCharacters(in: .whitespacesAndNewlines))
+            } catch {
+                state = .unavailable(error.localizedDescription)
+                return nil
+            }
+        }
+        state = .idle
+        return out.joined(separator: "\n")
+    }
+
+    /// Split text into context-window-friendly chunks on paragraph/sentence
+    /// boundaries (~1200 chars each) so long transcripts translate reliably.
+    static func chunk(_ text: String, maxChars: Int = 1200) -> [String] {
+        let paragraphs = text.components(separatedBy: "\n")
+        var chunks: [String] = []
+        var current = ""
+        func flush() {
+            let t = current.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { chunks.append(t) }
+            current = ""
+        }
+        for para in paragraphs {
+            if para.count > maxChars {
+                // A single very long line: break on sentence enders.
+                flush()
+                var sentence = ""
+                for word in para.split(separator: " ", omittingEmptySubsequences: false) {
+                    if sentence.count + word.count + 1 > maxChars { chunks.append(sentence.trimmingCharacters(in: .whitespaces)); sentence = "" }
+                    sentence += word
+                    sentence += " "
+                }
+                let t = sentence.trimmingCharacters(in: .whitespaces)
+                if !t.isEmpty { chunks.append(t) }
+            } else if current.count + para.count + 1 > maxChars {
+                flush()
+                current = para + "\n"
+            } else {
+                current += para + "\n"
+            }
+        }
+        flush()
+        return chunks.isEmpty ? [text] : chunks
+    }
+}
+
+// MARK: - Ask Inkling (on-device chat across your notes)
+
+/// One line in the Ask Inkling conversation.
 struct ChatMessage: Identifiable, Equatable {
     enum Role { case user, assistant }
     let id = UUID()
@@ -248,7 +336,7 @@ private struct AskAnswer {
     var sources: [String]
 }
 
-/// "Ask Parley" — a multi-turn, on-device assistant that answers questions about
+/// "Ask Inkling" — a multi-turn, on-device assistant that answers questions about
 /// the user's notes. The notes corpus is folded into the session instructions
 /// once; each question reuses the session so follow-ups keep context. Nothing
 /// leaves the device (Foundation Models).
@@ -269,14 +357,14 @@ final class AskService {
         case .unavailable(.deviceNotEligible): return "This device doesn't support Apple Intelligence."
         case .unavailable(.appleIntelligenceNotEnabled): return "Turn on Apple Intelligence in Settings to use Ask Parley."
         case .unavailable(.modelNotReady): return "The on-device model is still downloading. Try again shortly."
-        case .unavailable(let other): return "Ask Parley is unavailable (\(other))."
+        case .unavailable(let other): return "Ask Inkling is unavailable (\(other))."
         }
     }
 
     /// (Re)ground the assistant in the current notes. Call when the chat opens.
     func start(context: String) {
         session = LanguageModelSession(instructions: """
-        You are Parley's on-device assistant. Answer the user's questions using ONLY \
+        You are Inkling's on-device assistant. Answer the user's questions using ONLY \
         the notes below — their meeting notes, transcripts, and summaries. If the \
         answer isn't supported by the notes, say so plainly instead of guessing. Be \
         concise and conversational. In `sources`, list the titles of the notes you used.
@@ -292,7 +380,7 @@ final class AskService {
         guard !q.isEmpty, state != .thinking else { return }
         if let message = availabilityMessage() { state = .unavailable(message); return }
 
-        guard let session else { state = .unavailable("Ask Parley isn't ready yet."); return }
+        guard let session else { state = .unavailable("Ask Inkling isn't ready yet."); return }
         messages.append(ChatMessage(role: .user, text: q))
         state = .thinking
         do {

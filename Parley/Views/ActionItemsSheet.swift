@@ -40,7 +40,7 @@ struct ActionItemsSheet: View {
     private var content: some View {
         if let resultCount {
             message("Added \(resultCount) to Reminders",
-                    resultCount > 0 ? "Find them in the Parley list in Reminders." : "Nothing was written.",
+                    resultCount > 0 ? "Find them in the Inkling list in Reminders." : "Nothing was written.",
                     "checkmark.circle")
         } else if detected.isEmpty {
             message("No action items found",
@@ -103,7 +103,7 @@ struct ActionItemsSheet: View {
     }
 }
 
-/// The in-app Reminders list: the reminders Parley (and the user) created, with a
+/// The in-app Reminders list: the reminders Inkling (and the user) created, with a
 /// checkbox to complete them — so you don't have to leave for the Reminders app.
 struct RemindersSheet: View {
     let theme: Theme

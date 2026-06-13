@@ -2,6 +2,12 @@ import Foundation
 @preconcurrency import AVFoundation
 import Speech
 import SwiftData
+#if canImport(UIKit)
+import UIKit   // detect app backgrounding so we can backfill the transcript on stop
+#endif
+#if canImport(ActivityKit)
+import ActivityKit   // Live Activity: Lock Screen + Dynamic Island recording indicator
+#endif
 #if os(macOS)
 @preconcurrency import ScreenCaptureKit   // system-audio capture (the meeting's far side)
 #endif
@@ -76,6 +82,35 @@ final class TranscriptionService {
     private var analyzer: SpeechAnalyzer?
     private var continuation: AsyncStream<AnalyzerInput>.Continuation?
     private var resultsTask: Task<Void, Never>?
+    #if os(iOS)
+    /// Observer for audio-session interruptions (calls, Siri) so background
+    /// recording resumes instead of dying silently.
+    private var interruptionObserver: NSObjectProtocol?
+    /// Observer for engine configuration/route changes — notably the screen
+    /// locking, which stops the engine. We restart capture so a backgrounded
+    /// recording survives instead of freezing.
+    private var configObserver: NSObjectProtocol?
+    #endif
+    /// Kept so the input tap can be reinstalled and the engine restarted after a
+    /// route change without tearing down the running analyzer stream.
+    private var analyzerFormat: AVAudioFormat?
+    private var diarFile: AVAudioFile?
+    #if os(iOS)
+    /// Set if the app was backgrounded/locked mid-session. iOS pauses live speech
+    /// recognition then, so on stop we re-transcribe the recording to recover the
+    /// stretch the live pass missed.
+    private var wasBackgrounded = false
+    private var backgroundObserver: NSObjectProtocol?
+    #endif
+    /// Seed text/segments this session started from (a prior transcript already on
+    /// the note), preserved when the backfill replaces this session's portion.
+    private var sessionSeed = ""
+    private var sessionSeedSegments: [TranscriptSegment] = []
+    /// Scratch buffer for the stop-time file re-transcription.
+    private var backfillPieces: [String] = []
+    #if canImport(ActivityKit) && os(iOS)
+    private var liveActivity: Activity<RecordingActivityAttributes>?
+    #endif
 
     // Diarization: the session audio is recorded to a temp file and, on stop,
     // diarized offline to assign speakers. Kept around `stop()` so the post-stop
@@ -86,6 +121,9 @@ final class TranscriptionService {
     #if os(macOS)
     /// Captures the Mac's system audio (the meeting's far side) alongside the mic.
     private var systemAudio: SystemAudioCapture?
+    /// Held while recording so macOS App Nap doesn't throttle or suspend capture
+    /// when the app isn't frontmost (the Mac equivalent of iOS background audio).
+    private var backgroundActivity: NSObjectProtocol?
     #endif
     // The diarizer's Core ML models are cached inside `DiarizationEngine` (a
     // background actor), so the heavy work never runs on the main thread.
@@ -96,10 +134,15 @@ final class TranscriptionService {
     /// append rather than overwrite. `preferredLanguage` is a language code
     /// ("es") to force, or `nil` for Automatic.
     func start(seed: String, seedSegments: [TranscriptSegment] = [], preferredLanguage: String? = nil,
-               captureSystemAudio: Bool = false) async {
+               captureSystemAudio: Bool = false, noteTitle: String = "") async {
         guard state == .idle || isError else { return }
         finalizedText = seed
         finalizedSegments = seedSegments
+        sessionSeed = seed
+        sessionSeedSegments = seedSegments
+        #if os(iOS)
+        wasBackgrounded = false
+        #endif
         speakerEmbeddings = [:]
         volatileText = ""
         state = .preparing
@@ -120,50 +163,8 @@ final class TranscriptionService {
                 ?? Self.fallbackLocale(preferred: preferredLanguage)
             activeLocale = locale
 
-            let transcriber = SpeechTranscriber(
-                locale: locale,
-                transcriptionOptions: [],
-                reportingOptions: [.volatileResults],
-                attributeOptions: [.audioTimeRange]
-            )
-            self.transcriber = transcriber
+            let analyzerFormat = try await makeAnalyzerPipeline(locale: locale)
 
-            // Make sure the on-device model for this locale is installed.
-            let modelInstalled = await isModelInstalled(locale)
-            if !modelInstalled {
-                state = .downloadingModel
-                if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                    try await request.downloadAndInstall()
-                }
-            }
-
-            let analyzer = SpeechAnalyzer(modules: [transcriber])
-            self.analyzer = analyzer
-
-            let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
-
-            let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
-            self.continuation = continuation
-
-            // Consume results. This Task inherits @MainActor, so updating state is safe.
-            resultsTask = Task { [weak self] in
-                guard let self, let transcriber = self.transcriber else { return }
-                do {
-                    for try await result in transcriber.results {
-                        let piece = String(result.text.characters)
-                        if result.isFinal {
-                            self.appendFinalized(piece)
-                            self.volatileText = ""
-                        } else {
-                            self.volatileText = piece
-                        }
-                    }
-                } catch {
-                    self.state = .unavailable(error.localizedDescription)
-                }
-            }
-
-            try await analyzer.start(inputSequence: stream)
             try startEngine(convertingTo: analyzerFormat)
 
             #if os(macOS)
@@ -175,12 +176,127 @@ final class TranscriptionService {
             }
             #endif
 
+            #if os(macOS)
+            // Keep capturing/transcribing while backgrounded: prevent App Nap from
+            // throttling our threads and stop the display/system sleeping mid-meeting.
+            backgroundActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .idleSystemSleepDisabled],
+                reason: "Recording and transcribing a meeting")
+            #endif
+
             startedAt = Date()
             diarSessionStart = startedAt
             state = .recording
+            #if canImport(ActivityKit) && os(iOS)
+            startLiveActivity(title: noteTitle, at: startedAt ?? Date())
+            #endif
         } catch {
             state = .unavailable(error.localizedDescription)
             await teardown()
+        }
+    }
+
+    /// Build the transcriber + analyzer + results stream for `locale`, install the
+    /// results consumer, and start the analyzer. Returns the audio format the input
+    /// tap should convert buffers to. Shared by `start()` and `changeLanguage()`.
+    /// May flip `state` to `.downloadingModel` while a model installs.
+    private func makeAnalyzerPipeline(locale: Locale) async throws -> AVAudioFormat? {
+        let transcriber = SpeechTranscriber(
+            locale: locale,
+            transcriptionOptions: [],
+            reportingOptions: [.volatileResults],
+            attributeOptions: [.audioTimeRange]
+        )
+        self.transcriber = transcriber
+
+        // Make sure the on-device model for this locale is installed.
+        if !(await isModelInstalled(locale)) {
+            state = .downloadingModel
+            if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+                try await request.downloadAndInstall()
+            }
+        }
+
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        self.analyzer = analyzer
+
+        let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
+
+        let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
+        self.continuation = continuation
+
+        // Consume results. This Task inherits @MainActor, so updating state is safe.
+        resultsTask = Task { [weak self] in
+            guard let self, let transcriber = self.transcriber else { return }
+            do {
+                for try await result in transcriber.results {
+                    let piece = String(result.text.characters)
+                    if result.isFinal {
+                        self.appendFinalized(piece)
+                        self.volatileText = ""
+                    } else {
+                        self.volatileText = piece
+                    }
+                }
+            } catch {
+                self.state = .unavailable(error.localizedDescription)
+            }
+        }
+
+        try await analyzer.start(inputSequence: stream)
+        return analyzerFormat
+    }
+
+    /// Switch the transcription language **without stopping the recording** — e.g.
+    /// a Spanish voice memo becomes an English meeting. The transcript captured so
+    /// far is kept; new speech is appended in the new language on the same
+    /// timeline. The engine, audio session, recording file, timer and Live Activity
+    /// all keep running across the swap — only the analyzer/transcriber is replaced.
+    /// `preferred` is a language code ("en") or nil for Automatic.
+    func changeLanguage(to preferred: String?) async {
+        guard state == .recording else { return }
+
+        let supported = await SpeechTranscriber.supportedLocales
+        let locale = Self.resolveLocale(from: supported, preferred: preferred)
+            ?? Self.fallbackLocale(preferred: preferred)
+        // No-op if it resolves to the language already running.
+        guard locale.identifier != activeLocale?.identifier else { return }
+
+        state = .preparing
+
+        #if os(macOS)
+        // System audio captured the *old* continuation; restart it after the swap
+        // so the meeting's far side keeps feeding the new analyzer.
+        let hadSystemAudio = systemAudio != nil
+        if hadSystemAudio { await systemAudio?.stop(); systemAudio = nil }
+        #endif
+
+        // Stop feeding audio, then flush + finish the current analyzer so its last
+        // results land before we replace it.
+        engine.inputNode.removeTap(onBus: 0)
+        if !volatileText.isEmpty { appendFinalized(volatileText); volatileText = "" }
+        continuation?.finish()
+        do { try await analyzer?.finalizeAndFinishThroughEndOfInput() } catch { /* best effort */ }
+        resultsTask?.cancel()
+
+        do {
+            activeLocale = locale
+            let analyzerFormat = try await makeAnalyzerPipeline(locale: locale)
+            // Re-point the mic tap at the new analyzer's stream/format. (diarFile is
+            // kept, so the single session recording stays continuous.)
+            self.analyzerFormat = analyzerFormat
+            try installInputTap()
+            #if os(macOS)
+            if hadSystemAudio { await startSystemAudio(convertingTo: analyzerFormat) }
+            #endif
+            state = .recording
+        } catch {
+            // The new language failed to start; end cleanly (the transcript so far
+            // is preserved in finalizedText for the caller to persist).
+            state = .unavailable(error.localizedDescription)
+            await teardown()
+            startedAt = nil
+            state = .idle
         }
     }
 
@@ -197,6 +313,7 @@ final class TranscriptionService {
 
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        diarFile = nil   // release the writer so the recording is flushed/closed before we re-read it
         continuation?.finish()
 
         do { try await analyzer?.finalizeAndFinishThroughEndOfInput() } catch { /* best effort */ }
@@ -208,7 +325,20 @@ final class TranscriptionService {
         }
 
         #if os(iOS)
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+            self.interruptionObserver = nil
+        }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
+        #if canImport(ActivityKit) && os(iOS)
+        endLiveActivity()
+        #endif
+
+        // If the app was backgrounded/locked mid-session, iOS paused live
+        // recognition — re-transcribe the full recording to recover that stretch.
+        #if os(iOS)
+        if wasBackgrounded { await backfillFromRecording() }
         #endif
 
         await teardown()
@@ -219,6 +349,7 @@ final class TranscriptionService {
     // MARK: Audio engine
 
     private func startEngine(convertingTo analyzerFormat: AVAudioFormat?) throws {
+        self.analyzerFormat = analyzerFormat
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         // This must be the exact combination Apple's SpeechAnalyzer sample uses.
@@ -230,8 +361,19 @@ final class TranscriptionService {
         // (the modern spelling of the deprecated `.allowBluetooth`).
         try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .defaultToSpeaker])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
+        observeInterruptions()
+        observeConfigChange()
+        observeBackground()
         #endif
 
+        try installInputTap()
+    }
+
+    /// Install the mic tap and start the engine. Re-callable: used both to start a
+    /// session and to *restart* capture after a route/config change (e.g. the
+    /// screen locking), reusing the already-running analyzer stream so the
+    /// transcript keeps going across the lock.
+    private func installInputTap() throws {
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
 
@@ -245,20 +387,20 @@ final class TranscriptionService {
             )
         }
 
+        // Record the whole session to a temp file (created once, reused across
+        // restarts). Used for offline diarization *and* to re-transcribe the
+        // stretch iOS skipped while backgrounded. The write is nil-safe.
+        if diarFile == nil { diarFile = makeDiarFile(format: inputFormat) }
+
         // Captured locally so the background tap never touches main-actor state.
         let continuation = self.continuation
+        let analyzerFormat = self.analyzerFormat
         let converter = BufferConverter()
+        let diarFile = self.diarFile
 
-        // Record the session audio to a temp file for offline diarization. Only
-        // when FluidAudio is linked (otherwise there's nothing to diarize).
-        #if canImport(FluidAudio)
-        let diarFile = makeDiarFile(format: inputFormat)
-        #endif
-
+        input.removeTap(onBus: 0)   // safe no-op on first install; avoids a double tap on restart
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in
-            #if canImport(FluidAudio)
             try? diarFile?.write(from: buffer)
-            #endif
             guard let continuation else { return }
             if let analyzerFormat {
                 if let converted = try? converter.convert(buffer, to: analyzerFormat) {
@@ -272,6 +414,148 @@ final class TranscriptionService {
         engine.prepare()
         try engine.start()
     }
+
+    #if os(iOS)
+    /// Keep recording alive across interruptions (incoming call, Siri): when the
+    /// interruption ends and the system says we may resume, re-activate the
+    /// session and restart the engine — otherwise a backgrounded recording would
+    /// just stop.
+    private func observeInterruptions() {
+        guard interruptionObserver == nil else { return }
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            Task { @MainActor in self?.handleInterruption(note) }
+        }
+    }
+
+    private func handleInterruption(_ note: Notification) {
+        guard state == .recording,
+              let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+        switch type {
+        case .began:
+            break   // the system stopped our audio; we resume on .ended
+        case .ended:
+            let optsRaw = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            guard AVAudioSession.InterruptionOptions(rawValue: optsRaw).contains(.shouldResume) else { return }
+            try? AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
+            try? installInputTap()
+        @unknown default:
+            break
+        }
+    }
+
+    /// `AVAudioEngine` stops whenever its I/O configuration changes — most
+    /// importantly when the screen locks (the input route reconfigures). The
+    /// interruption notification doesn't cover that, so without this a
+    /// backgrounded recording silently freezes. Reactivate the session and
+    /// reinstall the tap to keep capturing through the lock.
+    private func observeConfigChange() {
+        guard configObserver == nil else { return }
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.restartCaptureAfterRouteChange() }
+        }
+    }
+
+    private func restartCaptureAfterRouteChange() {
+        guard state == .recording, !engine.isRunning else { return }
+        try? AVAudioSession.sharedInstance().setActive(true, options: .notifyOthersOnDeactivation)
+        try? installInputTap()
+    }
+
+    /// Note when the app is backgrounded/locked: iOS pauses live recognition while
+    /// backgrounded, so on stop we re-transcribe the recording to recover that gap.
+    private func observeBackground() {
+        guard backgroundObserver == nil else { return }
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.wasBackgrounded = true }
+        }
+    }
+
+    /// iOS keeps capturing mic audio to `diarAudioURL` while backgrounded, but
+    /// pauses live recognition — so the live transcript is missing whatever was
+    /// said while locked. Re-transcribe the complete recording (a finite file, so
+    /// recognition runs fully in the foreground at stop) and adopt it if it
+    /// recovered more text than the live pass. Best-effort: any failure leaves the
+    /// live transcript untouched.
+    private func backfillFromRecording() async {
+        guard let url = diarAudioURL, let locale = activeLocale else { return }
+        let sessionStart = diarSessionStart ?? startedAt ?? Date()
+        backfillPieces = []
+        do {
+            let audioFile = try AVAudioFile(forReading: url)
+            let transcriber = SpeechTranscriber(
+                locale: locale, transcriptionOptions: [],
+                reportingOptions: [], attributeOptions: []
+            )
+            let fileAnalyzer = SpeechAnalyzer(modules: [transcriber])
+
+            // Consume results concurrently while the file is analyzed (same shape
+            // as the live pass). Appends to a main-actor property — no data race.
+            let collect = Task { [weak self] in
+                guard let self else { return }
+                do {
+                    for try await result in transcriber.results {
+                        guard result.isFinal else { continue }
+                        let piece = String(result.text.characters)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !piece.isEmpty { self.backfillPieces.append(piece) }
+                    }
+                } catch { }
+            }
+
+            if let last = try await fileAnalyzer.analyzeSequence(from: audioFile) {
+                try await fileAnalyzer.finalizeAndFinish(through: last)
+            } else {
+                await fileAnalyzer.cancelAndFinishNow()
+            }
+            await collect.value
+
+            let pieces = backfillPieces
+            guard !pieces.isEmpty else { return }
+            let fileText = pieces.joined(separator: " ")
+            let combined = sessionSeed.isEmpty ? fileText : sessionSeed + " " + fileText
+            // Never shrink a good transcript — only adopt if we recovered more.
+            guard combined.count > finalizedText.count else { return }
+
+            let sampleRate = audioFile.fileFormat.sampleRate
+            let duration = sampleRate > 0 ? Double(audioFile.length) / sampleRate : 0
+            var segments = sessionSeedSegments
+            let total = max(pieces.count, 1)
+            for (i, piece) in pieces.enumerated() {
+                let at = sessionStart.addingTimeInterval(duration * Double(i + 1) / Double(total))
+                segments.append(TranscriptSegment(text: piece, at: at))
+            }
+            finalizedText = combined
+            finalizedSegments = segments
+        } catch {
+            // Keep the live transcript on any failure.
+        }
+    }
+    #endif
+
+    #if canImport(ActivityKit) && os(iOS)
+    /// Start a Live Activity so the recording shows on the Lock Screen and in the
+    /// Dynamic Island while the app is backgrounded. No-op if the user disabled
+    /// Live Activities or the widget extension isn't present yet.
+    private func startLiveActivity(title: String, at start: Date) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        let attrs = RecordingActivityAttributes(noteTitle: title.isEmpty ? "New recording" : title, startedAt: start)
+        let content = ActivityContent(state: RecordingActivityAttributes.ContentState(status: "Recording"), staleDate: nil)
+        liveActivity = try? Activity.request(attributes: attrs, content: content)
+    }
+
+    private func endLiveActivity() {
+        let act = liveActivity
+        liveActivity = nil
+        Task { await act?.end(nil, dismissalPolicy: .immediate) }
+    }
+    #endif
 
     #if os(macOS)
     /// Start capturing system audio and feed it into the same analyzer stream as
@@ -321,6 +605,24 @@ final class TranscriptionService {
         analyzer = nil
         transcriber = nil
         resultsTask = nil
+        analyzerFormat = nil
+        diarFile = nil
+        #if os(macOS)
+        if let backgroundActivity {
+            ProcessInfo.processInfo.endActivity(backgroundActivity)
+            self.backgroundActivity = nil
+        }
+        #endif
+        #if os(iOS)
+        if let configObserver {
+            NotificationCenter.default.removeObserver(configObserver)
+            self.configObserver = nil
+        }
+        if let backgroundObserver {
+            NotificationCenter.default.removeObserver(backgroundObserver)
+            self.backgroundObserver = nil
+        }
+        #endif
     }
 
     // MARK: Speaker diarization (FluidAudio, on-device)
@@ -441,28 +743,58 @@ final class TranscriptionService {
         name.range(of: #"^Speaker \d+$"#, options: .regularExpression) != nil
     }
 
+    /// The mainstream region to prefer when a language ships several regional
+    /// models, so "Automatic" lands on the expected one (es → es-ES, en → en-US)
+    /// instead of an arbitrary supported region like es-CL / en-ZA.
+    static let preferredRegion: [String: String] = [
+        "en": "US", "es": "ES", "fr": "FR", "de": "DE", "it": "IT",
+        "pt": "BR", "nl": "NL", "zh": "CN", "ja": "JP", "ko": "KR"
+    ]
+
     /// Pick a supported locale for transcription.
     ///
-    /// - An explicit `preferred` language code wins (matched by language).
+    /// - An explicit `preferred` language code wins, resolved to its mainstream
+    ///   region (so picking "Spanish" gives es-ES, not whatever region happens to
+    ///   be first in the device's supported list).
     /// - Otherwise "Automatic": walk the device's preferred languages *in order*
-    ///   and take the first that has a model — exact region match, else same
-    ///   language. (So `es` in your language list beats an `en-ES` region quirk.)
+    ///   and take the first that has a model — an exact region the user actually
+    ///   set, else that language's mainstream region.
     /// - Then fall back to `en-US`, then anything supported.
     static func resolveLocale(from supported: [Locale], preferred: String?) -> Locale? {
-        func match(language code: String) -> Locale? {
-            supported.first { $0.language.languageCode?.identifier == code }
+        // Among supported locales for a language, pick a sensible region rather
+        // than `supported.first` (whose ordering is arbitrary — the es-CL/en-ZA bug).
+        func best(language code: String) -> Locale? {
+            let candidates = supported.filter { $0.language.languageCode?.identifier == code }
+            guard !candidates.isEmpty else { return nil }
+            // 1. The mainstream region for this language (es-ES, en-US, …).
+            if let region = preferredRegion[code],
+               let hit = candidates.first(where: { $0.region?.identifier == region }) {
+                return hit
+            }
+            // 2. A region matching the device's own region.
+            if let devRegion = Locale.current.region?.identifier,
+               let hit = candidates.first(where: { $0.region?.identifier == devRegion }) {
+                return hit
+            }
+            // 3. The region whose code equals the language (es-ES, fr-FR, …).
+            if let hit = candidates.first(where: { $0.region?.identifier == code.uppercased() }) {
+                return hit
+            }
+            return candidates.first
         }
 
-        if let preferred, !preferred.isEmpty, let forced = match(language: preferred) {
+        if let preferred, !preferred.isEmpty, let forced = best(language: preferred) {
             return forced
         }
 
         for identifier in Locale.preferredLanguages {
             let locale = Locale(identifier: identifier)
+            // Honour an exact region the user deliberately set (e.g. es-MX) when a
+            // model exists; otherwise resolve to the language's mainstream region.
             if let exact = supported.first(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) {
                 return exact
             }
-            if let code = locale.language.languageCode?.identifier, let sameLanguage = match(language: code) {
+            if let code = locale.language.languageCode?.identifier, let sameLanguage = best(language: code) {
                 return sameLanguage
             }
         }

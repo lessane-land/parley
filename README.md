@@ -1,4 +1,4 @@
-# Parley
+# Inkling
 
 A **standalone, on-device, cross-platform** meeting companion — like Granola, but
 private and pen-friendly. It records a meeting, transcribes it live on-device,
@@ -91,7 +91,7 @@ registered at launch via CoreText.
 ## Setup
 
 1. Open `Parley.xcodeproj` in Xcode 26.
-2. Select the **Parley** target → **Signing & Capabilities** → set your **Team**.
+2. Select the **Inkling** target → **Signing & Capabilities** → set your **Team**.
    Confirm the bundle id is `com.lessane.Parley` (the CloudKit container
    `iCloud.com.lessane.Parley` must match it).
 3. Capabilities expected (entitlements are checked in): **iCloud → CloudKit**

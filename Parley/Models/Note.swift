@@ -164,7 +164,7 @@ final class Note {
     }
 }
 
-/// An enrolled voice: a name plus its averaged voice embedding, so Parley can
+/// An enrolled voice: a name plus its averaged voice embedding, so Inkling can
 /// recognize the same person across meetings ("that's Vanesa again"). The bytes
 /// are a 256-d `[Float]` (L2-normalized) from on-device diarization — math, not
 /// audio. CloudKit-safe (defaults + optional), so your enrolled voices sync across

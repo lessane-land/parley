@@ -27,9 +27,11 @@ struct TranscriptPanel: View {
     var onNewSpeaker: ((UUID) -> Void)? = nil               // ask the owner to prompt for a new name
     var onRenameSpeaker: ((String) -> Void)? = nil          // rename a whole speaker (from the legend)
     var onToggleFlag: ((UUID) -> Void)? = nil               // flag/unflag a line as an action item
+    var onTranslate: (() -> Void)? = nil                    // open the translate sheet
     var onCollapse: (() -> Void)? = nil                     // hide the transcript panel
 
     private var isRecording: Bool { state == .recording }
+    @State private var didCopy = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -63,14 +65,28 @@ struct TranscriptPanel: View {
                     .foregroundStyle(theme.inkFaint)
             }
 
-            if !fullTranscriptText.isEmpty {
-                Button { copyToPasteboard(fullTranscriptText) } label: {
-                    Image(systemName: "doc.on.doc")
+            if !fullTranscriptText.isEmpty, !isRecording, let onTranslate {
+                Button(action: onTranslate) {
+                    Image(systemName: "character.bubble")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(theme.inkFaint)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Copy transcript")
+                .accessibilityLabel("Translate transcript")
+            }
+
+            if !fullTranscriptText.isEmpty {
+                Button {
+                    copyToPasteboard(fullTranscriptText)
+                    withAnimation(.snappy) { didCopy = true }
+                    Task { try? await Task.sleep(for: .seconds(1.5)); didCopy = false }
+                } label: {
+                    Image(systemName: didCopy ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(didCopy ? theme.accent : theme.inkFaint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(didCopy ? "Copied" : "Copy transcript")
             }
 
             if let onCollapse {

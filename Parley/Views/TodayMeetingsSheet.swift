@@ -322,6 +322,9 @@ struct MonthCalendarView: View {
     var onClose: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    #endif
     @State private var scale: CalendarScale = .month
     /// The anchor the month/week stage is built around.
     @State private var cursor: Date = Calendar.current.startOfDay(for: Date())
@@ -408,7 +411,21 @@ struct MonthCalendarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
+    /// Compact (iPhone) packs the controls into two rows so nothing truncates.
+    private var isPhoneWidth: Bool {
+        #if os(iOS)
+        return hSizeClass == .compact
+        #else
+        return false
+        #endif
+    }
+
+    @ViewBuilder
     private var header: some View {
+        if isPhoneWidth { compactHeader } else { regularHeader }
+    }
+
+    private var regularHeader: some View {
         HStack(spacing: 16) {
             #if os(iOS)
             if let onToggleSidebar {
@@ -457,6 +474,38 @@ struct MonthCalendarView: View {
         .padding(.horizontal, 22).padding(.top, 18).padding(.bottom, 14)
     }
 
+    private var compactHeader: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                if let onClose {
+                    Button { onClose() } label: { Image(systemName: "chevron.backward").font(.system(size: 16, weight: .semibold)) }
+                        .buttonStyle(.plain).foregroundStyle(theme.accentInk)
+                        .accessibilityLabel("Back to notes")
+                }
+                Text(headerTitle)
+                    .font(theme.titleFont(19, relativeTo: .title3))
+                    .foregroundStyle(theme.ink).lineLimit(1)
+                Spacer(minLength: 4)
+                Button { step(-1) } label: { Image(systemName: "chevron.left") }
+                    .buttonStyle(.plain).foregroundStyle(theme.inkSoft)
+                Button("Today") { goToday() }
+                    .font(theme.bodyFont(12).weight(.semibold)).foregroundStyle(theme.inkSoft)
+                Button { step(1) } label: { Image(systemName: "chevron.right") }
+                    .buttonStyle(.plain).foregroundStyle(theme.inkSoft)
+                Button { showingNewEvent = true } label: {
+                    Image(systemName: "plus.circle.fill").font(.system(size: 22))
+                        .foregroundStyle(theme.accent)
+                }
+                .buttonStyle(.plain).accessibilityLabel("New event")
+            }
+            Picker("View", selection: $scale.animation(.snappy)) {
+                ForEach(CalendarScale.allCases) { Text($0.name).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 12)
+    }
+
     @ViewBuilder
     private var stage: some View {
         switch scale {
@@ -482,8 +531,8 @@ struct MonthCalendarView: View {
             .padding(.top, 10).padding(.bottom, 8).padding(.horizontal, 14)
 
             GeometryReader { geo in
-                let rows = 5
-                let rowH = max(70, geo.size.height / CGFloat(rows))
+                let rows = 6   // a month can span 6 weeks — show them all
+                let rowH = max(isPhoneWidth ? 44 : 64, geo.size.height / CGFloat(rows))
                 let gap = max(1, theme.borderWidth)   // Neubrutalist → 2px black gaps
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: gap), count: 7), spacing: gap) {
                     ForEach(monthDays, id: \.self) { day in monthCell(day, height: rowH) }
@@ -564,7 +613,7 @@ struct MonthCalendarView: View {
     }
 
     /// A note in a month cell — built exactly like the design's chip (time prefix +
-    /// title + a trailing glyph), on the accent tint so notes read like Parley's
+    /// title + a trailing glyph), on the accent tint so notes read like Inkling's
     /// own content. Mirrors `monthChip` so the two are visually consistent.
     private func monthNoteChip(_ note: Note) -> some View {
         let when = note.startDate ?? note.createdAt
@@ -855,7 +904,7 @@ struct MonthCalendarView: View {
         let weekday = cal.component(.weekday, from: monthStart)
         let leading = (weekday - cal.firstWeekday + 7) % 7
         guard let start = cal.date(byAdding: .day, value: -leading, to: monthStart) else { return [] }
-        return (0..<35).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
+        return (0..<42).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
     }
 
     private var weekDays: [Date] {
@@ -1110,7 +1159,7 @@ private struct DayPanel: View {
             Button { togglePrep(ev) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles").font(.system(size: 10))
-                    Text(isOpen ? "Hide prep" : "Prep with Parley")
+                    Text(isOpen ? "Hide prep" : "Prep with Inkling")
                         .font(theme.bodyFont(11).weight(.semibold))
                 }
                 .foregroundStyle(theme.accentInk)

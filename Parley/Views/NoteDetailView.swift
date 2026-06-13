@@ -72,6 +72,7 @@ struct NoteDetailView: View {
 
     private enum DetailSheet: Int, Identifiable {
         case actionItems
+        case translate
         var id: Int { rawValue }
     }
 
@@ -218,6 +219,8 @@ struct NoteDetailView: View {
                     access: eventKit.remindersAccess,
                     onAdd: { await eventKit.addReminders($0) }
                 )
+            case .translate:
+                TranslationSheet(theme: theme, sourceText: note.transcript)
             }
         }
         .navigationDestination(isPresented: $showingSummary) {
@@ -311,14 +314,11 @@ struct NoteDetailView: View {
             guard autoRecord, !didAutoStart, !transcription.isRecording else { return }
             didAutoStart = true
             onAutoRecordConsumed()
-            // The very first launch needs the pushed view + audio session to settle;
-            // a synchronous start here can silently no-op. Defer briefly, then retry
-            // a couple of times until recording actually begins.
-            for attempt in 0..<3 {
-                if transcription.isRecording { break }
-                try? await Task.sleep(for: .milliseconds(attempt == 0 ? 300 : 500))
-                if transcription.isRecording || transcription.state == .preparing
-                    || transcription.state == .downloadingModel { continue }
+            // Let the pushed view + audio session settle, then start once. (A
+            // synchronous start on first launch can silently no-op.)
+            try? await Task.sleep(for: .milliseconds(350))
+            let s = transcription.state
+            if !transcription.isRecording, s != .preparing, s != .downloadingModel {
                 toggleRecord()
             }
         }
@@ -1135,6 +1135,7 @@ struct NoteDetailView: View {
             onNewSpeaker: promptNewSpeaker,
             onRenameSpeaker: renameSpeaker,
             onToggleFlag: toggleFlag,
+            onTranslate: { activeSheet = .translate },
             onCollapse: { withAnimation(.snappy) { showTranscript = false } }
         )
     }
@@ -1268,53 +1269,43 @@ struct NoteDetailView: View {
         UserDefaults.standard.set(face, forKey: faceKey)
     }
 
+    /// True while *some* session (this note's recorder or the background one) is
+    /// actively capturing — the language can be switched live in that state.
+    private var isCapturing: Bool {
+        backgroundRecordingThisNote ? recorder.isRecording : transcription.isRecording
+    }
+
     @ViewBuilder
     private var recordControl: some View {
+        HStack(spacing: 8) {
+            // The language chip is always present, so you can switch language
+            // before *and* during a recording (a Spanish memo → an English meeting).
+            languageMenu
+            recordStateControl
+        }
+    }
+
+    @ViewBuilder
+    private var recordStateControl: some View {
         if backgroundRecordingThisNote {
             // Mirror the background session: live timer + a Stop that ends it.
-            HStack(spacing: 8) {
-                if let startedAt = recorder.startedAt {
-                    TimelineView(.periodic(from: startedAt, by: 1)) { _ in
-                        HStack(spacing: 5) {
-                            Circle().fill(theme.rec).frame(width: 7, height: 7)
-                            Text(elapsed(since: startedAt))
-                                .font(theme.monoFont(12, relativeTo: .subheadline))
-                                .foregroundStyle(theme.rec)
-                        }
-                    }
+            if let startedAt = recorder.startedAt {
+                TimelineView(.periodic(from: startedAt, by: 1)) { _ in
+                    recTimer(startedAt)
                 }
-                Button { recorder.stop() } label: {
-                    Image(systemName: "stop.fill")
-                        .font(.caption)
-                        .foregroundStyle(theme.paperRaised)
-                        .padding(8)
-                        .background(theme.ink, in: Circle())
-                }
+            }
+            Button { recorder.stop() } label: { stopGlyph }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Stop recording")
-            }
         } else if transcription.isRecording {
-            HStack(spacing: 8) {
-                if let startedAt = transcription.startedAt {
-                    TimelineView(.periodic(from: startedAt, by: 1)) { _ in
-                        HStack(spacing: 5) {
-                            Circle().fill(theme.rec).frame(width: 7, height: 7)
-                            Text(elapsed(since: startedAt))
-                                .font(theme.monoFont(12, relativeTo: .subheadline))
-                                .foregroundStyle(theme.rec)
-                        }
-                    }
+            if let startedAt = transcription.startedAt {
+                TimelineView(.periodic(from: startedAt, by: 1)) { _ in
+                    recTimer(startedAt)
                 }
-                Button { toggleRecord() } label: {
-                    Image(systemName: "stop.fill")
-                        .font(.caption)
-                        .foregroundStyle(theme.paperRaised)
-                        .padding(8)
-                        .background(theme.ink, in: Circle())
-                }
+            }
+            Button { toggleRecord() } label: { stopGlyph }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Stop recording")
-            }
         } else {
             Button { toggleRecord() } label: {
                 Label(recordLabel, systemImage: "mic.fill")
@@ -1324,6 +1315,80 @@ struct NoteDetailView: View {
                       || transcription.state == .finishing
                       || transcription.state == .identifyingSpeakers)
         }
+    }
+
+    private func recTimer(_ startedAt: Date) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(theme.rec).frame(width: 7, height: 7)
+            Text(elapsed(since: startedAt))
+                .font(theme.monoFont(12, relativeTo: .subheadline))
+                .foregroundStyle(theme.rec)
+        }
+    }
+
+    private var stopGlyph: some View {
+        Image(systemName: "stop.fill")
+            .font(.caption)
+            .foregroundStyle(theme.paperRaised)
+            .padding(8)
+            .background(theme.ink, in: Circle())
+    }
+
+    /// Compact language chooser shown next to Record. Bound to the same Settings
+    /// preference; while a session is live it switches the language *in place* via
+    /// `changeLanguage` (the transcript so far is kept, the recording continues).
+    private var languageMenu: some View {
+        Menu {
+            Picker("Language", selection: Binding(
+                get: { themeManager.transcriptionLanguage ?? "auto" },
+                set: { newValue in
+                    let code = (newValue == "auto") ? nil : newValue
+                    themeManager.transcriptionLanguage = code
+                    if backgroundRecordingThisNote {
+                        Task { await recorder.changeLanguage(to: code) }
+                    } else if transcription.isRecording {
+                        Task { await transcription.changeLanguage(to: code) }
+                    }
+                }
+            )) {
+                Text("Automatic").tag("auto")
+                ForEach(TranscriptionLanguages.options, id: \.code) { Text($0.name).tag($0.code) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "globe")
+                Text(languageChipLabel)
+            }
+            .font(theme.monoFont(12, relativeTo: .subheadline))
+            .foregroundStyle(theme.inkSoft)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(theme.paperRaised, in: Capsule())
+            .overlay(Capsule().strokeBorder(theme.line, lineWidth: 1))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .fixedSize()
+        // Block re-entrancy while a swap is mid-flight.
+        .disabled(transcription.state == .preparing || transcription.state == .downloadingModel)
+        .accessibilityLabel("Transcription language")
+    }
+
+    /// The short label for the language chip. While recording it reflects what the
+    /// session is *actually* listening for (so Automatic shows the resolved
+    /// language); otherwise it shows the chosen preference, or "Auto".
+    private var languageChipLabel: String {
+        if isCapturing,
+           let loc = (backgroundRecordingThisNote ? recorder.activeLocale : transcription.activeLocale),
+           let code = loc.language.languageCode?.identifier,
+           let opt = TranscriptionLanguages.options.first(where: { $0.code == code }) {
+            return opt.name
+        }
+        if let lang = themeManager.transcriptionLanguage,
+           let opt = TranscriptionLanguages.options.first(where: { $0.code == lang }) {
+            return opt.name
+        }
+        return "Auto"
     }
 
     private var recordLabel: String {
@@ -1376,7 +1441,8 @@ struct NoteDetailView: View {
                     seed: note.transcript,
                     seedSegments: seedSegments,
                     preferredLanguage: themeManager.transcriptionLanguage,
-                    captureSystemAudio: captureSystem
+                    captureSystemAudio: captureSystem,
+                    noteTitle: note.title
                 )
             }
         }
@@ -2565,6 +2631,132 @@ private struct AttachmentPreviewSheet: View {
         let text = await HandwritingOCR.recognizeImage(data, languages: languages, customWords: customWords)
         attachment.ocrText = text
         recognizing = false
+    }
+}
+
+/// Translate the note's transcript into another language, on-device. Pick a
+/// target, tap Translate, read (and copy) the result. Nothing leaves the machine
+/// (Foundation Models). The original transcript is never modified.
+private struct TranslationSheet: View {
+    let theme: Theme
+    let sourceText: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var service = TranslationService()
+    @State private var target = "en"
+    @State private var result = ""
+    @State private var didCopy = false
+
+    private var targetName: String {
+        TranscriptionLanguages.options.first { $0.code == target }?.name ?? "English"
+    }
+
+    var body: some View {
+        NavigationStack {
+            content
+                .background(theme.paperSunk)
+                .navigationTitle("Translate")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                    }
+                }
+        }
+        #if os(macOS)
+        .frame(minWidth: 440, minHeight: 460)
+        #endif
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Text("INTO")
+                    .font(theme.monoFont(11)).tracking(1.4)
+                    .foregroundStyle(theme.inkSoft)
+                Picker("Language", selection: $target) {
+                    ForEach(TranscriptionLanguages.options, id: \.code) { Text($0.name).tag($0.code) }
+                }
+                .labelsHidden()
+                .tint(theme.accent)
+                Spacer()
+                Button {
+                    Task { result = await service.translate(sourceText, into: targetName) ?? result }
+                } label: {
+                    Label(service.state == .working ? "Translating…" : "Translate",
+                          systemImage: "character.bubble")
+                }
+                .disabled(service.state == .working || sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+
+            Divider().overlay(theme.line)
+
+            resultArea
+        }
+    }
+
+    @ViewBuilder
+    private var resultArea: some View {
+        if case .unavailable(let message) = service.state {
+            infoState(message, "exclamationmark.triangle")
+        } else if result.isEmpty {
+            infoState(service.state == .working
+                      ? "Translating on-device…"
+                      : "Pick a language and tap Translate.",
+                      service.state == .working ? "hourglass" : "character.bubble")
+        } else {
+            ScrollView {
+                Text(result)
+                    .font(theme.bodyFont(15))
+                    .foregroundStyle(theme.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding(16)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    copy(result)
+                    withAnimation(.snappy) { didCopy = true }
+                    Task { try? await Task.sleep(for: .seconds(1.5)); didCopy = false }
+                } label: {
+                    Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                        .font(theme.monoFont(12))
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(theme.paperRaised, in: Capsule())
+                        .overlay(Capsule().strokeBorder(theme.line, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(didCopy ? theme.accent : theme.inkSoft)
+                .padding(16)
+            }
+        }
+    }
+
+    private func infoState(_ title: String, _ symbol: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(theme.inkFaint)
+            Text(title)
+                .font(theme.bodyFont(14))
+                .foregroundStyle(theme.inkSoft)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(32)
+    }
+
+    private func copy(_ text: String) {
+        #if canImport(UIKit)
+        UIPasteboard.general.string = text
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
     }
 }
 

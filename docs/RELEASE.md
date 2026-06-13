@@ -1,4 +1,4 @@
-# Shipping Parley
+# Shipping Inkling
 
 A practical path from "it builds" to "it's on the App Store." Do it in order:
 **harden → TestFlight → App Store.** There is no one-tap publish for a store app.
@@ -26,7 +26,7 @@ Test the **unhappy paths** on iPhone, iPad, and Mac:
       (App Store builds use Production — sync silently fails otherwise.)
 
 ### 3. App Store Connect
-- [ ] Create the app record (bundle id, name "Parley" or final name).
+- [ ] Create the app record (bundle id, name "Inkling" or final name).
 - [ ] **Privacy policy URL** (required) + support URL.
 - [ ] Privacy "nutrition label": *Data Not Collected* (everything is on-device /
       user's private iCloud) — matches the manifest.

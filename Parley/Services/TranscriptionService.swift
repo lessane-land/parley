@@ -121,6 +121,9 @@ final class TranscriptionService {
     #if os(macOS)
     /// Captures the Mac's system audio (the meeting's far side) alongside the mic.
     private var systemAudio: SystemAudioCapture?
+    /// Held while recording so macOS App Nap doesn't throttle or suspend capture
+    /// when the app isn't frontmost (the Mac equivalent of iOS background audio).
+    private var backgroundActivity: NSObjectProtocol?
     #endif
     // The diarizer's Core ML models are cached inside `DiarizationEngine` (a
     // background actor), so the heavy work never runs on the main thread.
@@ -213,6 +216,14 @@ final class TranscriptionService {
             if captureSystemAudio {
                 await startSystemAudio(convertingTo: analyzerFormat)
             }
+            #endif
+
+            #if os(macOS)
+            // Keep capturing/transcribing while backgrounded: prevent App Nap from
+            // throttling our threads and stop the display/system sleeping mid-meeting.
+            backgroundActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .idleSystemSleepDisabled],
+                reason: "Recording and transcribing a meeting")
             #endif
 
             startedAt = Date()
@@ -534,6 +545,12 @@ final class TranscriptionService {
         resultsTask = nil
         analyzerFormat = nil
         diarFile = nil
+        #if os(macOS)
+        if let backgroundActivity {
+            ProcessInfo.processInfo.endActivity(backgroundActivity)
+            self.backgroundActivity = nil
+        }
+        #endif
         #if os(iOS)
         if let configObserver {
             NotificationCenter.default.removeObserver(configObserver)
@@ -664,28 +681,58 @@ final class TranscriptionService {
         name.range(of: #"^Speaker \d+$"#, options: .regularExpression) != nil
     }
 
+    /// The mainstream region to prefer when a language ships several regional
+    /// models, so "Automatic" lands on the expected one (es → es-ES, en → en-US)
+    /// instead of an arbitrary supported region like es-CL / en-ZA.
+    static let preferredRegion: [String: String] = [
+        "en": "US", "es": "ES", "fr": "FR", "de": "DE", "it": "IT",
+        "pt": "BR", "nl": "NL", "zh": "CN", "ja": "JP", "ko": "KR"
+    ]
+
     /// Pick a supported locale for transcription.
     ///
-    /// - An explicit `preferred` language code wins (matched by language).
+    /// - An explicit `preferred` language code wins, resolved to its mainstream
+    ///   region (so picking "Spanish" gives es-ES, not whatever region happens to
+    ///   be first in the device's supported list).
     /// - Otherwise "Automatic": walk the device's preferred languages *in order*
-    ///   and take the first that has a model — exact region match, else same
-    ///   language. (So `es` in your language list beats an `en-ES` region quirk.)
+    ///   and take the first that has a model — an exact region the user actually
+    ///   set, else that language's mainstream region.
     /// - Then fall back to `en-US`, then anything supported.
     static func resolveLocale(from supported: [Locale], preferred: String?) -> Locale? {
-        func match(language code: String) -> Locale? {
-            supported.first { $0.language.languageCode?.identifier == code }
+        // Among supported locales for a language, pick a sensible region rather
+        // than `supported.first` (whose ordering is arbitrary — the es-CL/en-ZA bug).
+        func best(language code: String) -> Locale? {
+            let candidates = supported.filter { $0.language.languageCode?.identifier == code }
+            guard !candidates.isEmpty else { return nil }
+            // 1. The mainstream region for this language (es-ES, en-US, …).
+            if let region = preferredRegion[code],
+               let hit = candidates.first(where: { $0.region?.identifier == region }) {
+                return hit
+            }
+            // 2. A region matching the device's own region.
+            if let devRegion = Locale.current.region?.identifier,
+               let hit = candidates.first(where: { $0.region?.identifier == devRegion }) {
+                return hit
+            }
+            // 3. The region whose code equals the language (es-ES, fr-FR, …).
+            if let hit = candidates.first(where: { $0.region?.identifier == code.uppercased() }) {
+                return hit
+            }
+            return candidates.first
         }
 
-        if let preferred, !preferred.isEmpty, let forced = match(language: preferred) {
+        if let preferred, !preferred.isEmpty, let forced = best(language: preferred) {
             return forced
         }
 
         for identifier in Locale.preferredLanguages {
             let locale = Locale(identifier: identifier)
+            // Honour an exact region the user deliberately set (e.g. es-MX) when a
+            // model exists; otherwise resolve to the language's mainstream region.
             if let exact = supported.first(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) {
                 return exact
             }
-            if let code = locale.language.languageCode?.identifier, let sameLanguage = match(language: code) {
+            if let code = locale.language.languageCode?.identifier, let sameLanguage = best(language: code) {
                 return sameLanguage
             }
         }

@@ -1313,14 +1313,57 @@ struct NoteDetailView: View {
                 .accessibilityLabel("Stop recording")
             }
         } else {
-            Button { toggleRecord() } label: {
-                Label(recordLabel, systemImage: "mic.fill")
+            HStack(spacing: 8) {
+                languageMenu
+                Button { toggleRecord() } label: {
+                    Label(recordLabel, systemImage: "mic.fill")
+                }
+                .disabled(transcription.state == .preparing
+                          || transcription.state == .downloadingModel
+                          || transcription.state == .finishing
+                          || transcription.state == .identifyingSpeakers)
             }
-            .disabled(transcription.state == .preparing
-                      || transcription.state == .downloadingModel
-                      || transcription.state == .finishing
-                      || transcription.state == .identifyingSpeakers)
         }
+    }
+
+    /// Compact language chooser shown next to Record. Transcription is
+    /// single-language per session, so the choice is made here before starting;
+    /// it's bound to the same Settings preference (`transcriptionLanguage`).
+    private var languageMenu: some View {
+        Menu {
+            Picker("Language", selection: Binding(
+                get: { themeManager.transcriptionLanguage ?? "auto" },
+                set: { themeManager.transcriptionLanguage = ($0 == "auto") ? nil : $0 }
+            )) {
+                Text("Automatic").tag("auto")
+                ForEach(TranscriptionLanguages.options, id: \.code) { Text($0.name).tag($0.code) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "globe")
+                Text(languageChipLabel)
+            }
+            .font(theme.monoFont(12, relativeTo: .subheadline))
+            .foregroundStyle(theme.inkSoft)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(theme.paperRaised, in: Capsule())
+            .overlay(Capsule().strokeBorder(theme.line, lineWidth: 1))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .fixedSize()
+        .accessibilityLabel("Transcription language")
+    }
+
+    /// The short label for the language chip: the chosen language's name, or
+    /// "Auto" when following the device's preferred languages.
+    private var languageChipLabel: String {
+        if let lang = themeManager.transcriptionLanguage,
+           let opt = TranscriptionLanguages.options.first(where: { $0.code == lang }) {
+            return opt.name
+        }
+        return "Auto"
     }
 
     private var recordLabel: String {

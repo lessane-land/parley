@@ -163,50 +163,8 @@ final class TranscriptionService {
                 ?? Self.fallbackLocale(preferred: preferredLanguage)
             activeLocale = locale
 
-            let transcriber = SpeechTranscriber(
-                locale: locale,
-                transcriptionOptions: [],
-                reportingOptions: [.volatileResults],
-                attributeOptions: [.audioTimeRange]
-            )
-            self.transcriber = transcriber
+            let analyzerFormat = try await makeAnalyzerPipeline(locale: locale)
 
-            // Make sure the on-device model for this locale is installed.
-            let modelInstalled = await isModelInstalled(locale)
-            if !modelInstalled {
-                state = .downloadingModel
-                if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                    try await request.downloadAndInstall()
-                }
-            }
-
-            let analyzer = SpeechAnalyzer(modules: [transcriber])
-            self.analyzer = analyzer
-
-            let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
-
-            let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
-            self.continuation = continuation
-
-            // Consume results. This Task inherits @MainActor, so updating state is safe.
-            resultsTask = Task { [weak self] in
-                guard let self, let transcriber = self.transcriber else { return }
-                do {
-                    for try await result in transcriber.results {
-                        let piece = String(result.text.characters)
-                        if result.isFinal {
-                            self.appendFinalized(piece)
-                            self.volatileText = ""
-                        } else {
-                            self.volatileText = piece
-                        }
-                    }
-                } catch {
-                    self.state = .unavailable(error.localizedDescription)
-                }
-            }
-
-            try await analyzer.start(inputSequence: stream)
             try startEngine(convertingTo: analyzerFormat)
 
             #if os(macOS)
@@ -235,6 +193,110 @@ final class TranscriptionService {
         } catch {
             state = .unavailable(error.localizedDescription)
             await teardown()
+        }
+    }
+
+    /// Build the transcriber + analyzer + results stream for `locale`, install the
+    /// results consumer, and start the analyzer. Returns the audio format the input
+    /// tap should convert buffers to. Shared by `start()` and `changeLanguage()`.
+    /// May flip `state` to `.downloadingModel` while a model installs.
+    private func makeAnalyzerPipeline(locale: Locale) async throws -> AVAudioFormat? {
+        let transcriber = SpeechTranscriber(
+            locale: locale,
+            transcriptionOptions: [],
+            reportingOptions: [.volatileResults],
+            attributeOptions: [.audioTimeRange]
+        )
+        self.transcriber = transcriber
+
+        // Make sure the on-device model for this locale is installed.
+        if !(await isModelInstalled(locale)) {
+            state = .downloadingModel
+            if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
+                try await request.downloadAndInstall()
+            }
+        }
+
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        self.analyzer = analyzer
+
+        let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
+
+        let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
+        self.continuation = continuation
+
+        // Consume results. This Task inherits @MainActor, so updating state is safe.
+        resultsTask = Task { [weak self] in
+            guard let self, let transcriber = self.transcriber else { return }
+            do {
+                for try await result in transcriber.results {
+                    let piece = String(result.text.characters)
+                    if result.isFinal {
+                        self.appendFinalized(piece)
+                        self.volatileText = ""
+                    } else {
+                        self.volatileText = piece
+                    }
+                }
+            } catch {
+                self.state = .unavailable(error.localizedDescription)
+            }
+        }
+
+        try await analyzer.start(inputSequence: stream)
+        return analyzerFormat
+    }
+
+    /// Switch the transcription language **without stopping the recording** — e.g.
+    /// a Spanish voice memo becomes an English meeting. The transcript captured so
+    /// far is kept; new speech is appended in the new language on the same
+    /// timeline. The engine, audio session, recording file, timer and Live Activity
+    /// all keep running across the swap — only the analyzer/transcriber is replaced.
+    /// `preferred` is a language code ("en") or nil for Automatic.
+    func changeLanguage(to preferred: String?) async {
+        guard state == .recording else { return }
+
+        let supported = await SpeechTranscriber.supportedLocales
+        let locale = Self.resolveLocale(from: supported, preferred: preferred)
+            ?? Self.fallbackLocale(preferred: preferred)
+        // No-op if it resolves to the language already running.
+        guard locale.identifier != activeLocale?.identifier else { return }
+
+        state = .preparing
+
+        #if os(macOS)
+        // System audio captured the *old* continuation; restart it after the swap
+        // so the meeting's far side keeps feeding the new analyzer.
+        let hadSystemAudio = systemAudio != nil
+        if hadSystemAudio { await systemAudio?.stop(); systemAudio = nil }
+        #endif
+
+        // Stop feeding audio, then flush + finish the current analyzer so its last
+        // results land before we replace it.
+        engine.inputNode.removeTap(onBus: 0)
+        if !volatileText.isEmpty { appendFinalized(volatileText); volatileText = "" }
+        continuation?.finish()
+        do { try await analyzer?.finalizeAndFinishThroughEndOfInput() } catch { /* best effort */ }
+        resultsTask?.cancel()
+
+        do {
+            activeLocale = locale
+            let analyzerFormat = try await makeAnalyzerPipeline(locale: locale)
+            // Re-point the mic tap at the new analyzer's stream/format. (diarFile is
+            // kept, so the single session recording stays continuous.)
+            self.analyzerFormat = analyzerFormat
+            try installInputTap()
+            #if os(macOS)
+            if hadSystemAudio { await startSystemAudio(convertingTo: analyzerFormat) }
+            #endif
+            state = .recording
+        } catch {
+            // The new language failed to start; end cleanly (the transcript so far
+            // is preserved in finalizedText for the caller to persist).
+            state = .unavailable(error.localizedDescription)
+            await teardown()
+            startedAt = nil
+            state = .idle
         }
     }
 

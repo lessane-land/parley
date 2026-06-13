@@ -1265,75 +1265,87 @@ struct NoteDetailView: View {
         UserDefaults.standard.set(face, forKey: faceKey)
     }
 
+    /// True while *some* session (this note's recorder or the background one) is
+    /// actively capturing — the language can be switched live in that state.
+    private var isCapturing: Bool {
+        backgroundRecordingThisNote ? recorder.isRecording : transcription.isRecording
+    }
+
     @ViewBuilder
     private var recordControl: some View {
-        if backgroundRecordingThisNote {
-            // Mirror the background session: live timer + a Stop that ends it.
-            HStack(spacing: 8) {
-                if let startedAt = recorder.startedAt {
-                    TimelineView(.periodic(from: startedAt, by: 1)) { _ in
-                        HStack(spacing: 5) {
-                            Circle().fill(theme.rec).frame(width: 7, height: 7)
-                            Text(elapsed(since: startedAt))
-                                .font(theme.monoFont(12, relativeTo: .subheadline))
-                                .foregroundStyle(theme.rec)
-                        }
-                    }
-                }
-                Button { recorder.stop() } label: {
-                    Image(systemName: "stop.fill")
-                        .font(.caption)
-                        .foregroundStyle(theme.paperRaised)
-                        .padding(8)
-                        .background(theme.ink, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Stop recording")
-            }
-        } else if transcription.isRecording {
-            HStack(spacing: 8) {
-                if let startedAt = transcription.startedAt {
-                    TimelineView(.periodic(from: startedAt, by: 1)) { _ in
-                        HStack(spacing: 5) {
-                            Circle().fill(theme.rec).frame(width: 7, height: 7)
-                            Text(elapsed(since: startedAt))
-                                .font(theme.monoFont(12, relativeTo: .subheadline))
-                                .foregroundStyle(theme.rec)
-                        }
-                    }
-                }
-                Button { toggleRecord() } label: {
-                    Image(systemName: "stop.fill")
-                        .font(.caption)
-                        .foregroundStyle(theme.paperRaised)
-                        .padding(8)
-                        .background(theme.ink, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Stop recording")
-            }
-        } else {
-            HStack(spacing: 8) {
-                languageMenu
-                Button { toggleRecord() } label: {
-                    Label(recordLabel, systemImage: "mic.fill")
-                }
-                .disabled(transcription.state == .preparing
-                          || transcription.state == .downloadingModel
-                          || transcription.state == .finishing
-                          || transcription.state == .identifyingSpeakers)
-            }
+        HStack(spacing: 8) {
+            // The language chip is always present, so you can switch language
+            // before *and* during a recording (a Spanish memo → an English meeting).
+            languageMenu
+            recordStateControl
         }
     }
 
-    /// Compact language chooser shown next to Record. Transcription is
-    /// single-language per session, so the choice is made here before starting;
-    /// it's bound to the same Settings preference (`transcriptionLanguage`).
+    @ViewBuilder
+    private var recordStateControl: some View {
+        if backgroundRecordingThisNote {
+            // Mirror the background session: live timer + a Stop that ends it.
+            if let startedAt = recorder.startedAt {
+                TimelineView(.periodic(from: startedAt, by: 1)) { _ in
+                    recTimer(startedAt)
+                }
+            }
+            Button { recorder.stop() } label: { stopGlyph }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Stop recording")
+        } else if transcription.isRecording {
+            if let startedAt = transcription.startedAt {
+                TimelineView(.periodic(from: startedAt, by: 1)) { _ in
+                    recTimer(startedAt)
+                }
+            }
+            Button { toggleRecord() } label: { stopGlyph }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Stop recording")
+        } else {
+            Button { toggleRecord() } label: {
+                Label(recordLabel, systemImage: "mic.fill")
+            }
+            .disabled(transcription.state == .preparing
+                      || transcription.state == .downloadingModel
+                      || transcription.state == .finishing
+                      || transcription.state == .identifyingSpeakers)
+        }
+    }
+
+    private func recTimer(_ startedAt: Date) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(theme.rec).frame(width: 7, height: 7)
+            Text(elapsed(since: startedAt))
+                .font(theme.monoFont(12, relativeTo: .subheadline))
+                .foregroundStyle(theme.rec)
+        }
+    }
+
+    private var stopGlyph: some View {
+        Image(systemName: "stop.fill")
+            .font(.caption)
+            .foregroundStyle(theme.paperRaised)
+            .padding(8)
+            .background(theme.ink, in: Circle())
+    }
+
+    /// Compact language chooser shown next to Record. Bound to the same Settings
+    /// preference; while a session is live it switches the language *in place* via
+    /// `changeLanguage` (the transcript so far is kept, the recording continues).
     private var languageMenu: some View {
         Menu {
             Picker("Language", selection: Binding(
                 get: { themeManager.transcriptionLanguage ?? "auto" },
-                set: { themeManager.transcriptionLanguage = ($0 == "auto") ? nil : $0 }
+                set: { newValue in
+                    let code = (newValue == "auto") ? nil : newValue
+                    themeManager.transcriptionLanguage = code
+                    if backgroundRecordingThisNote {
+                        Task { await recorder.changeLanguage(to: code) }
+                    } else if transcription.isRecording {
+                        Task { await transcription.changeLanguage(to: code) }
+                    }
+                }
             )) {
                 Text("Automatic").tag("auto")
                 ForEach(TranscriptionLanguages.options, id: \.code) { Text($0.name).tag($0.code) }
@@ -1353,12 +1365,21 @@ struct NoteDetailView: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .fixedSize()
+        // Block re-entrancy while a swap is mid-flight.
+        .disabled(transcription.state == .preparing || transcription.state == .downloadingModel)
         .accessibilityLabel("Transcription language")
     }
 
-    /// The short label for the language chip: the chosen language's name, or
-    /// "Auto" when following the device's preferred languages.
+    /// The short label for the language chip. While recording it reflects what the
+    /// session is *actually* listening for (so Automatic shows the resolved
+    /// language); otherwise it shows the chosen preference, or "Auto".
     private var languageChipLabel: String {
+        if isCapturing,
+           let loc = (backgroundRecordingThisNote ? recorder.activeLocale : transcription.activeLocale),
+           let code = loc.language.languageCode?.identifier,
+           let opt = TranscriptionLanguages.options.first(where: { $0.code == code }) {
+            return opt.name
+        }
         if let lang = themeManager.transcriptionLanguage,
            let opt = TranscriptionLanguages.options.first(where: { $0.code == lang }) {
             return opt.name

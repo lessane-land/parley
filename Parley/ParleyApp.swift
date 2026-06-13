@@ -255,6 +255,16 @@ final class RecordingCoordinator {
         Task { await finish() }
     }
 
+    /// Switch the language of the in-progress background recording (see
+    /// `TranscriptionService.changeLanguage`). Also remembers the new preference.
+    func changeLanguage(to preferred: String?) async {
+        themeManager?.transcriptionLanguage = preferred
+        await transcription.changeLanguage(to: preferred)
+    }
+
+    /// The locale the background session is currently transcribing in, if any.
+    var activeLocale: Locale? { transcription.activeLocale }
+
     /// Mirror the streaming transcript onto the note every second, so an open
     /// detail view (and the store) reflect progress even while in the background.
     private func startPersisting(into note: Note) {

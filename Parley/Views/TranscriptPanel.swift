@@ -27,6 +27,7 @@ struct TranscriptPanel: View {
     var onNewSpeaker: ((UUID) -> Void)? = nil               // ask the owner to prompt for a new name
     var onRenameSpeaker: ((String) -> Void)? = nil          // rename a whole speaker (from the legend)
     var onToggleFlag: ((UUID) -> Void)? = nil               // flag/unflag a line as an action item
+    var onTranslate: (() -> Void)? = nil                    // open the translate sheet
     var onCollapse: (() -> Void)? = nil                     // hide the transcript panel
 
     private var isRecording: Bool { state == .recording }
@@ -62,6 +63,16 @@ struct TranscriptPanel: View {
                 Text(label)
                     .font(theme.monoFont(11))
                     .foregroundStyle(theme.inkFaint)
+            }
+
+            if !fullTranscriptText.isEmpty, !isRecording, let onTranslate {
+                Button(action: onTranslate) {
+                    Image(systemName: "character.bubble")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(theme.inkFaint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Translate transcript")
             }
 
             if !fullTranscriptText.isEmpty {

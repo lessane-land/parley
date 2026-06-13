@@ -72,6 +72,7 @@ struct NoteDetailView: View {
 
     private enum DetailSheet: Int, Identifiable {
         case actionItems
+        case translate
         var id: Int { rawValue }
     }
 
@@ -218,6 +219,8 @@ struct NoteDetailView: View {
                     access: eventKit.remindersAccess,
                     onAdd: { await eventKit.addReminders($0) }
                 )
+            case .translate:
+                TranslationSheet(theme: theme, sourceText: note.transcript)
             }
         }
         .navigationDestination(isPresented: $showingSummary) {
@@ -1132,6 +1135,7 @@ struct NoteDetailView: View {
             onNewSpeaker: promptNewSpeaker,
             onRenameSpeaker: renameSpeaker,
             onToggleFlag: toggleFlag,
+            onTranslate: { activeSheet = .translate },
             onCollapse: { withAnimation(.snappy) { showTranscript = false } }
         )
     }
@@ -2627,6 +2631,132 @@ private struct AttachmentPreviewSheet: View {
         let text = await HandwritingOCR.recognizeImage(data, languages: languages, customWords: customWords)
         attachment.ocrText = text
         recognizing = false
+    }
+}
+
+/// Translate the note's transcript into another language, on-device. Pick a
+/// target, tap Translate, read (and copy) the result. Nothing leaves the machine
+/// (Foundation Models). The original transcript is never modified.
+private struct TranslationSheet: View {
+    let theme: Theme
+    let sourceText: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var service = TranslationService()
+    @State private var target = "en"
+    @State private var result = ""
+    @State private var didCopy = false
+
+    private var targetName: String {
+        TranscriptionLanguages.options.first { $0.code == target }?.name ?? "English"
+    }
+
+    var body: some View {
+        NavigationStack {
+            content
+                .background(theme.paperSunk)
+                .navigationTitle("Translate")
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                    }
+                }
+        }
+        #if os(macOS)
+        .frame(minWidth: 440, minHeight: 460)
+        #endif
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Text("INTO")
+                    .font(theme.monoFont(11)).tracking(1.4)
+                    .foregroundStyle(theme.inkSoft)
+                Picker("Language", selection: $target) {
+                    ForEach(TranscriptionLanguages.options, id: \.code) { Text($0.name).tag($0.code) }
+                }
+                .labelsHidden()
+                .tint(theme.accent)
+                Spacer()
+                Button {
+                    Task { result = await service.translate(sourceText, into: targetName) ?? result }
+                } label: {
+                    Label(service.state == .working ? "Translating…" : "Translate",
+                          systemImage: "character.bubble")
+                }
+                .disabled(service.state == .working || sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+
+            Divider().overlay(theme.line)
+
+            resultArea
+        }
+    }
+
+    @ViewBuilder
+    private var resultArea: some View {
+        if case .unavailable(let message) = service.state {
+            infoState(message, "exclamationmark.triangle")
+        } else if result.isEmpty {
+            infoState(service.state == .working
+                      ? "Translating on-device…"
+                      : "Pick a language and tap Translate.",
+                      service.state == .working ? "hourglass" : "character.bubble")
+        } else {
+            ScrollView {
+                Text(result)
+                    .font(theme.bodyFont(15))
+                    .foregroundStyle(theme.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding(16)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    copy(result)
+                    withAnimation(.snappy) { didCopy = true }
+                    Task { try? await Task.sleep(for: .seconds(1.5)); didCopy = false }
+                } label: {
+                    Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+                        .font(theme.monoFont(12))
+                        .padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(theme.paperRaised, in: Capsule())
+                        .overlay(Capsule().strokeBorder(theme.line, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(didCopy ? theme.accent : theme.inkSoft)
+                .padding(16)
+            }
+        }
+    }
+
+    private func infoState(_ title: String, _ symbol: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(theme.inkFaint)
+            Text(title)
+                .font(theme.bodyFont(14))
+                .foregroundStyle(theme.inkSoft)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(32)
+    }
+
+    private func copy(_ text: String) {
+        #if canImport(UIKit)
+        UIPasteboard.general.string = text
+        #elseif canImport(AppKit)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        #endif
     }
 }
 
